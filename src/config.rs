@@ -75,42 +75,27 @@ mod tests {
 
     #[test]
     fn config_con_formato_invalido() {
-        // GIVEN: un reader con contenido invalido para el archivo de configuracion
-        let content = "Hola Mundo!".as_bytes();
-
-        // WHEN: se ejecuta la funcion from_reader con ese reader
-        let cfg = Config::from_reader(content);
-
-        // THEN: la funcion devuelve un Err porque el contenido es invalido
-        assert!(cfg.is_err());
-        assert!(matches!(cfg, Err(CustomError::ConfigInvalid)));
+        let content = "Archivo de Configuracion".as_bytes();
+        let config = Config::from_reader(content);
+        assert!(config.is_err());
+        assert!(matches!(config, Err(CustomError::ConfigInvalid)));
     }
 
     #[test]
     fn config_con_valores_faltantes() {
-        // GIVEN: un reader con contenido invalido para el archivo de configuracion
         let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n".as_bytes();
-
-        // WHEN: se ejecuta la funcion from_reader con ese reader
-        let cfg = Config::from_reader(content);
-
-        // THEN: la funcion devuelve un Err porque el contenido es invalido
-        assert!(cfg.is_err());
-        assert!(matches!(cfg, Err(CustomError::ConfigMissingValue)));
+        let config = Config::from_reader(content);
+        assert!(config.is_err());
+        assert!(matches!(config, Err(CustomError::ConfigMissingValue)));
     }
 
     #[test]
     fn config_sin_valores_requeridos() -> Result<(), CustomError> {
-        // GIVEN: un reader con contenido de configuracion completo
         let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n\
-            PROTOCOL_VERSION=9876"
+            PROTOCOL_VERSION=7000"
             .as_bytes();
-
-        // WHEN: se ejecuta la funcion from_reader con ese reader
         let cfg = Config::from_reader(content)?;
-
-        // THEN: la funcion devuelve Ok y los parametros de configuracion tienen los valores esperados
-        assert_eq!(9876, cfg.protocol_version);
+        assert_eq!(7000, cfg.protocol_version);
         assert_eq!("seed.testnet.bitcoin.sprovoost.nl", cfg.seed);
         Ok(())
     }
