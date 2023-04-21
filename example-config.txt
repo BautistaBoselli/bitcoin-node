@@ -1,2 +1,2 @@
-SEED=dns
+SEED=seed.testnet.bitcoin.sprovoost.nl
 PROTOCOL_VERSION=1

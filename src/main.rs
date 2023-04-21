@@ -4,6 +4,7 @@ use std::{env, path::Path};
 
 const CANT_ARGS: usize = 2;
 
+/// Obtiene la configuracion del archivo de configuracion. En esta se encuentra la semilla DNS y la version del protocolo.
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != CANT_ARGS {

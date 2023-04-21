@@ -6,6 +6,8 @@ use std::str::FromStr;
 
 use crate::error::CustomError;
 
+const CANTIDAD_ARGUMENTOS_DE_CONFIGURACION: usize = 2;
+
 #[derive(Debug)]
 pub struct Config {
     pub seed: String,
@@ -45,7 +47,7 @@ impl Config {
 
             let setting: Vec<&str> = current_line.split('=').collect();
 
-            if setting.len() != 2 {
+            if setting.len() != CANTIDAD_ARGUMENTOS_DE_CONFIGURACION {
                 return Err(CustomError::ConfigInvalid);
             }
             Self::load_setting(&mut config, setting[0], setting[1])?;
@@ -56,6 +58,10 @@ impl Config {
         Ok(config)
     }
 
+    /// Carga un "value" en el config en base al "name" que recibe.
+    /// Devuelve CustomError si:
+    /// - El "name" no es un nombre valido.
+    /// - El "value" no se pudo convertir al tipo esperado.
     fn load_setting(&mut self, name: &str, value: &str) -> Result<(), CustomError> {
         match name {
             "SEED" => self.seed = String::from(value),
@@ -90,13 +96,23 @@ mod tests {
     }
 
     #[test]
-    fn config_sin_valores_requeridos() -> Result<(), CustomError> {
+    fn config_con_valores_requeridos() -> Result<(), CustomError> {
         let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n\
             PROTOCOL_VERSION=7000"
             .as_bytes();
-        let cfg = Config::from_reader(content)?;
-        assert_eq!(7000, cfg.protocol_version);
-        assert_eq!("seed.testnet.bitcoin.sprovoost.nl", cfg.seed);
+        let config = Config::from_reader(content)?;
+        assert_eq!(7000, config.protocol_version);
+        assert_eq!("seed.testnet.bitcoin.sprovoost.nl", config.seed);
         Ok(())
+    }
+
+    #[test]
+    fn config_con_valores_demas() {
+        let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n\
+            PROTOCOL_VERSION=7000\ncampo no requerido"
+            .as_bytes();
+        let config = Config::from_reader(content);
+        assert!(config.is_err());
+        assert!(matches!(config, Err(CustomError::ConfigInvalid)));
     }
 }
