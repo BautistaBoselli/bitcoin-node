@@ -10,6 +10,7 @@ pub enum CustomError {
     ConfigMissingValue,
     ConfigMissingFile,
     ConfigErrorReadingValue,
+    CannotResolveSeedAddress,
 }
 
 impl CustomError {
@@ -19,6 +20,7 @@ impl CustomError {
             Self::ConfigMissingValue => "missing config values",
             Self::ConfigMissingFile => "missing config file",
             Self::ConfigErrorReadingValue => "error reading config value",
+            Self::CannotResolveSeedAddress => "cannot resolve seed address",
         }
     }
 }
