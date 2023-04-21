@@ -9,7 +9,8 @@ use crate::error::CustomError;
 #[derive(Debug)]
 pub struct Config {
     pub seed: String,
-    pub protocol_version: u32,
+    pub protocol_version: u16,
+    pub port: u16,
 }
 
 impl Config {
@@ -38,6 +39,7 @@ impl Config {
         let mut config = Self {
             seed: String::new(),
             protocol_version: 0,
+            port: 0,
         };
 
         for line in reader.lines() {
@@ -64,6 +66,9 @@ impl Config {
         if config.protocol_version == 0 {
             return Err(CustomError::ConfigMissingValue);
         }
+        if config.port == 0 {
+            return Err(CustomError::ConfigMissingValue);
+        }
         Ok(())
     }
 
@@ -76,7 +81,10 @@ impl Config {
             "SEED" => self.seed = String::from(value),
             "PROTOCOL_VERSION" => {
                 self.protocol_version =
-                    u32::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
+                    u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
+            }
+            "PORT" => {
+                self.port = u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
             _ => (),
         }
@@ -107,7 +115,8 @@ mod tests {
     #[test]
     fn config_con_valor_vacio() {
         let content = "SEED=\n\
-        PROTOCOL_VERSION=1234"
+        PROTOCOL_VERSION=1234\n\
+        PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content);
         assert!(config.is_err());
@@ -117,11 +126,13 @@ mod tests {
     #[test]
     fn config_con_valores_requeridos() -> Result<(), CustomError> {
         let content = "SEED=seed.test\n\
-            PROTOCOL_VERSION=7000"
+            PROTOCOL_VERSION=7000\n\
+            PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!(4321, config.port);
         Ok(())
     }
 
@@ -129,19 +140,23 @@ mod tests {
     fn config_con_valores_de_mas() -> Result<(), CustomError> {
         let content = "SEED=seed.test\n\
         VALOR_NO_REQUERIDO=1234\n\
-        PROTOCOL_VERSION=7000"
+        PROTOCOL_VERSION=7000\n\
+        PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!(4321, config.port);
 
         let content = "SEED=seed.test\n\
         VALOR_NO_REQUERIDO=\n\
-        PROTOCOL_VERSION=7000"
+        PROTOCOL_VERSION=7000\n\
+        PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!(4321, config.port);
         Ok(())
     }
 }
