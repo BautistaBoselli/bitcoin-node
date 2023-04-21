@@ -6,8 +6,6 @@ use std::str::FromStr;
 
 use crate::error::CustomError;
 
-const CANTIDAD_ARGUMENTOS_DE_CONFIGURACION: usize = 2;
-
 #[derive(Debug)]
 pub struct Config {
     pub seed: String,
@@ -47,15 +45,26 @@ impl Config {
 
             let setting: Vec<&str> = current_line.split('=').collect();
 
-            if setting.len() != CANTIDAD_ARGUMENTOS_DE_CONFIGURACION {
+            // ['KEY', 'VALUE'].len() == 2
+            if setting.len() != 2 {
                 return Err(CustomError::ConfigInvalid);
             }
             Self::load_setting(&mut config, setting[0], setting[1])?;
         }
-        if (config.seed.is_empty()) || (config.protocol_version == 0) {
+
+        Self::check_required_values(&config)?;
+
+        Ok(config)
+    }
+
+    fn check_required_values(config: &Config) -> Result<(), CustomError> {
+        if config.seed.is_empty() {
             return Err(CustomError::ConfigMissingValue);
         }
-        Ok(config)
+        if config.protocol_version == 0 {
+            return Err(CustomError::ConfigMissingValue);
+        }
+        Ok(())
     }
 
     /// Carga un "value" en el config en base al "name" que recibe.
@@ -81,7 +90,7 @@ mod tests {
 
     #[test]
     fn config_con_formato_invalido() {
-        let content = "Archivo de Configuracion".as_bytes();
+        let content = "KEY".as_bytes();
         let config = Config::from_reader(content);
         assert!(config.is_err());
         assert!(matches!(config, Err(CustomError::ConfigInvalid)));
@@ -89,7 +98,17 @@ mod tests {
 
     #[test]
     fn config_con_valores_faltantes() {
-        let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n".as_bytes();
+        let content = "SEED=seed.test\n".as_bytes();
+        let config = Config::from_reader(content);
+        assert!(config.is_err());
+        assert!(matches!(config, Err(CustomError::ConfigMissingValue)));
+    }
+
+    #[test]
+    fn config_con_valor_vacio() {
+        let content = "SEED=\n\
+        PROTOCOL_VERSION=1234"
+            .as_bytes();
         let config = Config::from_reader(content);
         assert!(config.is_err());
         assert!(matches!(config, Err(CustomError::ConfigMissingValue)));
@@ -97,22 +116,32 @@ mod tests {
 
     #[test]
     fn config_con_valores_requeridos() -> Result<(), CustomError> {
-        let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n\
+        let content = "SEED=seed.test\n\
             PROTOCOL_VERSION=7000"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
-        assert_eq!("seed.testnet.bitcoin.sprovoost.nl", config.seed);
+        assert_eq!("seed.test", config.seed);
         Ok(())
     }
 
     #[test]
-    fn config_con_valores_demas() {
-        let content = "SEED=seed.testnet.bitcoin.sprovoost.nl\n\
-            PROTOCOL_VERSION=7000\ncampo no requerido"
+    fn config_con_valores_de_mas() -> Result<(), CustomError> {
+        let content = "SEED=seed.test\n\
+        VALOR_NO_REQUERIDO=1234\n\
+        PROTOCOL_VERSION=7000"
             .as_bytes();
-        let config = Config::from_reader(content);
-        assert!(config.is_err());
-        assert!(matches!(config, Err(CustomError::ConfigInvalid)));
+        let config = Config::from_reader(content)?;
+        assert_eq!(7000, config.protocol_version);
+        assert_eq!("seed.test", config.seed);
+
+        let content = "SEED=seed.test\n\
+        VALOR_NO_REQUERIDO=\n\
+        PROTOCOL_VERSION=7000"
+            .as_bytes();
+        let config = Config::from_reader(content)?;
+        assert_eq!(7000, config.protocol_version);
+        assert_eq!("seed.test", config.seed);
+        Ok(())
     }
 }
