@@ -1,4 +1,4 @@
-use bitcoin::{config::Config, connect::connect};
+use bitcoin::{config::Config, connect::connect, connect::get_my_ip_address};
 use std::{env, path::Path};
 
 const CANT_ARGS: usize = 2;
@@ -26,7 +26,7 @@ fn main() {
 
     println!("Config: {:?}", config);
 
-    let addresses = match connect(config){
+    let mut addresses = match connect(config){
         Ok(addresses) => addresses,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -34,5 +34,15 @@ fn main() {
         }
     };
 
+    let first_adress = match addresses.next(){
+        Some(address) => address,
+        None => {
+            println!("ERROR: no addresses found");
+            return;
+        }
+    };
 
-}
+    
+
+    }
+
