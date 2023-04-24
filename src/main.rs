@@ -1,5 +1,5 @@
-use bitcoin::{config::Config, connect::connect, connect::get_my_ip_address};
-use std::{env, path::Path};
+use bitcoin::{config::Config, connect::{connect, Node}};
+use std::{env, path::Path, clone};
 
 const CANT_ARGS: usize = 2;
 
@@ -26,7 +26,7 @@ fn main() {
 
     println!("Config: {:?}", config);
 
-    let mut addresses = match connect(config){
+    let mut addresses = match connect(config.seed.clone(), config.port){
         Ok(addresses) => addresses,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -35,13 +35,21 @@ fn main() {
     };
 
     let first_adress = match addresses.next(){
-        Some(address) => address,
+        Some(address) => {
+            let node = Node{
+                ipv6: address.ip(),
+                services: 0x00,
+                port: address.port(),
+                version: config.protocol_version,
+            };
+        },
         None => {
             println!("ERROR: no addresses found");
             return;
         }
     };
 
+    //SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xf,0xf,0xf,0xf,0, 0, 0, 0)), 0)
     
 
     }
