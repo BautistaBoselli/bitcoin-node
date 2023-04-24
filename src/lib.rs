@@ -1,4 +1,5 @@
 pub mod config;
 pub mod error;
-pub mod version;
+pub mod message;
 pub mod node;
+pub mod version;

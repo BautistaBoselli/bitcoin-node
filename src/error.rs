@@ -12,7 +12,8 @@ pub enum CustomError {
     ConfigErrorReadingValue,
     CannotResolveSeedAddress,
     CannotConnectToNode,
-    CannotHandshakeNode
+    CannotHandshakeNode,
+    SerializedBufferIsInvalid
 }
 
 impl CustomError {
@@ -25,6 +26,7 @@ impl CustomError {
             Self::CannotResolveSeedAddress => "cannot resolve seed address",
             Self::CannotConnectToNode => "cannot connect to node",
             Self::CannotHandshakeNode => "cannot handshake with node",
+            Self::SerializedBufferIsInvalid => "serialized buffer is invalid"
         }
     }
 }
