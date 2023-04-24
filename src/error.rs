@@ -11,6 +11,8 @@ pub enum CustomError {
     ConfigMissingFile,
     ConfigErrorReadingValue,
     CannotResolveSeedAddress,
+    CannotConnectToNode,
+    CannotHandshakeNode
 }
 
 impl CustomError {
@@ -21,6 +23,8 @@ impl CustomError {
             Self::ConfigMissingFile => "missing config file",
             Self::ConfigErrorReadingValue => "error reading config value",
             Self::CannotResolveSeedAddress => "cannot resolve seed address",
+            Self::CannotConnectToNode => "cannot connect to node",
+            Self::CannotHandshakeNode => "cannot handshake with node",
         }
     }
 }
