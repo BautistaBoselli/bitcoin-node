@@ -1,4 +1,4 @@
-use crate::message::Message;
+use crate::message::{send, Message};
 use crate::{error::CustomError, version};
 use std::{
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, ToSocketAddrs},
@@ -26,8 +26,10 @@ impl Node {
     pub fn from_address(sender_node: Node, address: SocketAddrV6) -> Result<Self, CustomError> {
         let version_message = version::Version::new(sender_node, address);
 
-        let response = version_message.send()?;
+        let response = send(&version_message)?;
         let parsed_response = version::Version::parse(response);
+
+        println!("Parsed response: {:?}", parsed_response);
 
         Ok(Node {
             ipv6: *address.ip(),

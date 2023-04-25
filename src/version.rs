@@ -1,7 +1,4 @@
-use std::{
-    io::{Read, Write},
-    net::{Ipv6Addr, SocketAddrV6},
-};
+use std::net::{Ipv6Addr, SocketAddrV6};
 
 use crate::message::Message;
 use crate::{error::CustomError, node::Node};
@@ -41,30 +38,16 @@ impl Version {
             start_height: 0x00,
         }
     }
-    pub fn send(&self) -> Result<Vec<u8>, CustomError> {
-        let buffer = self.serialize();
-        let mut stream = std::net::TcpStream::connect((self.receiver_address, self.receiver_port))
-            .map_err(|_| CustomError::CannotConnectToNode)?;
-
-        stream
-            .write(&buffer)
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
-        stream
-            .flush()
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
-        println!("Sent: {:?}", buffer);
-        println!("Sent {:?} bytes", buffer.len());
-
-        let mut response = Vec::new();
-        stream
-            .read_to_end(&mut response)
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
-        println!("Received: {:?}", response);
-        Ok(response)
-    }
 }
 
 impl Message for Version {
+    fn get_address(&self) -> (Ipv6Addr, u16) {
+        (self.receiver_address, self.receiver_port)
+    }
+    fn get_command(&self) -> String {
+        String::from("version")
+    }
+
     fn serialize(&self) -> Vec<u8> {
         let mut buffer = vec![];
         buffer.extend_from_slice(&self.version.to_be_bytes());
@@ -89,7 +72,7 @@ impl Message for Version {
         buffer
     }
 
-    fn parse(buffer: Vec<u8>) -> Result<Box<Self>, CustomError> {
+    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
         if buffer.len() < 85 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
@@ -145,7 +128,7 @@ impl Message for Version {
             buffer[83 + user_agent_length as usize],
             buffer[84 + user_agent_length as usize],
         ]);
-        Ok(Box::new(Version {
+        Ok(Version {
             version,
             services,
             timestamp,
@@ -159,10 +142,7 @@ impl Message for Version {
             user_agent,
             user_agent_length,
             start_height,
-        }))
-    }
-    fn get_command(&self) -> String {
-        String::from("version")
+        })
     }
 }
 
@@ -183,7 +163,7 @@ mod tests {
         let version = Version::new(test_node, receiver_address);
         let buffer = version.serialize();
         let parsed_version = Version::parse(buffer)?;
-        assert_eq!(version, *parsed_version);
+        assert_eq!(version, parsed_version);
         Ok(())
     }
 
@@ -200,7 +180,7 @@ mod tests {
         let version = Version::new(test_node, receiver_address);
         let buffer = version.serialize();
         let parsed_version = Version::parse(buffer)?;
-        assert_eq!(version, *parsed_version);
+        assert_eq!(version, parsed_version);
         Ok(())
     }
 }
