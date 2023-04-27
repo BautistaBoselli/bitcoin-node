@@ -21,15 +21,15 @@ pub struct Version {
 }
 
 impl Version {
-    pub fn new(sender_node: Node, receiver_address: SocketAddrV6) -> Self {
+    pub fn new(sender_node: &Node, receiver_address: SocketAddrV6) -> Self {
         Version {
             version: sender_node.version,
-            services: 0x00,
+            services: sender_node.services,
             timestamp: chrono::Utc::now().timestamp() as u64,
             receiver_services: 0x00,
             receiver_address: *receiver_address.ip(),
             receiver_port: receiver_address.port(),
-            sender_services: 0x00,
+            sender_services: sender_node.services,
             sender_address: sender_node.ipv6,
             sender_port: sender_node.port,
             nonce: 0x00,
@@ -50,42 +50,49 @@ impl Message for Version {
 
     fn serialize(&self) -> Vec<u8> {
         let mut buffer = vec![];
-        buffer.extend_from_slice(&self.version.to_be_bytes());
-        buffer.extend_from_slice(&self.services.to_be_bytes());
-        buffer.extend_from_slice(&self.timestamp.to_be_bytes());
-        buffer.extend_from_slice(&self.receiver_services.to_be_bytes());
+        buffer.extend_from_slice(&self.version.to_le_bytes());
+        buffer.extend_from_slice(&self.services.to_le_bytes());
+        buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        buffer.extend_from_slice(&self.receiver_services.to_le_bytes());
         let ipv6_buffer = self.receiver_address.octets();
         for byte in ipv6_buffer {
             buffer.extend_from_slice(&[byte]);
         }
         buffer.extend_from_slice(&self.receiver_port.to_be_bytes());
-        buffer.extend_from_slice(&self.sender_services.to_be_bytes());
+        buffer.extend_from_slice(&self.sender_services.to_le_bytes());
         let ipv6_buffer = self.sender_address.octets();
         for byte in ipv6_buffer {
             buffer.extend_from_slice(&[byte]);
         }
         buffer.extend_from_slice(&self.sender_port.to_be_bytes());
-        buffer.extend_from_slice(&self.nonce.to_be_bytes());
-        buffer.extend_from_slice(&self.user_agent_length.to_be_bytes());
+        buffer.extend_from_slice(&self.nonce.to_le_bytes());
+        buffer.extend_from_slice(&self.user_agent_length.to_le_bytes());
         buffer.extend_from_slice(self.user_agent.as_bytes());
-        buffer.extend_from_slice(&self.start_height.to_be_bytes());
+        buffer.extend_from_slice(&self.start_height.to_le_bytes());
+        println!("Address and Port: {:?}", &buffer[46..72]);
+
         buffer
     }
 
-    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
+    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
+    where
+        Self: Sized,
+    {
+        println!("Buffer: {:?}", buffer);
+        println!("Buffer len: {:?} bytes", buffer.len());
         if buffer.len() < 85 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
-        let version = i32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-        let services = u64::from_be_bytes([
+        let version = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let services = u64::from_le_bytes([
             buffer[4], buffer[5], buffer[6], buffer[7], buffer[8], buffer[9], buffer[10],
             buffer[11],
         ]);
-        let timestamp = u64::from_be_bytes([
+        let timestamp = u64::from_le_bytes([
             buffer[12], buffer[13], buffer[14], buffer[15], buffer[16], buffer[17], buffer[18],
             buffer[19],
         ]);
-        let receiver_services = u64::from_be_bytes([
+        let receiver_services = u64::from_le_bytes([
             buffer[20], buffer[21], buffer[22], buffer[23], buffer[24], buffer[25], buffer[26],
             buffer[27],
         ]);
@@ -100,7 +107,7 @@ impl Message for Version {
             u16::from_be_bytes([buffer[42], buffer[43]]),
         );
         let receiver_port = u16::from_be_bytes([buffer[44], buffer[45]]);
-        let sender_services = u64::from_be_bytes([
+        let sender_services = u64::from_le_bytes([
             buffer[46], buffer[47], buffer[48], buffer[49], buffer[50], buffer[51], buffer[52],
             buffer[53],
         ]);
@@ -115,14 +122,14 @@ impl Message for Version {
             u16::from_be_bytes([buffer[68], buffer[69]]),
         );
         let sender_port = u16::from_be_bytes([buffer[70], buffer[71]]);
-        let nonce = u64::from_be_bytes([
+        let nonce = u64::from_le_bytes([
             buffer[72], buffer[73], buffer[74], buffer[75], buffer[76], buffer[77], buffer[78],
             buffer[79],
         ]);
         let user_agent_length = buffer[80];
         let user_agent =
             String::from_utf8(buffer[81..(81 + user_agent_length as usize)].to_vec()).unwrap();
-        let start_height = i32::from_be_bytes([
+        let start_height = i32::from_le_bytes([
             buffer[81 + user_agent_length as usize],
             buffer[82 + user_agent_length as usize],
             buffer[83 + user_agent_length as usize],
@@ -160,7 +167,7 @@ mod tests {
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-        let version = Version::new(test_node, receiver_address);
+        let version = Version::new(&test_node, receiver_address);
         let buffer = version.serialize();
         let parsed_version = Version::parse(buffer)?;
         assert_eq!(version, parsed_version);
@@ -177,7 +184,7 @@ mod tests {
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-        let version = Version::new(test_node, receiver_address);
+        let version = Version::new(&test_node, receiver_address);
         let buffer = version.serialize();
         let parsed_version = Version::parse(buffer)?;
         assert_eq!(version, parsed_version);

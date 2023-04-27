@@ -1,5 +1,8 @@
-use bitcoin::{config::Config, node::{Node, get_addresses}};
-use std::{env, path::Path, net::{Ipv6Addr}};
+use bitcoin::{
+    config::Config,
+    node::{get_addresses, Node},
+};
+use std::{env, net::Ipv4Addr, path::Path};
 
 const CANT_ARGS: usize = 2;
 
@@ -27,14 +30,13 @@ fn main() {
     println!("Config: {:?}", config);
 
     let my_node = Node {
-        ipv6: Ipv6Addr::new(0xf,0xf,0xf,0xf,0, 0, 0, 0),
+        ipv6: Ipv4Addr::new(0, 0, 0, 0).to_ipv6_mapped(),
         services: 0x00,
         port: config.port,
         version: config.protocol_version,
     };
 
-
-    let mut addresses = match get_addresses(config.seed.clone(), config.port){
+    let mut addresses = match get_addresses(config.seed.clone(), config.port) {
         Ok(addresses) => addresses,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -42,15 +44,19 @@ fn main() {
         }
     };
 
-    let first_address = match addresses.next(){
+    let first_address = match addresses.next() {
         Some(address) => match address {
-            std::net::SocketAddr::V6(address) => Node::from_address(my_node, address),
+            std::net::SocketAddr::V6(address) => Node::from_address(&my_node, address),
             std::net::SocketAddr::V4(address) => {
-                let address_v6 = std::net::SocketAddrV6::new(address.ip().to_ipv6_mapped(), address.port(), 0, 0);
-                    Node::from_address(my_node, address_v6)
+                println!("IPV6:{:?} ", address.ip().to_ipv6_mapped());
+                let address_v6 = std::net::SocketAddrV6::new(
+                    address.ip().to_ipv6_mapped(),
+                    address.port(),
+                    0,
+                    0,
+                );
+                Node::from_address(&my_node, address_v6)
             }
-
-            
         },
         None => {
             println!("ERROR: no addresses found");
@@ -60,10 +66,5 @@ fn main() {
 
     println!("First address: {:?}", first_address);
 
-
-
     //SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xf,0xf,0xf,0xf,0, 0, 0, 0)), 0)
-    
-
-    }
-
+}

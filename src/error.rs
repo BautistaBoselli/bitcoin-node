@@ -13,7 +13,9 @@ pub enum CustomError {
     CannotResolveSeedAddress,
     CannotConnectToNode,
     CannotHandshakeNode,
-    SerializedBufferIsInvalid
+    SerializedBufferIsInvalid,
+    InvalidHeader,
+    CommandNotImplemented,
 }
 
 impl CustomError {
@@ -26,7 +28,9 @@ impl CustomError {
             Self::CannotResolveSeedAddress => "cannot resolve seed address",
             Self::CannotConnectToNode => "cannot connect to node",
             Self::CannotHandshakeNode => "cannot handshake with node",
-            Self::SerializedBufferIsInvalid => "serialized buffer is invalid"
+            Self::SerializedBufferIsInvalid => "serialized buffer is invalid",
+            Self::InvalidHeader => "invalid header",
+            Self::CommandNotImplemented => "command not implemented",
         }
     }
 }

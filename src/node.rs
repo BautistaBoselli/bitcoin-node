@@ -1,5 +1,7 @@
-use crate::message::{send, Message};
+use crate::message::{Message, MessageHeader};
+use crate::version::Version;
 use crate::{error::CustomError, version};
+use std::io::Read;
 use std::{
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, ToSocketAddrs},
     vec::IntoIter,
@@ -23,20 +25,35 @@ pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, Cu
 }
 
 impl Node {
-    pub fn from_address(sender_node: Node, address: SocketAddrV6) -> Result<Self, CustomError> {
+    pub fn from_address(sender_node: &Node, address: SocketAddrV6) -> Result<Self, CustomError> {
         let version_message = version::Version::new(sender_node, address);
 
-        let response = send(&version_message)?;
-        let parsed_response = version::Version::parse(response);
+        let mut stream = std::net::TcpStream::connect(version_message.get_address())
+            .map_err(|_| CustomError::CannotConnectToNode)?;
 
-        println!("Parsed response: {:?}", parsed_response);
+        version_message.send(&mut stream)?;
 
-        Ok(Node {
-            ipv6: *address.ip(),
-            services: 0x00,
-            port: address.port(),
-            version: version_message.version,
-        })
+        let response_header = MessageHeader::read(&mut stream)?;
+
+        if response_header.command == "version".to_string() {
+            let mut message_buffer = vec![0; response_header.payload_size as usize];
+            stream
+                .read_exact(&mut message_buffer)
+                .map_err(|_| CustomError::InvalidHeader)?;
+
+            let version = Version::parse(message_buffer)?;
+
+            println!("Version: {:?}", version);
+
+            return Ok(Node {
+                ipv6: *address.ip(),
+                services: version.services,
+                port: address.port(),
+                version: version.version,
+            });
+        }
+
+        Err(CustomError::CannotConnectToNode)
     }
 }
 
