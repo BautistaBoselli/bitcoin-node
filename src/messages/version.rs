@@ -41,9 +41,6 @@ impl Version {
 }
 
 impl Message for Version {
-    fn get_address(&self) -> (Ipv6Addr, u16) {
-        (self.receiver_address, self.receiver_port)
-    }
     fn get_command(&self) -> String {
         String::from("version")
     }
@@ -77,8 +74,6 @@ impl Message for Version {
     where
         Self: Sized,
     {
-        println!("Buffer: {:?}", buffer);
-        println!("Buffer len: {:?} bytes", buffer.len());
         if buffer.len() < 85 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
@@ -176,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn parsed_invalid_version() -> Result<(), CustomError> {
+    fn parse_version() -> Result<(), CustomError> {
         let test_node = Node {
             ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
             services: 0x00,
@@ -192,5 +187,16 @@ mod tests {
         let parsed_version = Version::parse(buffer)?;
         assert_eq!(version, parsed_version);
         Ok(())
+    }
+
+    #[test]
+    fn parse_invalid_version() {
+        let buffer_too_short = vec![
+            127, 17, 1, 0, 9, 4, 0, 0, 0, 0, 0, 0, 48, 21, 75, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 40, 0, 0, 64, 0, 27, 8, 11, 68, 134, 135, 118, 52, 198, 86, 32, 213, 227, 9, 4,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let parsed_version = Version::parse(buffer_too_short);
+        assert_eq!(parsed_version.is_err(), true);
     }
 }

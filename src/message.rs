@@ -3,12 +3,11 @@ use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash;
 
 use std::io::Read;
+use std::io::Write;
 use std::net::TcpStream;
-use std::{io::Write, net::Ipv6Addr};
 
 pub trait Message {
     fn serialize(&self) -> Vec<u8>;
-    fn get_address(&self) -> (Ipv6Addr, u16);
     fn get_command(&self) -> String;
     fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
     where
@@ -45,11 +44,11 @@ pub trait Message {
             .read_exact(&mut payload_buffer)
             .map_err(|_| CustomError::CannotHandshakeNode)?;
 
-        Ok(Self::parse(payload_buffer)?)
+        Self::parse(payload_buffer)
     }
 }
 
-fn get_checksum(payload: &Vec<u8>) -> [u8; 4] {
+fn get_checksum(payload: &[u8]) -> [u8; 4] {
     let hash = sha256::Hash::hash(sha256::Hash::hash(payload).as_byte_array());
     [hash[0], hash[1], hash[2], hash[3]]
 }
@@ -101,7 +100,7 @@ impl MessageHeader {
                 return Err(CustomError::InvalidHeader);
             }
         };
-        command = command.replace("\0", "");
+        command = command.replace('\0', "");
         let payload_size = u32::from_le_bytes([buffer[16], buffer[17], buffer[18], buffer[19]]);
         let checksum = [buffer[20], buffer[21], buffer[22], buffer[23]];
 
@@ -120,10 +119,7 @@ impl MessageHeader {
             .map_err(|_| CustomError::CannotHandshakeNode)
             .unwrap();
 
-        println!("Received header: {:?}", header_buffer);
-
         let header = Self::parse(header_buffer).unwrap();
-        println!("Received header: {:?}", header);
 
         Ok(header)
     }
@@ -131,7 +127,7 @@ impl MessageHeader {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddrV6;
+    use std::net::{Ipv6Addr, SocketAddrV6};
 
     use crate::{messages::version::Version, node::Node};
 

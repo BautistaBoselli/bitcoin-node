@@ -1,5 +1,6 @@
 use crate::error::CustomError;
 use crate::message::{Message, MessageHeader};
+use crate::messages::ver_ack::VerAck;
 use crate::messages::version::Version;
 use std::net::TcpStream;
 use std::{
@@ -36,7 +37,7 @@ impl Node {
         let stream = TcpStream::connect(address).map_err(|_| CustomError::CannotConnectToNode)?;
 
         Ok(Self {
-            ip_v6: ip_v6,
+            ip_v6,
             services: 0,
             port: address.port(),
             version: 0,
@@ -57,7 +58,7 @@ impl Node {
 
         let response_header = MessageHeader::read(stream)?;
 
-        if response_header.command != "version".to_string() {
+        if response_header.command.as_str() != "version" {
             return Err(CustomError::CannotHandshakeNode);
         }
 
@@ -67,17 +68,14 @@ impl Node {
 
         println!("Version: {:?}", version_response);
 
-        // let response_header = MessageHeader::read(stream)?;
+        let response_header = MessageHeader::read(stream)?;
 
-        // if response_header.command != "verack".to_string() {
-        //     return Err(CustomError::CannotHandshakeNode);
-        // }
+        if response_header.command.as_str() != "verack" {
+            return Err(CustomError::CannotHandshakeNode);
+        }
 
-        // let version_response = VerAck::read(stream)?;
-        // self.version = version_response.version;
-        // self.services = version_response.services;
-
-        // println!("Version: {:?}", version_response);
+        let ver_ack_response = VerAck::read(stream, response_header.payload_size)?;
+        println!("VerAck: {:?}", ver_ack_response);
 
         self.handshake = true;
         Ok(())
