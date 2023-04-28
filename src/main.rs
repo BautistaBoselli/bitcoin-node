@@ -1,5 +1,8 @@
-use bitcoin::{config::Config, connect::connect};
-use std::{env, path::Path};
+use bitcoin::{
+    config::Config,
+    node::{get_addresses, Node},
+};
+use std::{env, net::Ipv4Addr, path::Path};
 
 const CANT_ARGS: usize = 2;
 
@@ -24,9 +27,16 @@ fn main() {
         }
     };
 
-    println!("Config: {:?}", config);
+    let my_node = Node {
+        ip_v6: Ipv4Addr::new(0, 0, 0, 0).to_ipv6_mapped(),
+        services: 0x00,
+        port: config.port,
+        version: config.protocol_version,
+        stream: None,
+        handshake: false,
+    };
 
-    let addresses = match connect(config){
+    let mut addresses = match get_addresses(config.seed.clone(), config.port) {
         Ok(addresses) => addresses,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -34,5 +44,31 @@ fn main() {
         }
     };
 
+    let first_address = match addresses.next() {
+        Some(address) => address,
+        None => {
+            println!("ERROR: no addresses found");
+            return;
+        }
+    };
 
+    let mut first_node = match Node::new(first_address) {
+        Ok(node) => node,
+        Err(_) => {
+            println!("ERROR: no addresses found");
+            return;
+        }
+    };
+
+    match first_node.handshake(&my_node) {
+        Ok(_) => println!("Handshake successful"),
+        Err(error) => {
+            println!("ERROR: {}", error);
+            return;
+        }
+    };
+
+    println!("First address: {:?}", first_node);
+
+    //SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xf,0xf,0xf,0xf,0, 0, 0, 0)), 0)
 }

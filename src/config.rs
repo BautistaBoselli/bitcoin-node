@@ -9,7 +9,7 @@ use crate::error::CustomError;
 #[derive(Debug)]
 pub struct Config {
     pub seed: String,
-    pub protocol_version: u16,
+    pub protocol_version: i32,
     pub port: u16,
 }
 
@@ -81,7 +81,7 @@ impl Config {
             "SEED" => self.seed = String::from(value),
             "PROTOCOL_VERSION" => {
                 self.protocol_version =
-                    u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
+                    i32::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
             "PORT" => {
                 self.port = u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
