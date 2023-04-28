@@ -30,7 +30,7 @@ impl Version {
             receiver_address: *receiver_address.ip(),
             receiver_port: receiver_address.port(),
             sender_services: sender_node.services,
-            sender_address: sender_node.ipv6,
+            sender_address: sender_node.ip_v6,
             sender_port: sender_node.port,
             nonce: 0x00,
             user_agent: String::from(""),
@@ -69,7 +69,6 @@ impl Message for Version {
         buffer.extend_from_slice(&self.user_agent_length.to_le_bytes());
         buffer.extend_from_slice(self.user_agent.as_bytes());
         buffer.extend_from_slice(&self.start_height.to_le_bytes());
-        println!("Address and Port: {:?}", &buffer[46..72]);
 
         buffer
     }
@@ -160,10 +159,12 @@ mod tests {
     #[test]
     fn create_version_message() -> Result<(), CustomError> {
         let test_node = Node {
-            ipv6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
+            ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
             services: 0x00,
             port: 4321,
             version: 7000,
+            stream: None,
+            handshake: false,
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
@@ -177,10 +178,12 @@ mod tests {
     #[test]
     fn parsed_invalid_version() -> Result<(), CustomError> {
         let test_node = Node {
-            ipv6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
+            ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
             services: 0x00,
             port: 4321,
             version: 7000,
+            stream: None,
+            handshake: false,
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);

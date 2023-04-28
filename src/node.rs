@@ -1,7 +1,7 @@
+use crate::error::CustomError;
 use crate::message::{Message, MessageHeader};
-use crate::version::Version;
-use crate::{error::CustomError, version};
-use std::io::Read;
+use crate::messages::version::Version;
+use std::net::TcpStream;
 use std::{
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, ToSocketAddrs},
     vec::IntoIter,
@@ -9,10 +9,12 @@ use std::{
 
 #[derive(Debug)]
 pub struct Node {
-    pub ipv6: Ipv6Addr,
+    pub ip_v6: Ipv6Addr,
     pub services: u64,
     pub port: u16,
     pub version: i32,
+    pub stream: Option<TcpStream>,
+    pub handshake: bool,
 }
 
 /// Conecta con la semilla DNS y devuelve un iterador de direcciones IP.
@@ -25,35 +27,60 @@ pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, Cu
 }
 
 impl Node {
-    pub fn from_address(sender_node: &Node, address: SocketAddrV6) -> Result<Self, CustomError> {
-        let version_message = version::Version::new(sender_node, address);
+    pub fn new(address: SocketAddr) -> Result<Self, CustomError> {
+        let ip_v6 = match address {
+            SocketAddr::V4(addr) => addr.ip().to_ipv6_mapped(),
+            SocketAddr::V6(addr) => addr.ip().to_owned(),
+        };
 
-        let mut stream = std::net::TcpStream::connect(version_message.get_address())
-            .map_err(|_| CustomError::CannotConnectToNode)?;
+        let stream = TcpStream::connect(address).map_err(|_| CustomError::CannotConnectToNode)?;
 
-        version_message.send(&mut stream)?;
+        Ok(Self {
+            ip_v6: ip_v6,
+            services: 0,
+            port: address.port(),
+            version: 0,
+            stream: Some(stream),
+            handshake: false,
+        })
+    }
+    pub fn handshake(&mut self, sender_node: &Node) -> Result<(), CustomError> {
+        let version_message =
+            Version::new(sender_node, SocketAddrV6::new(self.ip_v6, self.port, 0, 0));
 
-        let response_header = MessageHeader::read(&mut stream)?;
+        let stream = match &mut self.stream {
+            Some(stream) => stream,
+            None => return Err(CustomError::CannotHandshakeNode),
+        };
 
-        if response_header.command == "version".to_string() {
-            let mut message_buffer = vec![0; response_header.payload_size as usize];
-            stream
-                .read_exact(&mut message_buffer)
-                .map_err(|_| CustomError::InvalidHeader)?;
+        version_message.send(stream)?;
 
-            let version = Version::parse(message_buffer)?;
+        let response_header = MessageHeader::read(stream)?;
 
-            println!("Version: {:?}", version);
-
-            return Ok(Node {
-                ipv6: *address.ip(),
-                services: version.services,
-                port: address.port(),
-                version: version.version,
-            });
+        if response_header.command != "version".to_string() {
+            return Err(CustomError::CannotHandshakeNode);
         }
 
-        Err(CustomError::CannotConnectToNode)
+        let version_response = Version::read(stream, response_header.payload_size)?;
+        self.version = version_response.version;
+        self.services = version_response.services;
+
+        println!("Version: {:?}", version_response);
+
+        // let response_header = MessageHeader::read(stream)?;
+
+        // if response_header.command != "verack".to_string() {
+        //     return Err(CustomError::CannotHandshakeNode);
+        // }
+
+        // let version_response = VerAck::read(stream)?;
+        // self.version = version_response.version;
+        // self.services = version_response.services;
+
+        // println!("Version: {:?}", version_response);
+
+        self.handshake = true;
+        Ok(())
     }
 }
 

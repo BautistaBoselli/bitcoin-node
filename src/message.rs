@@ -35,22 +35,11 @@ pub trait Message {
         Ok(())
     }
 
-    fn read(stream: &mut TcpStream) -> Result<Self, CustomError>
+    fn read(stream: &mut TcpStream, message_size: u32) -> Result<Self, CustomError>
     where
         Self: Sized,
     {
-        let mut header_buffer = [0; 24];
-
-        stream
-            .read_exact(&mut header_buffer)
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
-
-        println!("Received header: {:?}", header_buffer);
-
-        let header = MessageHeader::parse(header_buffer)?;
-        println!("Received header: {:?}", header);
-
-        let mut payload_buffer = vec![0; header.payload_size as usize];
+        let mut payload_buffer = vec![0; message_size as usize];
 
         stream
             .read_exact(&mut payload_buffer)
@@ -105,9 +94,14 @@ impl MessageHeader {
             return Err(CustomError::InvalidHeader);
         }
         let magic = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-        let command = String::from_utf8(buffer[4..16].to_vec())
-            .unwrap()
-            .replace("\0", "");
+        let mut command = match String::from_utf8(buffer[4..16].to_vec()) {
+            Ok(command) => command,
+            Err(_) => {
+                println!("Invalid command on buffer: {:?}", buffer);
+                return Err(CustomError::InvalidHeader);
+            }
+        };
+        command = command.replace("\0", "");
         let payload_size = u32::from_le_bytes([buffer[16], buffer[17], buffer[18], buffer[19]]);
         let checksum = [buffer[20], buffer[21], buffer[22], buffer[23]];
 
@@ -139,7 +133,7 @@ impl MessageHeader {
 mod tests {
     use std::net::SocketAddrV6;
 
-    use crate::{node::Node, version::Version};
+    use crate::{messages::version::Version, node::Node};
 
     use super::*;
 
@@ -153,10 +147,12 @@ mod tests {
     #[test]
     fn test_message_header_length() {
         let test_node = Node {
-            ipv6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
+            ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
             services: 0x00,
             port: 4321,
             version: 7000,
+            stream: None,
+            handshake: false,
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);

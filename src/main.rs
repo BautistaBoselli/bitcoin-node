@@ -27,13 +27,13 @@ fn main() {
         }
     };
 
-    println!("Config: {:?}", config);
-
     let my_node = Node {
-        ipv6: Ipv4Addr::new(0, 0, 0, 0).to_ipv6_mapped(),
+        ip_v6: Ipv4Addr::new(0, 0, 0, 0).to_ipv6_mapped(),
         services: 0x00,
         port: config.port,
         version: config.protocol_version,
+        stream: None,
+        handshake: false,
     };
 
     let mut addresses = match get_addresses(config.seed.clone(), config.port) {
@@ -45,26 +45,30 @@ fn main() {
     };
 
     let first_address = match addresses.next() {
-        Some(address) => match address {
-            std::net::SocketAddr::V6(address) => Node::from_address(&my_node, address),
-            std::net::SocketAddr::V4(address) => {
-                println!("IPV6:{:?} ", address.ip().to_ipv6_mapped());
-                let address_v6 = std::net::SocketAddrV6::new(
-                    address.ip().to_ipv6_mapped(),
-                    address.port(),
-                    0,
-                    0,
-                );
-                Node::from_address(&my_node, address_v6)
-            }
-        },
+        Some(address) => address,
         None => {
             println!("ERROR: no addresses found");
             return;
         }
     };
 
-    println!("First address: {:?}", first_address);
+    let mut first_node = match Node::new(first_address) {
+        Ok(node) => node,
+        Err(_) => {
+            println!("ERROR: no addresses found");
+            return;
+        }
+    };
+
+    match first_node.handshake(&my_node) {
+        Ok(_) => println!("Handshake successful"),
+        Err(error) => {
+            println!("ERROR: {}", error);
+            return;
+        }
+    };
+
+    println!("First address: {:?}", first_node);
 
     //SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0xf,0xf,0xf,0xf,0, 0, 0, 0)), 0)
 }
