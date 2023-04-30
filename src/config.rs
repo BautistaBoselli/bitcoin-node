@@ -7,6 +7,13 @@ use std::str::FromStr;
 use crate::error::CustomError;
 
 #[derive(Debug)]
+
+/// Config es una estructura que contiene los valores de configuracion del nodo.
+/// Estos valores se leen de un archivo de configuracion.
+/// Los valores son:
+/// - seed: semilla DNS para obtener direcciones IP.
+/// - protocol_version: version del protocolo.
+/// - port: puerto en el que escucha el nodo.
 pub struct Config {
     pub seed: String,
     pub protocol_version: i32,
@@ -59,6 +66,7 @@ impl Config {
         Ok(config)
     }
 
+    /// Verifica que todos los valores requeridos esten cargados en el config.
     fn check_required_values(config: &Config) -> Result<(), CustomError> {
         if config.seed.is_empty() {
             return Err(CustomError::ConfigMissingValue);
@@ -84,7 +92,8 @@ impl Config {
                     i32::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
             "PORT" => {
-                self.port = u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
+                self.port =
+                    u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
             _ => (),
         }

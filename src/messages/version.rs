@@ -4,6 +4,21 @@ use crate::message::Message;
 use crate::{error::CustomError, node::Node};
 
 #[derive(PartialEq, Debug)]
+/// Crea una estructura para el mensaje de versión con los campos necesarios de acuerdo con el protocolo de Bitcoin.
+/// Los campos son:
+/// - version: que indica la versión del protocolo.
+/// - services: que indica los servicios que ofrece el nodo.
+/// - timestamp: que indica el timestamp del nodo que envía el mensaje.
+/// - receiver_services: que indica los servicios que se espera que pueda ofrecer el nodo que recibe el mensaje.
+/// - receiver_address: que indica la dirección IPv6 del nodo que recibe el mensaje.
+/// - receiver_port: que indica el puerto del nodo que recibe el mensaje.
+/// - sender_services: que indica los servicios que ofrece el nodo que envía el mensaje.
+/// - sender_address: que indica la dirección IPv6 del nodo que envía el mensaje.
+/// - sender_port: que indica el puerto del nodo que envía el mensaje.
+/// - nonce: que indica un número aleatorio que se utiliza para detectar conexiones a sí mismo.
+/// - user_agent: que indica el software que utiliza el nodo que envía el mensaje, puede ser vacío.
+/// - user_agent_length: que indica la longitud del campo user_agent. Si es 0, el campo user_agent no se incluye.
+/// - start_height: que indica el tamaño de la blockchain del nodo que envía el mensaje.
 pub struct Version {
     pub version: i32,
     pub services: u64,
@@ -21,6 +36,10 @@ pub struct Version {
 }
 
 impl Version {
+    /// Crea un nuevo mensaje de versión a partir de un nodo transmisor y una dirección IPv6 del nodo que recibe el mensaje.
+    /// El campo user_agent se inicializa con un string vacío y el campo user_agent_length con 0.
+    /// El campo nonce se inicializa con 0.
+    /// El campo start_height se inicializa con 0.
     pub fn new(sender_node: &Node, receiver_address: SocketAddrV6) -> Self {
         Version {
             version: sender_node.version,
@@ -40,11 +59,16 @@ impl Version {
     }
 }
 
+/// Implementa el trait Message para el mensaje de versión.
 impl Message for Version {
+    /// Devuelve el comando del mensaje.
+    /// En este caso, el comando es "version".
     fn get_command(&self) -> String {
         String::from("version")
     }
 
+    /// Devuelve un mensaje de versión serializado en un vector de bytes.
+    /// La mayoria de datos se envia en little endian, excepto las direcciones ip y puertos del nodo transmisor y receptor que se envian en big endian.
     fn serialize(&self) -> Vec<u8> {
         let mut buffer = vec![];
         buffer.extend_from_slice(&self.version.to_le_bytes());
@@ -70,6 +94,8 @@ impl Message for Version {
         buffer
     }
 
+    /// Deserializa un vector de bytes en un mensaje de versión.
+    /// Devuelve un CustomError si el vector de bytes no contiene la cantidad minima de bytes de un mensaje versión válido.
     fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
     where
         Self: Sized,
@@ -121,8 +147,8 @@ impl Message for Version {
             buffer[79],
         ]);
         let user_agent_length = buffer[80];
-        let user_agent =
-            String::from_utf8(buffer[81..(81 + user_agent_length as usize)].to_vec()).unwrap();
+        let user_agent = String::from_utf8(buffer[81..(81 + user_agent_length as usize)].to_vec())
+            .map_err(|_| CustomError::SerializedBufferIsInvalid)?;
         let start_height = i32::from_le_bytes([
             buffer[81 + user_agent_length as usize],
             buffer[82 + user_agent_length as usize],
