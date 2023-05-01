@@ -1,8 +1,16 @@
 use bitcoin::{
     config::Config,
-    node::{get_addresses, Node},
+    error::CustomError,
+    node::Node,
+    peer::{get_addresses, Peer},
 };
-use std::{env, net::Ipv4Addr, path::Path};
+use std::{
+    env,
+    net::Ipv4Addr,
+    path::Path,
+    thread::{self, JoinHandle},
+};
+use std::{net::SocketAddr, vec::IntoIter};
 
 const CANT_ARGS: usize = 2;
 
@@ -27,16 +35,9 @@ fn main() {
         }
     };
 
-    let my_node = Node {
-        ip_v6: Ipv4Addr::new(0, 0, 0, 0).to_ipv6_mapped(),
-        services: 0x00,
-        port: config.port,
-        version: config.protocol_version,
-        stream: None,
-        handshake: false,
-    };
+    let my_node = Node::new(&config);
 
-    let mut addresses = match get_addresses(config.seed.clone(), config.port) {
+    let addresses = match get_addresses(config.seed.clone(), my_node.port) {
         Ok(addresses) => addresses,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -44,29 +45,32 @@ fn main() {
         }
     };
 
-    let first_address = match addresses.next() {
-        Some(address) => address,
-        None => {
-            println!("ERROR: no addresses found");
-            return;
-        }
-    };
+    let node_threads = handshake_all_nodes(addresses, &my_node);
+    // let node_threads = match handshake_all_nodes(addresses, &my_node) {
+    //     Ok(node_threads) => node_threads,
+    //     Err(error) => {
+    //         println!("ERROR: {}", error);
+    //         return;
+    //     }
+    // };
+}
 
-    let mut first_node = match Node::new(first_address) {
-        Ok(node) => node,
-        Err(_) => {
-            println!("ERROR: no addresses found");
-            return;
-        }
-    };
+fn handshake_all_nodes(addresses: IntoIter<SocketAddr>, my_node: &Node) -> Vec<Peer> {
+    let mut handles: Vec<Peer> = vec![];
 
-    match first_node.handshake(&my_node) {
-        Ok(_) => println!("Handshake successful"),
-        Err(error) => {
-            println!("ERROR: {}", error);
-            return;
-        }
-    };
+    println!("Handshaking with {} nodes", addresses.len());
 
-    println!("First Node: {:?}", first_node);
+    for address in addresses {
+        let peer = match Peer::new(address, &my_node) {
+            Ok(peer) => peer,
+            Err(error) => {
+                println!("ERROR: {} {}", error, address.ip());
+                continue;
+            }
+        };
+        println!("Handshake succesful with {}", peer.ip_v6);
+        handles.push(peer);
+    }
+
+    handles
 }

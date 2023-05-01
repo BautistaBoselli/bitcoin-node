@@ -1,7 +1,8 @@
 use std::net::{Ipv6Addr, SocketAddrV6};
 
+use crate::error::CustomError;
 use crate::message::Message;
-use crate::{error::CustomError, node::Node};
+use crate::node::Node;
 
 #[derive(PartialEq, Debug)]
 /// Crea una estructura para el mensaje de versión con los campos necesarios de acuerdo con el protocolo de Bitcoin.
@@ -175,6 +176,7 @@ impl Message for Version {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -184,8 +186,7 @@ mod tests {
             services: 0x00,
             port: 4321,
             version: 7000,
-            stream: None,
-            handshake: false,
+            peers: vec![],
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
@@ -203,8 +204,7 @@ mod tests {
             services: 0x00,
             port: 4321,
             version: 7000,
-            stream: None,
-            handshake: false,
+            peers: vec![],
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
