@@ -1,9 +1,12 @@
 use crate::{error::CustomError, message::Message};
 
 #[derive(Debug)]
+/// VerAck es un mensaje vacio que se envia tras intercambiar los mensajes de version.
+/// Sirve para confirmar que se ha establecido la conexión.
 pub struct VerAck {}
 
 impl VerAck {
+    /// Crea un nuevo mensaje de verificación de conexión.
     pub fn new() -> Self {
         VerAck {}
     }
@@ -15,15 +18,21 @@ impl Default for VerAck {
     }
 }
 
+/// Implementa el trait Message para el mensaje de verificación de conexión.
 impl Message for VerAck {
+    /// Devuelve el comando del mensaje.
+    /// En este caso, el comando es "verack".
     fn get_command(&self) -> String {
         String::from("verack")
     }
 
+    /// Devuelve un vector vacío.
     fn serialize(&self) -> Vec<u8> {
         vec![]
     }
 
+    /// Parsea un vector de bytes en un mensaje de verificación de conexión.
+    /// Si el vector no está vacío, devuelve un CustomError.
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError>
     where
         Self: Sized,

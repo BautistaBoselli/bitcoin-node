@@ -6,6 +6,14 @@ use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 
+/// Este trait representa un mensaje del protocolo.
+/// Todos los mensajes deben implementar este trait, por lo que todos deben poder:
+/// - Serializarse.
+/// - Parsearse.
+/// - Obtener su comando.
+/// Esto se realiza de forma distinta para cada mensaje, por lo que se implementa de forma individual en cada uno.
+/// A parte de esto, todos los mensajes deben poder enviarse a un stream y leerse de un stream.
+/// Para ello, se implementan los métodos send y read que al ser el procedimiento igual en todos los mensajes, no requieren implementación individual.
 pub trait Message {
     fn serialize(&self) -> Vec<u8>;
     fn get_command(&self) -> String;
@@ -13,6 +21,11 @@ pub trait Message {
     where
         Self: Sized;
 
+    /// Envía el mensaje a un stream.
+    /// Devuelve CustomError si:
+    /// - No se puede escribir en el stream el header del mensaje.
+    /// - No se puede escribir en el stream el payload del mensaje.
+    /// - No se puede hacer flush del stream.
     fn send(&self, stream: &mut TcpStream) -> Result<(), CustomError>
     where
         Self: Sized,
@@ -34,6 +47,9 @@ pub trait Message {
         Ok(())
     }
 
+    /// Lee un mensaje de un stream y lo parsea.
+    /// Devuelve CustomError si:
+    /// - No se puede leer del stream
     fn read(stream: &mut TcpStream, message_size: u32) -> Result<Self, CustomError>
     where
         Self: Sized,
@@ -48,13 +64,23 @@ pub trait Message {
     }
 }
 
+/// Calcula el checksum de un payload.
+/// El checksum es el hash de doble aplicación de sha256.
+/// Devuelve los primeros 4 bytes del hash.
 fn get_checksum(payload: &[u8]) -> [u8; 4] {
     let hash = sha256::Hash::hash(sha256::Hash::hash(payload).as_byte_array());
     [hash[0], hash[1], hash[2], hash[3]]
 }
 
+/// El magic number es un número que se usa para identificar la red, en nuestro caso, la testnet.
 const MAGIC: u32 = 0x0b110907;
 #[derive(Debug)]
+/// Representa el header de un mensaje.
+/// El header contiene:
+/// - Un magic number que identifica la red.
+/// - Un comando que identifica el tipo de mensaje.
+/// - El tamaño del payload.
+/// - El checksum del payload.
 pub struct MessageHeader {
     magic: u32,
     pub command: String,
@@ -63,6 +89,7 @@ pub struct MessageHeader {
 }
 
 impl MessageHeader {
+    /// Crea un nuevo header a partir de un mensaje.
     pub fn new(message: &dyn Message) -> Self {
         let payload = message.serialize();
         let payload_size = payload.len() as u32;
@@ -75,6 +102,13 @@ impl MessageHeader {
             checksum,
         }
     }
+
+    /// Serializa el header que siempre tiene un tamaño de 24 bytes.
+    /// Los campos se serializan en el siguiente orden:
+    /// - Magic number: 4 bytes.
+    /// - Command: 12 bytes.
+    /// - Payload size: 4 bytes.
+    /// - Checksum: 4 bytes.
     pub fn serialize(&self) -> Vec<u8> {
         let mut header = vec![0; 24];
 
@@ -88,7 +122,12 @@ impl MessageHeader {
         header
     }
 
+    /// Parsea un header a partir de un buffer de 24 bytes.
+    /// Devuelve CustomError si:
+    /// - El buffer no tiene 24 bytes.
+    /// - El comando no se puede parsear a String.
     pub fn parse(buffer: [u8; 24]) -> Result<Self, CustomError> {
+        // Este chequeo de longitud no es innecesario??, ya que si el buffer no tiene 24 bytes, no se puede parsear...
         if buffer.len() != 24 {
             return Err(CustomError::InvalidHeader);
         }
@@ -111,15 +150,18 @@ impl MessageHeader {
             checksum,
         })
     }
+
+    /// Lee un header de un stream y lo parsea.
+    /// Devuelve CustomError si:
+    /// - No se puede leer del stream.
     pub fn read(stream: &mut TcpStream) -> Result<Self, CustomError> {
         let mut header_buffer = [0; 24];
 
         stream
             .read_exact(&mut header_buffer)
-            .map_err(|_| CustomError::CannotHandshakeNode)
-            .unwrap();
+            .map_err(|_| CustomError::CannotHandshakeNode)?;
 
-        let header = Self::parse(header_buffer).unwrap();
+        let header = Self::parse(header_buffer)?;
 
         Ok(header)
     }

@@ -19,6 +19,7 @@ pub enum CustomError {
 }
 
 impl CustomError {
+    /// Devuelve un string con la descripcion del error.
     fn description(&self) -> &str {
         match self {
             Self::ConfigInvalid => "invalid config file",
