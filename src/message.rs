@@ -127,7 +127,6 @@ impl MessageHeader {
     /// - El buffer no tiene 24 bytes.
     /// - El comando no se puede parsear a String.
     pub fn parse(buffer: [u8; 24]) -> Result<Self, CustomError> {
-        // Este chequeo de longitud no es innecesario??, ya que si el buffer no tiene 24 bytes, no se puede parsear...
         if buffer.len() != 24 {
             return Err(CustomError::InvalidHeader);
         }
@@ -189,8 +188,7 @@ mod tests {
             services: 0x00,
             port: 4321,
             version: 7000,
-            stream: None,
-            handshake: false,
+            peers: vec![],
         };
 
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
