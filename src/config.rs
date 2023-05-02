@@ -18,6 +18,7 @@ pub struct Config {
     pub seed: String,
     pub protocol_version: i32,
     pub port: u16,
+    pub log_file: String,
 }
 
 impl Config {
@@ -47,6 +48,7 @@ impl Config {
             seed: String::new(),
             protocol_version: 0,
             port: 0,
+            log_file: String::new(),
         };
 
         for line in reader.lines() {
@@ -77,6 +79,9 @@ impl Config {
         if config.port == 0 {
             return Err(CustomError::ConfigMissingValue);
         }
+        if config.log_file.is_empty() {
+            return Err(CustomError::ConfigMissingValue);
+        }
         Ok(())
     }
 
@@ -95,6 +100,7 @@ impl Config {
                 self.port =
                     u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
+            "LOG" => self.log_file = String::from(value),
             _ => (),
         }
         Ok(())

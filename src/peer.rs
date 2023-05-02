@@ -42,7 +42,7 @@ impl Peer {
 
         let ip_v6 = match address {
             SocketAddr::V4(addr) => addr.ip().to_ipv6_mapped(),
-            SocketAddr::V6(addr) => addr.ip().clone(),
+            SocketAddr::V6(addr) => addr.ip().to_owned(),
         };
 
         let mut new_peer = Self {
@@ -53,7 +53,7 @@ impl Peer {
             stream,
         };
 
-        new_peer.handshake(&sender_node)?;
+        new_peer.handshake(sender_node)?;
 
         Ok(new_peer)
     }
