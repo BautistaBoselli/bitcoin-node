@@ -16,6 +16,7 @@ pub enum CustomError {
     SerializedBufferIsInvalid,
     InvalidHeader,
     CommandNotImplemented,
+    Logging,
 }
 
 impl CustomError {
@@ -32,6 +33,7 @@ impl CustomError {
             Self::SerializedBufferIsInvalid => "serialized buffer is invalid",
             Self::InvalidHeader => "invalid header",
             Self::CommandNotImplemented => "command not implemented",
+            Self::Logging => "couldn't send log",
         }
     }
 }

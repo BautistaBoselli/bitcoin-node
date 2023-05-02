@@ -1,15 +1,11 @@
 use bitcoin::{
     config::Config,
     error::CustomError,
+    logger::Logger,
     node::Node,
     peer::{get_addresses, Peer},
 };
-use std::{
-    env,
-    net::Ipv4Addr,
-    path::Path,
-    thread::{self, JoinHandle},
-};
+use std::{env, path::Path};
 use std::{net::SocketAddr, vec::IntoIter};
 
 const CANT_ARGS: usize = 2;
@@ -37,7 +33,7 @@ fn main() {
 
     let my_node = Node::new(&config);
 
-    let addresses = match get_addresses(config.seed.clone(), my_node.port) {
+    let addresses = match get_addresses(config.seed, my_node.port) {
         Ok(addresses) => addresses,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -45,32 +41,44 @@ fn main() {
         }
     };
 
-    let node_threads = handshake_all_nodes(addresses, &my_node);
-    // let node_threads = match handshake_all_nodes(addresses, &my_node) {
-    //     Ok(node_threads) => node_threads,
-    //     Err(error) => {
-    //         println!("ERROR: {}", error);
-    //         return;
-    //     }
-    // };
+    let logger = Logger::new(&config.log_file);
+    let _node_threads = match handshake_all_nodes(addresses, &my_node, &logger) {
+        Ok(node_threads) => node_threads,
+        Err(error) => {
+            println!("ERROR: {}", error);
+            return;
+        }
+    };
 }
 
-fn handshake_all_nodes(addresses: IntoIter<SocketAddr>, my_node: &Node) -> Vec<Peer> {
+fn handshake_all_nodes(
+    addresses: IntoIter<SocketAddr>,
+    my_node: &Node,
+    logger: &Logger,
+) -> Result<Vec<Peer>, CustomError> {
     let mut handles: Vec<Peer> = vec![];
+    let logger_sender = logger.get_sender();
 
-    println!("Handshaking with {} nodes", addresses.len());
+    logger_sender
+        .send(format!("Handshaking with {} nodes", addresses.len()))
+        .map_err(|_| CustomError::Logging)?;
 
     for address in addresses {
-        let peer = match Peer::new(address, &my_node) {
+        let peer = match Peer::new(address, my_node) {
             Ok(peer) => peer,
             Err(error) => {
-                println!("ERROR: {} {}", error, address.ip());
+                logger_sender
+                    .send(format!("ERROR: {} {}", error, address.ip()))
+                    .map_err(|_| CustomError::Logging)?;
                 continue;
             }
         };
-        println!("Handshake succesful with {}", peer.ip_v6);
+        logger_sender
+            .send(format!("Handshake succesful with {}", peer.ip_v6))
+            .map_err(|_| CustomError::Logging)?;
+
         handles.push(peer);
     }
 
-    handles
+    Ok(handles)
 }
