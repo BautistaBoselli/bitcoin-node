@@ -131,6 +131,7 @@ mod tests {
     fn config_con_valor_vacio() {
         let content = "SEED=\n\
         PROTOCOL_VERSION=1234\n\
+        LOG=log.txt\n\
         PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content);
@@ -142,11 +143,13 @@ mod tests {
     fn config_con_valores_requeridos() -> Result<(), CustomError> {
         let content = "SEED=seed.test\n\
             PROTOCOL_VERSION=7000\n\
+            LOG=log.txt\n\
             PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
         Ok(())
     }
@@ -156,21 +159,25 @@ mod tests {
         let content = "SEED=seed.test\n\
         VALOR_NO_REQUERIDO=1234\n\
         PROTOCOL_VERSION=7000\n\
+        LOG=log.txt\n\
         PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
 
         let content = "SEED=seed.test\n\
         VALOR_NO_REQUERIDO=\n\
         PROTOCOL_VERSION=7000\n\
+        LOG=log.txt\n\
         PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
         Ok(())
     }
