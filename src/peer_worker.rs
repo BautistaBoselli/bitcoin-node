@@ -14,8 +14,10 @@ pub enum PeerAction {
 }
 
 pub enum PeerResponse {
-    HandshakeSuccess,
     NewHeaders(String),
+    GetHeadersError,
+    Block((String, String)),
+    GetBlockError(String),
 }
 
 pub struct PeerWorker {
@@ -46,7 +48,7 @@ impl PeerWorker {
             };
             peer.handshake(sender_address).unwrap();
 
-            event_loop(receiver, logger_sender, peer, peers_response_sender);
+            event_loop(receiver, peer, peers_response_sender);
         });
 
         Self {
@@ -58,18 +60,15 @@ impl PeerWorker {
 
 fn event_loop(
     receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
-    logger_sender: mpsc::Sender<String>,
     peer: Peer,
     peers_response_sender: mpsc::Sender<PeerResponse>,
 ) {
     loop {
         let peer_message = receiver.lock().unwrap().recv().unwrap();
         match peer_message {
-            PeerAction::GetHeaders => {
-                handle_getheaders(&logger_sender, &peer, &peers_response_sender)
-            }
-            PeerAction::GetBlock(job) => {
-                handle_getblock(&logger_sender, &peer, job);
+            PeerAction::GetHeaders => handle_getheaders(&peer, &peers_response_sender),
+            PeerAction::GetBlock(block_header) => {
+                handle_getblock(&peer, block_header, &peers_response_sender)
             }
             PeerAction::Terminate => {
                 break;
@@ -78,29 +77,42 @@ fn event_loop(
     }
 }
 
-fn handle_getheaders(
-    logger_sender: &mpsc::Sender<String>,
-    peer: &Peer,
-    peers_response_sender: &mpsc::Sender<PeerResponse>,
-) {
-    logger_sender
-        .send(format!("peer {}: getting headers...", peer.address.ip()))
-        .unwrap();
+fn handle_getheaders(peer: &Peer, peers_response_sender: &mpsc::Sender<PeerResponse>) {
     thread::sleep(Duration::from_millis(2000));
+
+    let headers = match peer.get_headers() {
+        Ok(headers) => headers,
+        Err(_) => {
+            peers_response_sender
+                .send(PeerResponse::GetHeadersError)
+                .unwrap();
+            return;
+        }
+    };
+
     peers_response_sender
-        .send(PeerResponse::NewHeaders(
-            "<<< NUEVOS HEADERS >>>".to_string(),
-        ))
+        .send(PeerResponse::NewHeaders(headers))
         .unwrap();
 }
 
-fn handle_getblock(logger_sender: &mpsc::Sender<String>, peer: &Peer, job: String) {
+fn handle_getblock(
+    peer: &Peer,
+    block_header: String,
+    peers_response_sender: &mpsc::Sender<PeerResponse>,
+) {
     thread::sleep(Duration::from_millis(1000));
-    logger_sender
-        .send(format!(
-            "peer {}: getting block {}...",
-            peer.address.ip(),
-            job
-        ))
+
+    let block = match peer.get_block(&block_header) {
+        Ok(block) => block,
+        Err(_) => {
+            peers_response_sender
+                .send(PeerResponse::GetBlockError(block_header))
+                .unwrap();
+            return;
+        }
+    };
+
+    peers_response_sender
+        .send(PeerResponse::Block((block_header, block)))
         .unwrap();
 }

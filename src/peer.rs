@@ -107,6 +107,23 @@ impl Peer {
         verack_message.send(&mut self.stream)?;
         Ok(())
     }
+
+    pub fn get_headers(&self) -> Result<String, CustomError> {
+        // loop para enviar los mensajes y conseguir los headers
+        Ok(format!(
+            "<<< NUEVOS HEADERS DESDE EL PEER {} >>>",
+            self.address.ip()
+        ))
+    }
+
+    pub fn get_block(&self, block_header: &String) -> Result<String, CustomError> {
+        // loop para enviar los mensajes y conseguir los headers
+        Ok(format!(
+            "<<< BLOQUE {} DESDE EL PEER {} >>>",
+            block_header,
+            self.address.ip()
+        ))
+    }
 }
 
 #[cfg(test)]

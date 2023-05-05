@@ -73,9 +73,9 @@ impl Node {
     }
 
     fn start_workers(&mut self, addresses: IntoIter<SocketAddr>) {
-        let mut i = 10;
+        let mut num_of_threads = 10;
         for address in addresses {
-            if i == 0 {
+            if num_of_threads == 0 {
                 break;
             }
 
@@ -91,16 +91,16 @@ impl Node {
 
             self.peers.push(peer);
 
-            i -= 1;
+            num_of_threads -= 1;
         }
     }
 
     fn handle_peer_response(&mut self, message: PeerResponse) {
         // esto tendria que ser una funcion receptora de mensajes (mientras descargas headers podria llegarte una transaccion o un bloque o lo que sea)
         match message {
-            PeerResponse::NewHeaders(headers) => {
+            PeerResponse::Block((block_hash, block)) => {
                 self.logger_sender
-                    .send(format!("New headers: {}", headers))
+                    .send(format!("Block {}: {}", block_hash, block))
                     .unwrap();
             }
             _ => {}
