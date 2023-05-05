@@ -2,10 +2,10 @@ use crate::error::CustomError;
 use crate::message::{Message, MessageHeader};
 use crate::messages::ver_ack::VerAck;
 use crate::messages::version::Version;
-use crate::node::Node;
 use std::net::TcpStream;
+use std::sync::mpsc::Sender;
 use std::{
-    net::{Ipv6Addr, SocketAddr, SocketAddrV6, ToSocketAddrs},
+    net::{SocketAddr, SocketAddrV6, ToSocketAddrs},
     vec::IntoIter,
 };
 
@@ -13,11 +13,11 @@ use std::{
 /// Representa un peer de la red.
 /// Contiene la dirección IPv6, los servicios que ofrece, el puerto, la versión del protocolo, el stream y el estado del handshake.
 pub struct Peer {
-    pub ip_v6: Ipv6Addr,
+    pub address: SocketAddrV6,
     pub services: u64,
-    pub port: u16,
     pub version: i32,
     pub stream: TcpStream,
+    logger_sender: Sender<String>,
 }
 
 /// Conecta con la semilla DNS y devuelve un iterador de direcciones IP.
@@ -37,7 +37,12 @@ impl Peer {
     /// Devuelve un nuevo nodo con el campo de stream inicializado al TcpStream creado y handshake en false.
     /// Devuelve CustomError si:
     /// - No se pudo crear el TcpStream.
-    pub fn new(address: SocketAddr, sender_node: &Node) -> Result<Self, CustomError> {
+    pub fn new(
+        address: SocketAddr,
+        services: u64,
+        version: i32,
+        logger_sender: Sender<String>,
+    ) -> Result<Self, CustomError> {
         let stream = TcpStream::connect(address).map_err(|_| CustomError::CannotConnectToNode)?;
 
         let ip_v6 = match address {
@@ -45,15 +50,13 @@ impl Peer {
             SocketAddr::V6(addr) => addr.ip().to_owned(),
         };
 
-        let mut new_peer = Self {
-            ip_v6,
-            services: 0,
-            port: address.port(),
-            version: 0,
+        let new_peer = Self {
+            address: SocketAddrV6::new(ip_v6, address.port(), 0, 0),
+            services,
+            version,
             stream,
+            logger_sender,
         };
-
-        new_peer.handshake(sender_node)?;
 
         Ok(new_peer)
     }
@@ -66,35 +69,42 @@ impl Peer {
     /// El primer mensaje de respuesta no es de tipo Version.
     /// No se pudo leer el mensaje de tipo VerAck.
     /// El segundo mensaje de respuesta no es de tipo VerAck.
-    fn handshake(&mut self, sender_node: &Node) -> Result<(), CustomError> {
+    pub fn handshake(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
+        self.share_versions(sender_address)?;
+        self.share_veracks()?;
+
+        self.logger_sender
+            .send(format!("Successful handshake with {}", self.address.ip()))
+            .unwrap();
+
+        Ok(())
+    }
+
+    fn share_versions(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
         let version_message =
-            Version::new(sender_node, SocketAddrV6::new(self.ip_v6, self.port, 0, 0));
+            Version::new(self.address, sender_address, self.version, self.services);
+        version_message.send(&mut self.stream)?;
 
-        let stream = &mut self.stream;
-
-        version_message.send(stream)?;
-
-        let response_header = MessageHeader::read(stream)?;
-
+        let response_header = MessageHeader::read(&mut self.stream)?;
         if response_header.command.as_str() != "version" {
             return Err(CustomError::CannotHandshakeNode);
         }
 
-        let version_response = Version::read(stream, response_header.payload_size)?;
+        let version_response = Version::read(&mut self.stream, response_header.payload_size)?;
         self.version = version_response.version;
         self.services = version_response.services;
 
-        let response_header = MessageHeader::read(stream)?;
+        Ok(())
+    }
 
+    fn share_veracks(&mut self) -> Result<(), CustomError> {
+        let response_header = MessageHeader::read(&mut self.stream)?;
         if response_header.command.as_str() != "verack" {
             return Err(CustomError::CannotHandshakeNode);
         }
-
-        VerAck::read(stream, response_header.payload_size)?;
-
+        VerAck::read(&mut self.stream, response_header.payload_size)?;
         let verack_message = VerAck::new();
-        verack_message.send(stream)?;
-
+        verack_message.send(&mut self.stream)?;
         Ok(())
     }
 }

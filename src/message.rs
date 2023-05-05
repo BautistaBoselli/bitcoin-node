@@ -170,7 +170,7 @@ impl MessageHeader {
 mod tests {
     use std::net::{Ipv6Addr, SocketAddrV6};
 
-    use crate::{messages::version::Version, node::Node};
+    use crate::messages::version::Version;
 
     use super::*;
 
@@ -183,16 +183,9 @@ mod tests {
 
     #[test]
     fn test_message_header_length() {
-        let test_node = Node {
-            ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
-            services: 0x00,
-            port: 4321,
-            version: 7000,
-            peers: vec![],
-        };
-
+        let sender_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 4321, 0, 0);
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-        let version = Version::new(&test_node, receiver_address);
+        let version = Version::new(receiver_address, sender_address, 70000, 0x00);
 
         let header = MessageHeader::new(&version).serialize();
         assert_eq!(header.len(), 24);
