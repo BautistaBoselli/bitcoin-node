@@ -9,7 +9,7 @@ use std::{
 use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
-    messages::{get_headers::GetHeaders, ver_ack::VerAck, version::Version},
+    messages::{get_headers::GetHeaders, headers::Headers, ver_ack::VerAck, version::Version},
     // peer::Peer,
 };
 
@@ -26,7 +26,7 @@ pub enum PeerAction {
 }
 
 pub enum PeerResponse {
-    NewHeaders(String),
+    NewHeaders(Headers),
     GetHeadersError,
     Block((String, String)),
     GetBlockError(String),
@@ -118,17 +118,17 @@ impl Peer {
 
             if response_header.command.as_str() == "headers" {
                 println!("Recibida la respuesta de headers...");
-                let _response =
-                    match GetHeaders::read(&mut thread_stream, response_header.payload_size) {
-                        Ok(response) => response,
-                        Err(error) => {
-                            println!("Error al leer el mensaje: {}", error);
-                            return;
-                        }
-                    };
+                let response = match Headers::read(&mut thread_stream, response_header.payload_size)
+                {
+                    Ok(response) => response,
+                    Err(error) => {
+                        println!("Error al leer el mensaje: {}", error);
+                        return;
+                    }
+                };
 
                 peer_response_sender_clone
-                    .send(PeerResponse::NewHeaders("NUEVOOOSS HEADEARSS".to_string()))
+                    .send(PeerResponse::NewHeaders(response))
                     .unwrap();
             } else {
                 let cmd = response_header.command.as_str();

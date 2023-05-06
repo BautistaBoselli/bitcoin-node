@@ -3,7 +3,7 @@ use crate::{error::CustomError, message::Message};
 #[derive(Debug)]
 
 pub struct Headers {
-    pub header_count: u8,
+    pub header_count: u64,
     pub headers: Vec<BlockHeader>,
 }
 
@@ -19,7 +19,7 @@ pub struct BlockHeader {
 }
 
 impl Headers {
-    pub fn new(header_count: u8) -> Self {
+    pub fn new(header_count: u64) -> Self {
         Headers {
             header_count,
             headers: vec![],
@@ -33,6 +33,7 @@ impl Message for Headers {
     }
 
     fn serialize(&self) -> Vec<u8> {
+        /*
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(&self.header_count.to_le_bytes());
         for header in &self.headers {
@@ -45,15 +46,39 @@ impl Message for Headers {
             buffer.extend(&header.tx_count.to_le_bytes());
         }
         buffer
+        */
+        vec![]
     }
 
     fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
     where
         Self: Sized,
     {
-        let header_count = u8::from_le_bytes([buffer[0]]);
+        println!("longitud: {}", buffer.len() % 81);
+        println!("buffer 0: {}", buffer[0]);
+        println!("buffer 1: {}", buffer[1]);
+
+        let (header_count, mut i) = match buffer[0] {
+            0xFF => (
+                u64::from_le_bytes([
+                    buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7],
+                    buffer[8],
+                ]),
+                9,
+            ),
+            0xFE => (
+                u64::from_le_bytes([buffer[1], buffer[2], buffer[3], 0, 0, 0, 0, 0]),
+                5,
+            ),
+            0xFD => (
+                u64::from_le_bytes([buffer[1], buffer[2], 0, 0, 0, 0, 0, 0]),
+                3,
+            ),
+            _ => (u64::from_le_bytes([buffer[0], 0, 0, 0, 0, 0, 0, 0]), 1),
+        };
+
+        println!("header count: {}", header_count);
         let mut headers: Vec<BlockHeader> = vec![];
-        let mut i = 1;
         while i < buffer.len() {
             let version =
                 i32::from_le_bytes([buffer[i], buffer[i + 1], buffer[i + 2], buffer[i + 3]]);

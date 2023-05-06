@@ -1,3 +1,5 @@
+use bitcoin_hashes::hex::FromHex;
+
 use crate::{error::CustomError, message::Message};
 
 #[derive(PartialEq, Debug)]
@@ -12,7 +14,10 @@ impl GetHeaders {
     pub fn new(version: i32, hash_stop: Vec<u8>) -> Self {
         GetHeaders {
             version,
-            block_locator_hashes: vec![],
+            block_locator_hashes: vec![Vec::from_hex(
+                "6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000",
+            )
+            .unwrap()],
             hash_stop,
         }
     }
