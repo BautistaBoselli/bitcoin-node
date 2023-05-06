@@ -1,4 +1,4 @@
-use bitcoin::peer::get_addresses;
+use bitcoin::peer::{get_addresses, PeerAction};
 use bitcoin::{config::Config, logger::Logger, node::Node};
 use std::{env, path::Path};
 
@@ -39,6 +39,8 @@ fn main() {
     let mut my_node = Node::new(&config, &logger);
 
     my_node.connect(addresses);
+
+    my_node.execute(PeerAction::GetHeaders);
 
     // for _i in 0..20 {
     //     my_node.execute(PeerAction::Echo(

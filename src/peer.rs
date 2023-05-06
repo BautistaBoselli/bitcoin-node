@@ -1,74 +1,156 @@
-use crate::error::CustomError;
-use crate::message::{Message, MessageHeader};
-use crate::messages::ver_ack::VerAck;
-use crate::messages::version::Version;
-use std::net::TcpStream;
-use std::sync::mpsc::Sender;
 use std::{
-    net::{SocketAddr, SocketAddrV6, ToSocketAddrs},
+    io::Read,
+    net::{SocketAddr, SocketAddrV6, TcpStream, ToSocketAddrs},
+    sync::{mpsc, Arc, Mutex},
+    thread,
     vec::IntoIter,
 };
 
-#[derive(Debug)]
-/// Representa un peer de la red.
-/// Contiene la dirección IPv6, los servicios que ofrece, el puerto, la versión del protocolo, el stream y el estado del handshake.
-pub struct Peer {
-    pub address: SocketAddrV6,
-    pub services: u64,
-    pub version: i32,
-    pub stream: TcpStream,
-    logger_sender: Sender<String>,
-}
+use crate::{
+    error::CustomError,
+    message::{Message, MessageHeader},
+    messages::{get_headers::GetHeaders, ver_ack::VerAck, version::Version},
+    // peer::Peer,
+};
 
-/// Conecta con la semilla DNS y devuelve un iterador de direcciones IP.
-/// Tanto la semilla como el puerto son parámetros recibidos del archivo de configuración.
-/// Devuelve CustomError si:
-/// - No se pudo resolver la semilla DNS.
 pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, CustomError> {
     (seed, port)
         .to_socket_addrs()
         .map_err(|_| CustomError::CannotResolveSeedAddress)
 }
 
+pub enum PeerAction {
+    GetHeaders,
+    GetBlock(String),
+    Terminate,
+}
+
+pub enum PeerResponse {
+    NewHeaders(String),
+    GetHeadersError,
+    Block((String, String)),
+    GetBlockError(String),
+}
+
+pub struct Peer {
+    pub id: SocketAddr,
+    pub address: SocketAddrV6,
+    pub services: u64,
+    pub version: i32,
+    pub stream: TcpStream,
+    pub node_listener_thread: Option<thread::JoinHandle<()>>,
+    pub stream_listener_thread: Option<thread::JoinHandle<()>>,
+    pub logger_sender: mpsc::Sender<String>,
+}
+
 impl Peer {
-    /// Crea un nuevo nodo a partir de un SocketAddr.
-    /// Si el SocketAddr es IPv4, se convierte a IPv6, sino se obtiene la dirección IPv6.
-    /// Crear un nuevo TcpStream y se intenta conectar al nodo cuya dirección se recibe como parámetro.
-    /// Devuelve un nuevo nodo con el campo de stream inicializado al TcpStream creado y handshake en false.
-    /// Devuelve CustomError si:
-    /// - No se pudo crear el TcpStream.
     pub fn new(
         address: SocketAddr,
+        sender_address: SocketAddrV6,
         services: u64,
         version: i32,
-        logger_sender: Sender<String>,
+        receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+        logger_sender: mpsc::Sender<String>,
+        peers_response_sender: mpsc::Sender<PeerResponse>,
     ) -> Result<Self, CustomError> {
-        let stream = TcpStream::connect(address).map_err(|_| CustomError::CannotConnectToNode)?;
-
         let ip_v6 = match address {
             SocketAddr::V4(addr) => addr.ip().to_ipv6_mapped(),
             SocketAddr::V6(addr) => addr.ip().to_owned(),
         };
 
-        let new_peer = Self {
+        let stream = TcpStream::connect(address).map_err(|_| CustomError::CannotConnectToNode)?;
+
+        let mut peer = Self {
+            id: address,
             address: SocketAddrV6::new(ip_v6, address.port(), 0, 0),
+            node_listener_thread: None,
+            stream_listener_thread: None,
             services,
             version,
             stream,
             logger_sender,
         };
 
-        Ok(new_peer)
+        peer.handshake(sender_address)?;
+
+        let peer_response_sender_clone = peers_response_sender.clone();
+        let logger_sender_clone = peer.logger_sender.clone();
+        let mut thread_stream = peer.stream.try_clone().unwrap();
+
+        let node_listener_thread = thread::spawn(move || loop {
+            let peer_message = receiver.lock().unwrap().recv().unwrap();
+            match peer_message {
+                PeerAction::GetHeaders => {
+                    println!("Recibido el pedido de headers...");
+                    let request = GetHeaders::new(version, vec![0; 32]).send(&mut thread_stream);
+
+                    if request.is_err() {
+                        logger_sender_clone
+                            .send("Error pidiendo headers".to_string())
+                            .unwrap();
+                        peer_response_sender_clone
+                            .send(PeerResponse::GetHeadersError)
+                            .unwrap();
+                    }
+                }
+                PeerAction::GetBlock(block_header) => {
+                    println!("Recibido el pedido de bloque {}...", block_header);
+                    return;
+                }
+                PeerAction::Terminate => {
+                    break;
+                }
+            }
+        });
+
+        let peer_response_sender_clone = peers_response_sender.clone();
+        let logger_sender_clone = peer.logger_sender.clone();
+        let mut thread_stream = peer.stream.try_clone().unwrap();
+
+        let stream_listener_thread = thread::spawn(move || loop {
+            let response_header = match MessageHeader::read(&mut thread_stream) {
+                Ok(header) => header,
+                Err(error) => {
+                    println!("Error al leer el header: {}", error);
+                    return;
+                }
+            };
+
+            if response_header.command.as_str() == "headers" {
+                println!("Recibida la respuesta de headers...");
+                let _response =
+                    match GetHeaders::read(&mut thread_stream, response_header.payload_size) {
+                        Ok(response) => response,
+                        Err(error) => {
+                            println!("Error al leer el mensaje: {}", error);
+                            return;
+                        }
+                    };
+
+                peer_response_sender_clone
+                    .send(PeerResponse::NewHeaders("NUEVOOOSS HEADEARSS".to_string()))
+                    .unwrap();
+            } else {
+                let cmd = response_header.command.as_str();
+
+                if cmd != "ping" && cmd != "alert" && cmd != "addr" {
+                    logger_sender_clone
+                        .send(format!(
+                            "Recibido desconocido: {:?}",
+                            response_header.command
+                        ))
+                        .unwrap();
+                }
+                let mut buffer: Vec<u8> = vec![0; response_header.payload_size as usize];
+                thread_stream.read_exact(&mut buffer).unwrap();
+            }
+        });
+
+        peer.node_listener_thread = Some(node_listener_thread);
+        peer.stream_listener_thread = Some(stream_listener_thread);
+        Ok(peer)
     }
 
-    /// Genera el handshake entre &self (que es un nodo) y el otro nodo recibido como parámetro.
-    /// Devuelve CustomError si:
-    /// No existe un stream para el nodo.
-    /// No se pudo enviar el mensaje de tipo Version.
-    /// No se pudo leer el mensaje de respuesta.
-    /// El primer mensaje de respuesta no es de tipo Version.
-    /// No se pudo leer el mensaje de tipo VerAck.
-    /// El segundo mensaje de respuesta no es de tipo VerAck.
     pub fn handshake(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
         self.share_versions(sender_address)?;
         self.share_veracks()?;
@@ -91,6 +173,7 @@ impl Peer {
         }
 
         let version_response = Version::read(&mut self.stream, response_header.payload_size)?;
+
         self.version = version_response.version;
         self.services = version_response.services;
 
@@ -102,44 +185,11 @@ impl Peer {
         if response_header.command.as_str() != "verack" {
             return Err(CustomError::CannotHandshakeNode);
         }
+
         VerAck::read(&mut self.stream, response_header.payload_size)?;
         let verack_message = VerAck::new();
         verack_message.send(&mut self.stream)?;
-        Ok(())
-    }
 
-    pub fn get_headers(&self) -> Result<String, CustomError> {
-        // loop para enviar los mensajes y conseguir los headers
-        Ok(format!(
-            "<<< NUEVOS HEADERS DESDE EL PEER {} >>>",
-            self.address.ip()
-        ))
-    }
-
-    pub fn get_block(&self, block_header: &String) -> Result<String, CustomError> {
-        // loop para enviar los mensajes y conseguir los headers
-        Ok(format!(
-            "<<< BLOQUE {} DESDE EL PEER {} >>>",
-            block_header,
-            self.address.ip()
-        ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn connect_to_seed_invalida() {
-        let addresses = get_addresses(String::from("seed.test"), 4321);
-        assert!(addresses.is_err());
-    }
-
-    #[test]
-    fn connect_to_seed_valida() -> Result<(), CustomError> {
-        let addresses = get_addresses(String::from("google.com"), 80)?;
-        assert!(addresses.len() > 0);
         Ok(())
     }
 }

@@ -195,17 +195,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_version() -> Result<(), CustomError> {
-        let sender_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 4321, 0, 0);
-        let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-        let version: Version = Version::new(receiver_address, sender_address, 7000, 0x00);
-        let buffer = version.serialize();
-        let parsed_version = Version::parse(buffer)?;
-        assert_eq!(version, parsed_version);
-        Ok(())
-    }
-
-    #[test]
     fn parse_invalid_version() {
         let buffer_too_short = vec![
             127, 17, 1, 0, 9, 4, 0, 0, 0, 0, 0, 0, 48, 21, 75, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

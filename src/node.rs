@@ -1,16 +1,17 @@
 use std::{
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{
-        mpsc::{self, Receiver, Sender},
+        mpsc::{self, Sender},
         Arc, Mutex,
     },
+    thread,
     vec::IntoIter,
 };
 
 use crate::{
     config::Config,
     logger::Logger,
-    peer_worker::{PeerAction, PeerResponse, PeerWorker},
+    peer::{Peer, PeerAction, PeerResponse},
 };
 
 pub struct Node {
@@ -21,8 +22,8 @@ pub struct Node {
     peers_sender: mpsc::Sender<PeerAction>,
     peers_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     peers_response_sender: Sender<PeerResponse>,
-    peers_response_receiver: Receiver<PeerResponse>,
-    peers: Vec<PeerWorker>,
+    peers: Vec<Peer>,
+    pub event_loop_thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Node {
@@ -33,6 +34,32 @@ impl Node {
         let peers_receiver = Arc::new(Mutex::new(receiver));
         let (peers_response_sender, peers_response_receiver) = mpsc::channel();
 
+        let logger_sender_clone = logger_sender.clone();
+        let peers_sender_clone = peers_sender.clone();
+        let thread = thread::spawn(move || loop {
+            while let Ok(message) = peers_response_receiver.recv() {
+                match message {
+                    PeerResponse::Block((block_hash, block)) => {
+                        logger_sender_clone
+                            .send(format!("Block {}: {}", block_hash, block))
+                            .unwrap();
+                    }
+                    PeerResponse::NewHeaders(headers) => {
+                        logger_sender_clone
+                            .send(format!("New headers: {}", headers))
+                            .unwrap();
+
+                        for i in 0..20 {
+                            peers_sender_clone
+                                .send(PeerAction::GetBlock(i.to_string()))
+                                .unwrap();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+
         Self {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
             services: 0x00,
@@ -41,8 +68,8 @@ impl Node {
             peers_sender,
             peers_receiver,
             peers_response_sender,
-            peers_response_receiver,
             peers: vec![],
+            event_loop_thread: Some(thread),
         }
     }
 
@@ -51,35 +78,13 @@ impl Node {
             .send(format!("Handshaking with {} nodes", addresses.len()))
             .unwrap();
 
-        self.start_workers(addresses);
-
-        self.execute(PeerAction::GetHeaders);
-        let message = self.peers_response_receiver.recv().unwrap();
-
-        if let PeerResponse::NewHeaders(headers) = message {
-            self.logger_sender
-                .send(format!("New headers: {}", headers))
-                .unwrap();
-
-            for i in 0..20 {
-                self.execute(PeerAction::GetBlock(i.to_string()));
-            }
-        }
-
-        // verificar que tengas todos los headers
-        while let Ok(message) = self.peers_response_receiver.recv() {
-            self.handle_peer_response(message);
-        }
-    }
-
-    fn start_workers(&mut self, addresses: IntoIter<SocketAddr>) {
         let mut num_of_threads = 10;
         for address in addresses {
             if num_of_threads == 0 {
                 break;
             }
 
-            let peer = PeerWorker::new(
+            let peer = Peer::new(
                 address,
                 self.address,
                 self.services,
@@ -87,24 +92,15 @@ impl Node {
                 self.peers_receiver.clone(),
                 self.logger_sender.clone(),
                 self.peers_response_sender.clone(),
-            );
+            )
+            .unwrap();
 
             self.peers.push(peer);
 
             num_of_threads -= 1;
         }
-    }
 
-    fn handle_peer_response(&mut self, message: PeerResponse) {
-        // esto tendria que ser una funcion receptora de mensajes (mientras descargas headers podria llegarte una transaccion o un bloque o lo que sea)
-        match message {
-            PeerResponse::Block((block_hash, block)) => {
-                self.logger_sender
-                    .send(format!("Block {}: {}", block_hash, block))
-                    .unwrap();
-            }
-            _ => {}
-        }
+        // verificar que tengas todos los headers
     }
 
     pub fn execute(&self, peer_message: PeerAction) {
@@ -112,20 +108,24 @@ impl Node {
     }
 }
 
-impl Drop for Node {
-    fn drop(&mut self) {
-        for _ in &mut self.peers {
-            self.peers_sender.send(PeerAction::Terminate).unwrap();
-        }
+// impl Drop for Node {
+//     fn drop(&mut self) {
+//         for _ in &mut self.peers {
+//             self.peers_sender.send(PeerAction::Terminate).unwrap();
+//         }
 
-        self.logger_sender
-            .send("Shutting down all workers.".to_string())
-            .unwrap();
+//         self.logger_sender
+//             .send("Shutting down all workers.".to_string())
+//             .unwrap();
 
-        for worker in &mut self.peers {
-            if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
-            }
-        }
-    }
-}
+//         for worker in &mut self.peers {
+//             if let Some(thread) = worker.node_listener_thread.take() {
+//                 thread.join().unwrap();
+//             }
+//             if let Some(thread) = worker.stream_listener_thread.take() {
+//                 thread.join().unwrap();
+//             }
+//         }
+//         self.event_loop_thread.take().unwrap().join().unwrap();
+//     }
+// }
