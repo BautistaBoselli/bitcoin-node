@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::thread::JoinHandle;
 use std::{
     fs::OpenOptions,
     sync::mpsc::{self, Sender},
@@ -10,7 +9,6 @@ use std::{
 
 pub struct Logger {
     tx: Sender<String>,
-    thread: Option<JoinHandle<()>>,
 }
 
 impl Logger {
@@ -28,28 +26,17 @@ impl Logger {
             .open(filename)
             .unwrap();
 
-        let thread = thread::spawn(move || {
+        thread::spawn(move || {
             while let Ok(message) = rx.recv() {
                 println!("logger: {}", message);
                 writeln!(file, "{}", message).unwrap();
             }
         });
 
-        Self {
-            tx,
-            thread: Some(thread),
-        }
+        Self { tx }
     }
     pub fn get_sender(&self) -> Sender<String> {
         self.tx.clone()
-    }
-}
-
-impl Drop for Logger {
-    fn drop(&mut self) {
-        if let Some(thread) = self.thread.take() {
-            thread.join().unwrap();
-        }
     }
 }
 
@@ -61,8 +48,10 @@ mod tests {
 
     #[test]
     fn log_file_gets_written() {
+        println!("Testing");
         let logger = Logger::new(&String::from("test1.txt"));
         let sender = logger.get_sender();
+        println!("Sender: {:?}", sender);
         sender.send(String::from("Sender test 1")).unwrap();
         sender.send(String::from("Sender test 2")).unwrap();
         thread::sleep(time::Duration::from_millis(100));
