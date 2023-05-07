@@ -2,6 +2,8 @@ use bitcoin_hashes::hex::FromHex;
 
 use crate::{error::CustomError, message::Message};
 
+use super::headers::{parse_var_int, serialize_var_int};
+
 #[derive(PartialEq, Debug)]
 
 pub struct GetHeaders {
@@ -28,7 +30,7 @@ impl Message for GetHeaders {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(&self.version.to_le_bytes());
-        buffer.extend(&self.block_locator_hashes.len().to_le_bytes());
+        buffer.extend(serialize_var_int(self.block_locator_hashes.len() as u64));
         for hash in &self.block_locator_hashes {
             buffer.extend(hash);
         }
@@ -44,7 +46,7 @@ impl Message for GetHeaders {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
         let version = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-        let hash_count = u8::from_le_bytes([buffer[4]]);
+        let (hash_count, mut i) = parse_var_int(&buffer[4..].to_vec());
         let mut block_locator_hashes: Vec<Vec<u8>> = vec![];
         if hash_count == 0 {
             return Ok(GetHeaders {
@@ -53,7 +55,7 @@ impl Message for GetHeaders {
                 hash_stop: buffer[5..37].to_vec(),
             });
         }
-        let mut i = 5;
+        i += 4; // 4 bytes for version
         while i < buffer.len() - 32 {
             let hash = buffer[i..(i + 32)].to_vec();
             block_locator_hashes.push(hash);

@@ -103,18 +103,23 @@ impl Peer {
                     let mut saved_headers_buffer = vec![];
                     file.read_to_end(&mut saved_headers_buffer).unwrap();
 
+                    println!(
+                        "Tengo {} bytes de headers (o sea {} headers)",
+                        saved_headers_buffer.len(),
+                        saved_headers_buffer.len() / 80
+                    );
+
                     // WIP: START FROM LAST SAVED
                     let genesis = vec![Vec::from_hex(
                         "6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000",
                     )
                     .unwrap()];
 
-                    let saved_headers = Headers::parse_headers(saved_headers_buffer.clone(), 0);
+                    let saved_headers = Headers::parse_headers(saved_headers_buffer.clone());
 
                     // va a ser 80 cuando eliminemos el txCount
-                    let last_header = match saved_headers_buffer.len() >= 81 {
-                        true => saved_headers_buffer
-                            .get(saved_headers_buffer.len() - 81..saved_headers_buffer.len() - 1),
+                    let last_header = match saved_headers_buffer.len() >= 80 {
+                        true => saved_headers_buffer.get(saved_headers_buffer.len() - 80..),
                         false => None,
                     };
 
@@ -133,7 +138,6 @@ impl Peer {
                         None => genesis,
                     };
 
-                    println!("Tengo ahora mismo: {}", saved_headers.len());
                     println!("primero header: {:?}", saved_headers.get(0));
                     println!("segundo header: {:?}", saved_headers.get(1));
                     println!("tercero header: {:?}", saved_headers.get(2));
