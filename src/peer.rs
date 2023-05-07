@@ -110,13 +110,13 @@ impl Peer {
                     .unwrap()];
 
                     let saved_headers = Headers::parse_headers(saved_headers_buffer.clone(), 0);
-                    // let last_header = match saved_headers.last() {
-                    //     Some(header) => Has(header),
-                    //     None => genesis
-                    // }
 
-                    let last_header = saved_headers_buffer
-                        .get(saved_headers_buffer.len() - 81..saved_headers_buffer.len() - 1);
+                    // va a ser 80 cuando eliminemos el txCount
+                    let last_header = match saved_headers_buffer.len() >= 81 {
+                        true => saved_headers_buffer
+                            .get(saved_headers_buffer.len() - 81..saved_headers_buffer.len() - 1),
+                        false => None,
+                    };
 
                     let block_header_hashes = match last_header {
                         Some(header) => {
