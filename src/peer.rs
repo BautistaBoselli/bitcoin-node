@@ -1,4 +1,5 @@
 use std::{
+    fs::OpenOptions,
     io::Read,
     net::{SocketAddr, SocketAddrV6, TcpStream, ToSocketAddrs},
     sync::{mpsc, Arc, Mutex},
@@ -6,10 +7,18 @@ use std::{
     vec::IntoIter,
 };
 
+use bitcoin_hashes::{hex::FromHex, sha256d};
+use bitcoin_hashes::{sha256, Hash};
+
 use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
-    messages::{get_headers::GetHeaders, headers::Headers, ver_ack::VerAck, version::Version},
+    messages::{
+        get_headers::GetHeaders,
+        headers::{BlockHeader, Headers},
+        ver_ack::VerAck,
+        version::Version,
+    },
     // peer::Peer,
 };
 
@@ -82,7 +91,63 @@ impl Peer {
             match peer_message {
                 PeerAction::GetHeaders => {
                     println!("Recibido el pedido de headers...");
-                    let request = GetHeaders::new(version, vec![0; 32]).send(&mut thread_stream);
+                    // ver archivo y serialize los headers
+                    let mut file = OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .append(true)
+                        .open("store/headers.txt")
+                        .unwrap();
+
+                    let mut saved_headers_buffer = vec![];
+                    file.read_to_end(&mut saved_headers_buffer).unwrap();
+
+                    // WIP: START FROM LAST SAVED
+                    let genesis = vec![Vec::from_hex(
+                        "6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000",
+                    )
+                    .unwrap()];
+
+                    let saved_headers = Headers::parse_headers(saved_headers_buffer.clone(), 0);
+                    // let last_header = match saved_headers.last() {
+                    //     Some(header) => Has(header),
+                    //     None => genesis
+                    // }
+
+                    let last_header = saved_headers_buffer
+                        .get(saved_headers_buffer.len() - 81..saved_headers_buffer.len() - 1);
+
+                    let block_header_hashes = match last_header {
+                        Some(header) => {
+                            // genesis.append(&mut vec![sha256d::Hash::hash(header)
+                            //     .to_byte_array()
+                            //     .to_vec()]);
+
+                            [sha256d::Hash::hash(header).to_byte_array().to_vec()].to_vec()
+
+                            // genesis.append(&mut [val.to_vec()].to_vec());
+                            // genesis.reverse();
+                            // genesis
+                        }
+                        None => genesis,
+                    };
+
+                    println!("Tengo ahora mismo: {}", saved_headers.len());
+                    println!("primero header: {:?}", saved_headers.get(0));
+                    println!("segundo header: {:?}", saved_headers.get(1));
+                    println!("tercero header: {:?}", saved_headers.get(2));
+                    println!("Ultimo header: {:?}", saved_headers.last());
+
+                    // println!("Genesis: {:?}", genesis);
+                    println!("Block header hashes: {:?}", block_header_hashes);
+
+                    // END WIP: START FROM LAST SAVED
+
+                    // empezar un loop pidiendo headers nuevos desde el ultimo que tengo
+
+                    let request = GetHeaders::new(version, block_header_hashes, vec![0; 32])
+                        .send(&mut thread_stream);
 
                     if request.is_err() {
                         logger_sender_clone

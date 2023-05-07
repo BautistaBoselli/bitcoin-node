@@ -11,13 +11,10 @@ pub struct GetHeaders {
 }
 
 impl GetHeaders {
-    pub fn new(version: i32, hash_stop: Vec<u8>) -> Self {
+    pub fn new(version: i32, block_locator_hashes: Vec<Vec<u8>>, hash_stop: Vec<u8>) -> Self {
         GetHeaders {
             version,
-            block_locator_hashes: vec![Vec::from_hex(
-                "6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000",
-            )
-            .unwrap()],
+            block_locator_hashes,
             hash_stop,
         }
     }
@@ -88,7 +85,12 @@ mod tests {
     fn get_headers_serialize() {
         let mut empty_stop_hash: Vec<u8> = vec![];
         empty_stop_hash.resize(32, 0);
-        let get_headers = GetHeaders::new(70015, empty_stop_hash);
+        let genesis =
+            vec![
+                Vec::from_hex("6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000")
+                    .unwrap(),
+            ];
+        let get_headers = GetHeaders::new(70015, genesis, empty_stop_hash);
         let serialized_getheaders = get_headers.serialize();
         let parsed_getheaders = GetHeaders::parse(serialized_getheaders).unwrap();
         assert_eq!(get_headers, parsed_getheaders);

@@ -1,4 +1,6 @@
 use std::{
+    fs::{File, OpenOptions},
+    io::{Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{
         mpsc::{self, Sender},
@@ -7,6 +9,8 @@ use std::{
     thread,
     vec::IntoIter,
 };
+
+use chrono::{TimeZone, Utc};
 
 use crate::{
     config::Config,
@@ -44,11 +48,32 @@ impl Node {
                             .send(format!("Block {}: {}", block_hash, block))
                             .unwrap();
                     }
-                    PeerResponse::NewHeaders(headers) => {
-                        logger_sender_clone
-                            .send(format!("New headers: {}", headers))
+                    PeerResponse::NewHeaders(new_headers) => {
+                        let mut file = OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .create(true)
+                            .append(true)
+                            .open("store/headers.txt")
                             .unwrap();
 
+                        file.write_all(&new_headers.serialize_headers()).unwrap();
+
+                        logger_sender_clone
+                            .send(format!("New headers: {:?}", new_headers.headers.last()))
+                            .unwrap();
+
+                        println!("nuevos primero header: {:?}", new_headers.headers.get(0));
+                        println!("nuevos segundo header: {:?}", new_headers.headers.get(1));
+                        println!("nuevos tercero header: {:?}", new_headers.headers.get(2));
+                        println!("nuevos Ultimo header: {:?}", new_headers.headers.last());
+
+                        // new_headers.headers.iter().for_each(|header| {
+                        //     // if header.timestamp > Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9) {}
+                        //     peers_sender_clone
+                        //         .send(PeerAction::GetBlock(header.to_string()))
+                        //         .unwrap();
+                        // });
                         for i in 0..20 {
                             peers_sender_clone
                                 .send(PeerAction::GetBlock(i.to_string()))
