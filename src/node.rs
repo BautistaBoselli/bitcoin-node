@@ -133,24 +133,24 @@ impl Node {
     }
 }
 
-// impl Drop for Node {
-//     fn drop(&mut self) {
-//         for _ in &mut self.peers {
-//             self.peers_sender.send(PeerAction::Terminate).unwrap();
-//         }
+impl Drop for Node {
+    fn drop(&mut self) {
+        for _ in &mut self.peers {
+            self.peers_sender.send(PeerAction::Terminate).unwrap();
+        }
 
-//         self.logger_sender
-//             .send("Shutting down all workers.".to_string())
-//             .unwrap();
+        self.logger_sender
+            .send("Shutting down all workers.".to_string())
+            .unwrap();
 
-//         for worker in &mut self.peers {
-//             if let Some(thread) = worker.node_listener_thread.take() {
-//                 thread.join().unwrap();
-//             }
-//             if let Some(thread) = worker.stream_listener_thread.take() {
-//                 thread.join().unwrap();
-//             }
-//         }
-//         self.event_loop_thread.take().unwrap().join().unwrap();
-//     }
-// }
+        for worker in &mut self.peers {
+            if let Some(thread) = worker.node_listener_thread.take() {
+                thread.join().unwrap();
+            }
+            if let Some(thread) = worker.stream_listener_thread.take() {
+                thread.join().unwrap();
+            }
+        }
+        self.event_loop_thread.take().unwrap().join().unwrap();
+    }
+}

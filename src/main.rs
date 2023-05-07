@@ -42,6 +42,8 @@ fn main() {
 
     my_node.execute(PeerAction::GetHeaders);
 
+    println!("Terminada la tarea del main");
+
     // for _i in 0..20 {
     //     my_node.execute(PeerAction::Echo(
     //         "Soy un peer hablando en concurrencia".to_string(),
