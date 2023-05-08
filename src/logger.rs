@@ -26,10 +26,11 @@ impl Logger {
             .open(filename)
             .unwrap();
 
-        thread::spawn(move || loop {
-            let message = rx.recv().unwrap();
-            println!("logger: {}", message);
-            writeln!(file, "{}", message).unwrap();
+        thread::spawn(move || {
+            while let Ok(message) = rx.recv() {
+                println!("logger: {}", message);
+                writeln!(file, "{}", message).unwrap();
+            }
         });
 
         Self { tx }
@@ -47,8 +48,10 @@ mod tests {
 
     #[test]
     fn log_file_gets_written() {
+        println!("Testing");
         let logger = Logger::new(&String::from("test1.txt"));
         let sender = logger.get_sender();
+        println!("Sender: {:?}", sender);
         sender.send(String::from("Sender test 1")).unwrap();
         sender.send(String::from("Sender test 2")).unwrap();
         thread::sleep(time::Duration::from_millis(100));

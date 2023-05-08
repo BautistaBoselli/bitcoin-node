@@ -2,7 +2,6 @@ use std::net::{Ipv6Addr, SocketAddrV6};
 
 use crate::error::CustomError;
 use crate::message::Message;
-use crate::node::Node;
 
 #[derive(PartialEq, Debug)]
 /// Crea una estructura para el mensaje de versión con los campos necesarios de acuerdo con el protocolo de Bitcoin.
@@ -41,17 +40,22 @@ impl Version {
     /// El campo user_agent se inicializa con un string vacío y el campo user_agent_length con 0.
     /// El campo nonce se inicializa con 0.
     /// El campo start_height se inicializa con 0.
-    pub fn new(sender_node: &Node, receiver_address: SocketAddrV6) -> Self {
+    pub fn new(
+        receiver_address: SocketAddrV6,
+        sender_address: SocketAddrV6,
+        version: i32,
+        services: u64,
+    ) -> Self {
         Version {
-            version: sender_node.version,
-            services: sender_node.services,
+            version,
+            services,
             timestamp: chrono::Utc::now().timestamp() as u64,
             receiver_services: 0x00,
             receiver_address: *receiver_address.ip(),
             receiver_port: receiver_address.port(),
-            sender_services: sender_node.services,
-            sender_address: sender_node.ip_v6,
-            sender_port: sender_node.port,
+            sender_services: services,
+            sender_address: *sender_address.ip(),
+            sender_port: sender_address.port(),
             nonce: 0x00,
             user_agent: String::from(""),
             user_agent_length: 0x00,
@@ -181,34 +185,9 @@ mod tests {
 
     #[test]
     fn create_version_message() -> Result<(), CustomError> {
-        let test_node = Node {
-            ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
-            services: 0x00,
-            port: 4321,
-            version: 7000,
-            peers: vec![],
-        };
-
+        let sender_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 4321, 0, 0);
         let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-        let version = Version::new(&test_node, receiver_address);
-        let buffer = version.serialize();
-        let parsed_version = Version::parse(buffer)?;
-        assert_eq!(version, parsed_version);
-        Ok(())
-    }
-
-    #[test]
-    fn parse_version() -> Result<(), CustomError> {
-        let test_node = Node {
-            ip_v6: Ipv6Addr::new(0xf, 0xf, 0xf, 0xf, 0, 0, 0, 0),
-            services: 0x00,
-            port: 4321,
-            version: 7000,
-            peers: vec![],
-        };
-
-        let receiver_address = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-        let version = Version::new(&test_node, receiver_address);
+        let version: Version = Version::new(receiver_address, sender_address, 7000, 0x00);
         let buffer = version.serialize();
         let parsed_version = Version::parse(buffer)?;
         assert_eq!(version, parsed_version);

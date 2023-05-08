@@ -17,6 +17,7 @@ pub enum CustomError {
     InvalidHeader,
     CommandNotImplemented,
     Logging,
+    CannotReadMessageHeader,
 }
 
 impl CustomError {
@@ -34,6 +35,7 @@ impl CustomError {
             Self::InvalidHeader => "invalid header",
             Self::CommandNotImplemented => "command not implemented",
             Self::Logging => "couldn't send log",
+            Self::CannotReadMessageHeader => "cannot read message header",
         }
     }
 }
