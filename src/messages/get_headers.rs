@@ -1,5 +1,3 @@
-use bitcoin_hashes::hex::FromHex;
-
 use crate::{error::CustomError, message::Message};
 
 use super::headers::{parse_var_int, serialize_var_int};
@@ -81,18 +79,15 @@ impl Message for GetHeaders {
 #[cfg(test)]
 mod tests {
 
+    use crate::peer::GENESIS;
+
     use super::*;
 
     #[test]
     fn get_headers_serialize() {
         let mut empty_stop_hash: Vec<u8> = vec![];
         empty_stop_hash.resize(32, 0);
-        let genesis =
-            vec![
-                Vec::from_hex("6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000")
-                    .unwrap(),
-            ];
-        let get_headers = GetHeaders::new(70015, genesis, empty_stop_hash);
+        let get_headers = GetHeaders::new(70015, [GENESIS.to_vec()].to_vec(), empty_stop_hash);
         let serialized_getheaders = get_headers.serialize();
         let parsed_getheaders = GetHeaders::parse(serialized_getheaders).unwrap();
         assert_eq!(get_headers, parsed_getheaders);

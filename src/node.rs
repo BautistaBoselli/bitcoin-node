@@ -1,20 +1,16 @@
 use std::{
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::{Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
-    sync::{
-        mpsc::{self, Sender},
-        Arc, Mutex,
-    },
+    sync::{mpsc, Arc, Mutex},
     thread,
     vec::IntoIter,
 };
 
-use chrono::{TimeZone, Utc};
-
 use crate::{
     config::Config,
     logger::Logger,
+    messages::headers::Headers,
     peer::{Peer, PeerAction, PeerResponse},
 };
 
@@ -22,10 +18,10 @@ pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
     pub version: i32,
-    logger_sender: Sender<String>,
+    logger_sender: mpsc::Sender<String>,
     peers_sender: mpsc::Sender<PeerAction>,
     peers_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
-    peers_response_sender: Sender<PeerResponse>,
+    peers_response_sender: mpsc::Sender<PeerResponse>,
     peers: Vec<Peer>,
     pub event_loop_thread: Option<thread::JoinHandle<()>>,
 }
@@ -40,6 +36,31 @@ impl Node {
 
         let logger_sender_clone = logger_sender.clone();
         let peers_sender_clone = peers_sender.clone();
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .append(true)
+            .open("store/headers.txt")
+            .unwrap();
+
+        let mut saved_headers_buffer = vec![];
+        file.read_to_end(&mut saved_headers_buffer).unwrap();
+
+        let mut headers = match Headers::parse_headers(saved_headers_buffer) {
+            Ok(headers) => headers,
+            Err(_) => vec![],
+        };
+
+        let last_header = match headers.last() {
+            Some(header) => Some(header.hash()),
+            None => None,
+        };
+        peers_sender_clone
+            .send(PeerAction::GetHeaders(last_header))
+            .unwrap();
+
+        // thread que escucha los mensajes de los peers
         let thread = thread::spawn(move || loop {
             while let Ok(message) = peers_response_receiver.recv() {
                 match message {
@@ -48,7 +69,7 @@ impl Node {
                             .send(format!("Block {}: {}", block_hash, block))
                             .unwrap();
                     }
-                    PeerResponse::NewHeaders(new_headers) => {
+                    PeerResponse::NewHeaders(mut new_headers) => {
                         let mut file = OpenOptions::new()
                             .read(true)
                             .write(true)
@@ -59,27 +80,39 @@ impl Node {
 
                         file.write_all(&new_headers.serialize_headers()).unwrap();
 
-                        logger_sender_clone
-                            .send(format!("New headers: {:?}", new_headers.headers.last()))
-                            .unwrap();
-
-                        println!("nuevos primero header: {:?}", new_headers.headers.get(0));
-                        println!("nuevos segundo header: {:?}", new_headers.headers.get(1));
-                        println!("nuevos tercero header: {:?}", new_headers.headers.get(2));
-                        println!("nuevos Ultimo header: {:?}", new_headers.headers.last());
-
-                        // new_headers.headers.iter().for_each(|header| {
-                        //     // if header.timestamp > Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9) {}
-                        //     peers_sender_clone
-                        //         .send(PeerAction::GetBlock(header.to_string()))
-                        //         .unwrap();
-                        // });
-                        for i in 0..20 {
-                            peers_sender_clone
-                                .send(PeerAction::GetBlock(i.to_string()))
-                                .unwrap();
+                        if let Some(first_header) = new_headers.headers.get(0) {
+                            println!("primer header: {:?}", first_header.prev_block_hash);
                         }
+
+                        let new_headers_count = new_headers.headers.len();
+                        headers.append(&mut new_headers.headers);
+                        println!(
+                            "Hay {} headers (nuevos {})",
+                            headers.len(),
+                            new_headers_count
+                        );
                     }
+                    PeerResponse::GetHeadersError => {
+                        let last_header = match headers.last() {
+                            Some(header) => Some(header.hash()),
+                            None => None,
+                        };
+                        peers_sender_clone
+                            .send(PeerAction::GetHeaders(last_header))
+                            .unwrap();
+                    }
+
+                    // new_headers.headers.iter().for_each(|header| {
+                    //     // if header.timestamp > Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9) {}
+                    //     peers_sender_clone
+                    //         .send(PeerAction::GetBlock(header.to_string()))
+                    //         .unwrap();
+                    // });
+                    // for i in 0..20 {
+                    //     peers_sender_clone
+                    //         .send(PeerAction::GetBlock(i.to_string()))
+                    //         .unwrap();
+                    // }
                     _ => {}
                 }
             }
@@ -135,9 +168,9 @@ impl Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        for _ in &mut self.peers {
-            self.peers_sender.send(PeerAction::Terminate).unwrap();
-        }
+        // for _ in &mut self.peers {
+        //     self.peers_sender.send(PeerAction::Terminate).unwrap();
+        // }
 
         self.logger_sender
             .send("Shutting down all workers.".to_string())

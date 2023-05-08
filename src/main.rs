@@ -1,4 +1,4 @@
-use bitcoin::peer::{get_addresses, PeerAction};
+use bitcoin::peer::get_addresses;
 use bitcoin::{config::Config, logger::Logger, node::Node};
 use std::{env, path::Path};
 
@@ -40,13 +40,5 @@ fn main() {
 
     my_node.connect(addresses);
 
-    my_node.execute(PeerAction::GetHeaders);
-
     println!("Terminada la tarea del main");
-
-    // for _i in 0..20 {
-    //     my_node.execute(PeerAction::Echo(
-    //         "Soy un peer hablando en concurrencia".to_string(),
-    //     ))
-    // }
 }

@@ -1,3 +1,5 @@
+use bitcoin_hashes::{sha256d, Hash};
+
 use crate::{error::CustomError, message::Message};
 
 #[derive(Debug)]
@@ -43,6 +45,11 @@ impl BlockHeader {
             nonce,
         }
     }
+    pub fn hash(&self) -> Vec<u8> {
+        sha256d::Hash::hash(&self.serialize())
+            .to_byte_array()
+            .to_vec()
+    }
 }
 
 impl Headers {
@@ -57,14 +64,21 @@ impl Headers {
         }
         buffer
     }
-    pub fn parse_headers(buffer: Vec<u8>) -> Vec<BlockHeader> {
+    pub fn parse_headers(buffer: Vec<u8>) -> Result<Vec<BlockHeader>, CustomError> {
+        if buffer.len() == 0 {
+            return Ok(vec![]);
+        }
+        if buffer.len() % 80 != 0 {
+            return Err(CustomError::SerializedBufferIsInvalid);
+        }
+
         let mut headers = vec![];
         let mut i = 0;
         while i < buffer.len() {
             headers.push(BlockHeader::parse(buffer[i..(i + 80)].to_vec()));
             i += 80;
         }
-        headers
+        Ok(headers)
     }
 }
 
@@ -87,7 +101,7 @@ impl Message for Headers {
     where
         Self: Sized,
     {
-        if buffer.len() < 9 {
+        if buffer.len() == 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 

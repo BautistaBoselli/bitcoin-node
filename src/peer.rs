@@ -1,5 +1,4 @@
 use std::{
-    fs::OpenOptions,
     io::Read,
     net::{SocketAddr, SocketAddrV6, TcpStream, ToSocketAddrs},
     sync::{mpsc, Arc, Mutex},
@@ -7,18 +6,10 @@ use std::{
     vec::IntoIter,
 };
 
-use bitcoin_hashes::{hex::FromHex, sha256d};
-use bitcoin_hashes::{sha256, Hash};
-
 use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
-    messages::{
-        get_headers::GetHeaders,
-        headers::{BlockHeader, Headers},
-        ver_ack::VerAck,
-        version::Version,
-    },
+    messages::{get_headers::GetHeaders, headers::Headers, ver_ack::VerAck, version::Version},
     // peer::Peer,
 };
 
@@ -28,8 +19,13 @@ pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, Cu
         .map_err(|_| CustomError::CannotResolveSeedAddress)
 }
 
+pub const GENESIS: [u8; 32] = [
+    111, 226, 140, 10, 182, 241, 179, 114, 193, 166, 162, 70, 174, 99, 247, 79, 147, 30, 131, 101,
+    225, 90, 8, 156, 104, 214, 25, 0, 0, 0, 0, 0,
+];
+
 pub enum PeerAction {
-    GetHeaders,
+    GetHeaders(Option<Vec<u8>>),
     GetBlock(String),
     Terminate,
 }
@@ -86,81 +82,18 @@ impl Peer {
         let logger_sender_clone = peer.logger_sender.clone();
         let mut thread_stream = peer.stream.try_clone().unwrap();
 
+        //thread que escucha al nodo
         let node_listener_thread = thread::spawn(move || loop {
             let peer_message = receiver.lock().unwrap().recv().unwrap();
             match peer_message {
-                PeerAction::GetHeaders => {
-                    println!("Recibido el pedido de headers...");
-                    // ver archivo y serialize los headers
-                    let mut file = OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .create(true)
-                        .append(true)
-                        .open("store/headers.txt")
-                        .unwrap();
-
-                    let mut saved_headers_buffer = vec![];
-                    file.read_to_end(&mut saved_headers_buffer).unwrap();
-
-                    println!(
-                        "Tengo {} bytes de headers (o sea {} headers)",
-                        saved_headers_buffer.len(),
-                        saved_headers_buffer.len() / 80
+                PeerAction::GetHeaders(last_header) => {
+                    handle_getheaders(
+                        last_header,
+                        version,
+                        &mut thread_stream,
+                        &logger_sender_clone,
+                        &peer_response_sender_clone,
                     );
-
-                    // WIP: START FROM LAST SAVED
-                    let genesis = vec![Vec::from_hex(
-                        "6FE28C0AB6F1B372C1A6A246AE63F74F931E8365E15A089C68D6190000000000",
-                    )
-                    .unwrap()];
-
-                    let saved_headers = Headers::parse_headers(saved_headers_buffer.clone());
-
-                    // va a ser 80 cuando eliminemos el txCount
-                    let last_header = match saved_headers_buffer.len() >= 80 {
-                        true => saved_headers_buffer.get(saved_headers_buffer.len() - 80..),
-                        false => None,
-                    };
-
-                    let block_header_hashes = match last_header {
-                        Some(header) => {
-                            // genesis.append(&mut vec![sha256d::Hash::hash(header)
-                            //     .to_byte_array()
-                            //     .to_vec()]);
-
-                            [sha256d::Hash::hash(header).to_byte_array().to_vec()].to_vec()
-
-                            // genesis.append(&mut [val.to_vec()].to_vec());
-                            // genesis.reverse();
-                            // genesis
-                        }
-                        None => genesis,
-                    };
-
-                    println!("primero header: {:?}", saved_headers.get(0));
-                    println!("segundo header: {:?}", saved_headers.get(1));
-                    println!("tercero header: {:?}", saved_headers.get(2));
-                    println!("Ultimo header: {:?}", saved_headers.last());
-
-                    // println!("Genesis: {:?}", genesis);
-                    println!("Block header hashes: {:?}", block_header_hashes);
-
-                    // END WIP: START FROM LAST SAVED
-
-                    // empezar un loop pidiendo headers nuevos desde el ultimo que tengo
-
-                    let request = GetHeaders::new(version, block_header_hashes, vec![0; 32])
-                        .send(&mut thread_stream);
-
-                    if request.is_err() {
-                        logger_sender_clone
-                            .send("Error pidiendo headers".to_string())
-                            .unwrap();
-                        peer_response_sender_clone
-                            .send(PeerResponse::GetHeadersError)
-                            .unwrap();
-                    }
                 }
                 PeerAction::GetBlock(block_header) => {
                     println!("Recibido el pedido de bloque {}...", block_header);
@@ -172,15 +105,17 @@ impl Peer {
             }
         });
 
+        //AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
         let peer_response_sender_clone = peers_response_sender.clone();
         let logger_sender_clone = peer.logger_sender.clone();
         let mut thread_stream = peer.stream.try_clone().unwrap();
-
+        //Thread que escucha el stream
         let stream_listener_thread = thread::spawn(move || loop {
             let response_header = match MessageHeader::read(&mut thread_stream) {
                 Ok(header) => header,
                 Err(error) => {
-                    println!("Error al leer el header: {}", error);
+                    println!("{}", error);
                     return;
                 }
             };
@@ -196,13 +131,24 @@ impl Peer {
                     }
                 };
 
+                if response.headers.len() == 2000 {
+                    let last_header = response.headers.last().map(|h| h.hash());
+                    handle_getheaders(
+                        last_header,
+                        version,
+                        &mut thread_stream,
+                        &logger_sender_clone,
+                        &peer_response_sender_clone,
+                    );
+                }
+
                 peer_response_sender_clone
                     .send(PeerResponse::NewHeaders(response))
                     .unwrap();
             } else {
                 let cmd = response_header.command.as_str();
 
-                if cmd != "ping" && cmd != "alert" && cmd != "addr" {
+                if cmd != "ping" && cmd != "alert" && cmd != "addr" && cmd != "inv" {
                     logger_sender_clone
                         .send(format!(
                             "Recibido desconocido: {:?}",
@@ -260,5 +206,32 @@ impl Peer {
         verack_message.send(&mut self.stream)?;
 
         Ok(())
+    }
+}
+
+fn handle_getheaders(
+    last_header: Option<Vec<u8>>,
+    version: i32,
+    thread_stream: &mut TcpStream,
+    logger_sender_clone: &mpsc::Sender<String>,
+    peer_response_sender_clone: &mpsc::Sender<PeerResponse>,
+) {
+    println!("Recibido el pedido de headers...");
+
+    let block_header_hashes = match last_header {
+        Some(header) => [header].to_vec(),
+        None => [GENESIS.to_vec()].to_vec(),
+    };
+    println!("Block header hashes: {:?}", block_header_hashes);
+
+    let request = GetHeaders::new(version, block_header_hashes, vec![0; 32]).send(thread_stream);
+
+    if request.is_err() {
+        logger_sender_clone
+            .send("Error pidiendo headers".to_string())
+            .unwrap();
+        peer_response_sender_clone
+            .send(PeerResponse::GetHeadersError)
+            .unwrap();
     }
 }

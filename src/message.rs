@@ -158,7 +158,7 @@ impl MessageHeader {
 
         stream
             .read_exact(&mut header_buffer)
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
+            .map_err(|_| CustomError::CannotReadMessageHeader)?;
 
         let header = Self::parse(header_buffer)?;
 
