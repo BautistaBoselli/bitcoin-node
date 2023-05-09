@@ -3,3 +3,6 @@ config.txt
 log.txt
 /store/*
 !/store/.gitkeep
+!/store/blocks
+/store/blocks/*
+!/store/blocks/.gitkeep

@@ -9,7 +9,14 @@ use std::{
 use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
-    messages::{get_headers::GetHeaders, headers::Headers, ver_ack::VerAck, version::Version},
+    messages::{
+        get_data::GetData,
+        get_headers::GetHeaders,
+        headers::{BlockHeader, Headers},
+        inv::Inventory,
+        ver_ack::VerAck,
+        version::Version,
+    },
     // peer::Peer,
 };
 
@@ -26,15 +33,15 @@ pub const GENESIS: [u8; 32] = [
 
 pub enum PeerAction {
     GetHeaders(Option<Vec<u8>>),
-    GetBlock(String),
+    GetData(Vec<Inventory>),
     Terminate,
 }
 
 pub enum PeerResponse {
     NewHeaders(Headers),
     GetHeadersError,
-    Block((String, String)),
-    GetBlockError(String),
+    Block((Vec<u8>, Vec<u8>)),
+    GetDataError(Vec<Inventory>),
 }
 
 pub struct Peer {
@@ -95,12 +102,21 @@ impl Peer {
                         &peer_response_sender_clone,
                     );
                 }
-                PeerAction::GetBlock(block_header) => {
-                    println!("Recibido el pedido de bloque {}...", block_header);
-                    return;
-                }
                 PeerAction::Terminate => {
                     break;
+                }
+                PeerAction::GetData(inventories) => {
+                    println!("Enviando getdata...");
+                    let inventories_clone = inventories.clone();
+                    let request = GetData::new(inventories).send(&mut thread_stream);
+                    if request.is_err() {
+                        logger_sender_clone
+                            .send("Error pidiendo data".to_string())
+                            .unwrap();
+                        peer_response_sender_clone
+                            .send(PeerResponse::GetDataError(inventories_clone))
+                            .unwrap();
+                    }
                 }
             }
         });
@@ -144,6 +160,17 @@ impl Peer {
 
                 peer_response_sender_clone
                     .send(PeerResponse::NewHeaders(response))
+                    .unwrap();
+            } else if response_header.command.as_str() == "block" {
+                println!("Recibida la respuesta de blocks...");
+                let mut block_buffer = vec![0; response_header.payload_size as usize];
+                thread_stream.read_exact(&mut block_buffer).unwrap();
+                let header_hash = BlockHeader::parse(block_buffer[0..80].to_vec())
+                    .unwrap()
+                    .hash();
+
+                peer_response_sender_clone
+                    .send(PeerResponse::Block((header_hash, block_buffer)))
                     .unwrap();
             } else {
                 let cmd = response_header.command.as_str();
@@ -216,13 +243,10 @@ fn handle_getheaders(
     logger_sender_clone: &mpsc::Sender<String>,
     peer_response_sender_clone: &mpsc::Sender<PeerResponse>,
 ) {
-    println!("Recibido el pedido de headers...");
-
     let block_header_hashes = match last_header {
         Some(header) => [header].to_vec(),
         None => [GENESIS.to_vec()].to_vec(),
     };
-    println!("Block header hashes: {:?}", block_header_hashes);
 
     let request = GetHeaders::new(version, block_header_hashes, vec![0; 32]).send(thread_stream);
 

@@ -10,7 +10,10 @@ use std::{
 use crate::{
     config::Config,
     logger::Logger,
-    messages::headers::Headers,
+    messages::{
+        headers::Headers,
+        inv::{Inventory, InventoryType},
+    },
     peer::{Peer, PeerAction, PeerResponse},
 };
 
@@ -65,9 +68,18 @@ impl Node {
             while let Ok(message) = peers_response_receiver.recv() {
                 match message {
                     PeerResponse::Block((block_hash, block)) => {
-                        logger_sender_clone
-                            .send(format!("Block {}: {}", block_hash, block))
+                        let mut filename = String::with_capacity(2 * block_hash.len());
+                        for byte in block_hash {
+                            filename.push_str(format!("{:02X}", byte).as_str());
+                        }
+                        let mut file = OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .create(true)
+                            .open(format!("store/blocks/{}.txt", filename))
                             .unwrap();
+
+                        file.write_all(&block).unwrap();
                     }
                     PeerResponse::NewHeaders(mut new_headers) => {
                         let mut file = OpenOptions::new()
@@ -80,11 +92,24 @@ impl Node {
 
                         file.write_all(&new_headers.serialize_headers()).unwrap();
 
-                        if let Some(first_header) = new_headers.headers.get(0) {
-                            println!("primer header: {:?}", first_header.prev_block_hash);
-                        }
-
                         let new_headers_count = new_headers.headers.len();
+                        new_headers
+                            .headers
+                            .iter()
+                            .filter(|header| header.timestamp > 1683514800)
+                            .collect::<Vec<_>>()
+                            .chunks(5)
+                            .for_each(|headers| {
+                                let inventory = headers
+                                    .iter()
+                                    .map(|header| {
+                                        Inventory::new(InventoryType::GetBlock, header.hash())
+                                    })
+                                    .collect();
+                                peers_sender_clone
+                                    .send(PeerAction::GetData(inventory))
+                                    .unwrap();
+                            });
                         headers.append(&mut new_headers.headers);
                         println!(
                             "Hay {} headers (nuevos {})",
