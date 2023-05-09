@@ -29,21 +29,24 @@ impl BlockHeader {
         buffer.extend(&self.nonce.to_le_bytes());
         buffer
     }
-    pub fn parse(buffer: Vec<u8>) -> Self {
+    pub fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
+        if buffer.len() < 80 {
+            return Err(CustomError::SerializedBufferIsInvalid);
+        }
         let version = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         let prev_block_hash = buffer[4..36].to_vec();
         let merkle_root = buffer[36..68].to_vec();
         let timestamp = u32::from_le_bytes([buffer[68], buffer[69], buffer[70], buffer[71]]);
         let bits = u32::from_le_bytes([buffer[72], buffer[73], buffer[74], buffer[75]]);
         let nonce = u32::from_le_bytes([buffer[76], buffer[77], buffer[78], buffer[79]]);
-        BlockHeader {
+        Ok(BlockHeader {
             version,
             prev_block_hash,
             merkle_root,
             timestamp,
             bits,
             nonce,
-        }
+        })
     }
     pub fn hash(&self) -> Vec<u8> {
         sha256d::Hash::hash(&self.serialize())
@@ -75,7 +78,7 @@ impl Headers {
         let mut headers = vec![];
         let mut i = 0;
         while i < buffer.len() {
-            headers.push(BlockHeader::parse(buffer[i..(i + 80)].to_vec()));
+            headers.push(BlockHeader::parse(buffer[i..(i + 80)].to_vec())?);
             i += 80;
         }
         Ok(headers)
@@ -115,7 +118,7 @@ impl Message for Headers {
 
         let mut headers = vec![];
         while i < buffer.len() {
-            headers.push(BlockHeader::parse(buffer[i..(i + 81)].to_vec()));
+            headers.push(BlockHeader::parse(buffer[i..(i + 81)].to_vec())?);
             i += 81;
         }
         Ok(Headers { headers })
