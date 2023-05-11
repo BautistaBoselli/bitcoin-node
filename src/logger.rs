@@ -1,39 +1,42 @@
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::str::CharIndices;
 use std::{
     fs::OpenOptions,
     sync::mpsc::{self, Sender},
     thread,
 };
 
+use crate::error::CustomError;
+
 pub struct Logger {
     tx: Sender<String>,
 }
 
 impl Logger {
-    pub fn new(filename: &String) -> Self {
+    pub fn new(filename: &String) -> Result<Self, CustomError> {
         let (tx, rx) = mpsc::channel();
 
         if Path::new(filename).exists() {
-            fs::remove_file(filename).unwrap();
+            fs::remove_file(filename).map_err(|_| CustomError::CannotRemoveFile)?;
         }
 
         let mut file = OpenOptions::new()
             .create_new(true)
             .write(true)
             .append(true)
-            .open(filename)
-            .unwrap();
+            .open(filename)?;
 
-        thread::spawn(move || {
+        thread::spawn(move || -> Result<(), CustomError> {
             while let Ok(message) = rx.recv() {
                 println!("logger: {}", message);
-                writeln!(file, "{}", message).unwrap();
+                writeln!(file, "{}", message)?;
             }
+            Ok(())
         });
 
-        Self { tx }
+        Ok(Self { tx })
     }
     pub fn get_sender(&self) -> Sender<String> {
         self.tx.clone()
@@ -49,7 +52,7 @@ mod tests {
     #[test]
     fn log_file_gets_written() {
         println!("Testing");
-        let logger = Logger::new(&String::from("test1.txt"));
+        let logger = Logger::new(&String::from("test1.txt")).unwrap();
         let sender = logger.get_sender();
         println!("Sender: {:?}", sender);
         sender.send(String::from("Sender test 1")).unwrap();
@@ -65,7 +68,7 @@ mod tests {
 
     #[test]
     fn log_file_gets_written_by_two_senders() {
-        let logger = Logger::new(&String::from("test2.txt"));
+        let logger = Logger::new(&String::from("test2.txt")).unwrap();
         let sender1 = logger.get_sender();
         let sender2 = logger.get_sender();
         sender1.send(String::from("Sender test 1")).unwrap();
@@ -81,7 +84,7 @@ mod tests {
 
     #[test]
     fn log_file_gets_written_by_two_threads() {
-        let logger = Logger::new(&String::from("test3.txt"));
+        let logger = Logger::new(&String::from("test3.txt")).unwrap();
         let sender1 = logger.get_sender();
         let sender2 = logger.get_sender();
         thread::spawn(move || sender1.send(String::from("Sender test 1")).unwrap())
