@@ -1,6 +1,4 @@
-use crate::{error::CustomError, message::Message, messages::headers::parse_var_int};
-
-use super::headers::serialize_var_int;
+use crate::{error::CustomError, message::Message, parser::BufferParser, parser::VarIntSerialize};
 
 pub struct Inv {
     pub inventories: Vec<Inventory>,
@@ -15,7 +13,7 @@ impl Inv {
 impl Message for Inv {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
-        buffer.extend(serialize_var_int(self.inventories.len() as u64));
+        buffer.extend(self.inventories.len().to_varint_bytes());
         for inventory in &self.inventories {
             buffer.extend(inventory.serialize());
         }
@@ -26,26 +24,20 @@ impl Message for Inv {
         String::from("inv")
     }
 
-    fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError>
-    where
-        Self: Sized,
-    {
-        if buffer.len() == 0 {
-            return Err(CustomError::SerializedBufferIsInvalid);
-        }
+    fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
+        let mut parser = BufferParser::new(buffer);
 
-        let (inventory_count, mut i) = parse_var_int(&buffer);
+        let inventory_count = parser.extract_varint()?;
 
-        if (buffer.len() - i) % 36 != 0 {
+        if parser.len() % 36 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
         println!("inventory count: {}", inventory_count);
 
         let mut inventories = vec![];
-        while i < buffer.len() {
-            inventories.push(Inventory::parse(buffer[i..(i + 36)].to_vec())?);
-            i += 36;
+        while !parser.is_empty() {
+            inventories.push(Inventory::parse(parser.extract_buffer(36)?.to_vec())?);
         }
         Ok(Self { inventories })
     }
@@ -73,7 +65,7 @@ impl Inventory {
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         let inventory_type = match self.inventory_type {
-            InventoryType::GetBlock => 2 as u32,
+            InventoryType::GetBlock => 2_u32,
         };
         buffer.extend(inventory_type.to_le_bytes());
         buffer.extend(&self.hash);
@@ -81,17 +73,17 @@ impl Inventory {
     }
 
     pub fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
-        if buffer.len() != 36 {
+        let mut parser = BufferParser::new(buffer);
+        if parser.len() != 36 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
-        let inventory_type = match u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]])
-        {
-            2 => InventoryType::GetBlock,
+        let inventory_type = match parser.extract_u32()? {
+            2_u32 => InventoryType::GetBlock,
             _ => return Err(CustomError::SerializedBufferIsInvalid),
         };
         Ok(Self {
             inventory_type,
-            hash: buffer[4..].to_vec(),
+            hash: parser.extract_buffer(32)?.to_vec(),
         })
     }
 }

@@ -123,7 +123,7 @@ impl Peer {
 
         //AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
-        let peer_response_sender_clone = peers_response_sender.clone();
+        let peer_response_sender_clone = peers_response_sender;
         let logger_sender_clone = peer.logger_sender.clone();
         let mut thread_stream = peer.stream.try_clone().unwrap();
         //Thread que escucha el stream

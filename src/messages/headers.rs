@@ -1,6 +1,10 @@
 use bitcoin_hashes::{sha256d, Hash};
 
-use crate::{error::CustomError, message::Message};
+use crate::{
+    error::CustomError,
+    message::Message,
+    parser::{BufferParser, VarIntSerialize},
+};
 
 #[derive(Debug)]
 
@@ -30,22 +34,18 @@ impl BlockHeader {
         buffer
     }
     pub fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
-        if buffer.len() < 80 {
+        let mut parser = BufferParser::new(buffer);
+        if parser.len() < 80 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
-        let version = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-        let prev_block_hash = buffer[4..36].to_vec();
-        let merkle_root = buffer[36..68].to_vec();
-        let timestamp = u32::from_le_bytes([buffer[68], buffer[69], buffer[70], buffer[71]]);
-        let bits = u32::from_le_bytes([buffer[72], buffer[73], buffer[74], buffer[75]]);
-        let nonce = u32::from_le_bytes([buffer[76], buffer[77], buffer[78], buffer[79]]);
+
         Ok(BlockHeader {
-            version,
-            prev_block_hash,
-            merkle_root,
-            timestamp,
-            bits,
-            nonce,
+            version: parser.extract_i32()?,
+            prev_block_hash: parser.extract_buffer(32)?.to_vec(),
+            merkle_root: parser.extract_buffer(32)?.to_vec(),
+            timestamp: parser.extract_u32()?,
+            bits: parser.extract_u32()?,
+            nonce: parser.extract_u32()?,
         })
     }
     pub fn hash(&self) -> Vec<u8> {
@@ -68,18 +68,14 @@ impl Headers {
         buffer
     }
     pub fn parse_headers(buffer: Vec<u8>) -> Result<Vec<BlockHeader>, CustomError> {
-        if buffer.len() == 0 {
-            return Ok(vec![]);
-        }
-        if buffer.len() % 80 != 0 {
+        let mut parser = BufferParser::new(buffer);
+        if parser.len() % 80 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
         let mut headers = vec![];
-        let mut i = 0;
-        while i < buffer.len() {
-            headers.push(BlockHeader::parse(buffer[i..(i + 80)].to_vec())?);
-            i += 80;
+        while !parser.is_empty() {
+            headers.push(BlockHeader::parse(parser.extract_buffer(80)?.to_vec())?);
         }
         Ok(headers)
     }
@@ -92,78 +88,30 @@ impl Message for Headers {
 
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
-        buffer.extend(serialize_var_int(self.headers.len() as u64));
+        buffer.extend(self.headers.len().to_varint_bytes());
         for header in &self.headers {
             buffer.extend(&header.serialize());
-            buffer.extend((0 as u8).to_le_bytes());
+            buffer.extend(0_u8.to_le_bytes());
         }
         buffer
     }
 
-    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
-    where
-        Self: Sized,
-    {
-        if buffer.len() == 0 {
+    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
+        let mut parser = BufferParser::new(buffer);
+
+        let header_count = parser.extract_varint()?;
+        if parser.len() % 81 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
-        let (header_count, mut i) = parse_var_int(&buffer);
-
-        if (buffer.len() - i) % 81 != 0 {
-            return Err(CustomError::SerializedBufferIsInvalid);
+        let mut headers = vec![];
+        while parser.len() >= 81 {
+            headers.push(BlockHeader::parse(parser.extract_buffer(81)?.to_vec())?);
         }
 
         println!("header count: {}", header_count);
-
-        let mut headers = vec![];
-        while i < buffer.len() {
-            headers.push(BlockHeader::parse(buffer[i..(i + 81)].to_vec())?);
-            i += 81;
-        }
         Ok(Headers { headers })
     }
-}
-
-pub fn parse_var_int(buffer: &Vec<u8>) -> (u64, usize) {
-    let (header_count, i) = match buffer[0] {
-        0xFF => (
-            u64::from_le_bytes([
-                buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7],
-                buffer[8],
-            ]),
-            9,
-        ),
-        0xFE => (
-            u64::from_le_bytes([buffer[1], buffer[2], buffer[3], 0, 0, 0, 0, 0]),
-            5,
-        ),
-        0xFD => (
-            u64::from_le_bytes([buffer[1], buffer[2], 0, 0, 0, 0, 0, 0]),
-            3,
-        ),
-        _ => (u64::from_le_bytes([buffer[0], 0, 0, 0, 0, 0, 0, 0]), 1),
-    };
-    (header_count, i)
-}
-
-pub fn serialize_var_int(var_int: u64) -> Vec<u8> {
-    if var_int < 0xFD {
-        return (var_int as u8).to_le_bytes().to_vec();
-    }
-    if var_int <= 0xFFFF {
-        let mut buffer = [0xFD as u8].to_vec();
-        buffer.append(&mut (var_int as u16).to_le_bytes().to_vec());
-        return buffer;
-    }
-    if var_int <= 0xFFFFFFFF {
-        let mut buffer = [0xFE as u8].to_vec();
-        buffer.append(&mut (var_int as u32).to_le_bytes().to_vec());
-        return buffer;
-    }
-    let mut buffer = [0xFF as u8].to_vec();
-    buffer.append(&mut var_int.to_le_bytes().to_vec());
-    buffer
 }
 
 // #[cfg(test)]

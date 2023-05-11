@@ -1,6 +1,10 @@
-use crate::{error::CustomError, message::Message};
+use crate::{
+    error::CustomError,
+    message::Message,
+    parser::{BufferParser, VarIntSerialize},
+};
 
-use super::headers::{parse_var_int, serialize_var_int};
+// use super::headers::{parse_var_int, serialize_var_int};
 
 #[derive(PartialEq, Debug)]
 
@@ -28,7 +32,7 @@ impl Message for GetHeaders {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(&self.version.to_le_bytes());
-        buffer.extend(serialize_var_int(self.block_locator_hashes.len() as u64));
+        buffer.extend(self.block_locator_hashes.len().to_varint_bytes());
         for hash in &self.block_locator_hashes {
             buffer.extend(hash);
         }
@@ -36,38 +40,30 @@ impl Message for GetHeaders {
         buffer
     }
 
-    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
-    where
-        Self: Sized,
-    {
-        if buffer.len() < 37 {
+    fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
+        let mut parser = BufferParser::new(buffer);
+
+        if parser.len() < 37 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
-        let version = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-        let (hash_count, mut i) = parse_var_int(&buffer[4..].to_vec());
+        let version = parser.extract_i32()?;
+        let hash_count = parser.extract_varint()?;
+
         let mut block_locator_hashes: Vec<Vec<u8>> = vec![];
-        if hash_count == 0 {
-            return Ok(GetHeaders {
-                version,
-                block_locator_hashes,
-                hash_stop: buffer[5..37].to_vec(),
-            });
-        }
-        i += 4; // 4 bytes for version
-        while i < buffer.len() - 32 {
-            let hash = buffer[i..(i + 32)].to_vec();
+
+        println!("hash count: {}", hash_count);
+        while parser.len() > 32 {
+            let hash = parser.extract_buffer(32)?.to_vec();
             block_locator_hashes.push(hash);
-            i += 32;
         }
-        if i != buffer.len() - 32 {
-            return Err(CustomError::SerializedBufferIsInvalid);
-        }
-        let hash_stop = buffer[i..(i + 32)].to_vec();
 
-        if block_locator_hashes.len() != hash_count as usize {
+        let hash_stop = parser.extract_buffer(32)?.to_vec();
+
+        if !parser.is_empty() || block_locator_hashes.len() != hash_count as usize {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
+        println!("hash count: {}", hash_count);
         Ok(GetHeaders {
             version,
             block_locator_hashes,
@@ -101,6 +97,7 @@ mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0,
         ];
+
         let parsed_getheaders = GetHeaders::parse(serialized_getheaders).unwrap();
         assert_eq!(parsed_getheaders.version, 70015);
         assert_eq!(parsed_getheaders.block_locator_hashes.len(), 1);
@@ -111,6 +108,19 @@ mod tests {
                 162, 103, 247, 127, 103, 118, 167, 48, 41, 155, 158, 132, 88, 193
             ]
         );
+        assert_eq!(parsed_getheaders.hash_stop, vec![0; 32]);
+    }
+
+    #[test]
+    fn no_headers_get_headers_parses_correctly() {
+        let serialized_getheaders = vec![
+            127, 17, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+
+        let parsed_getheaders = GetHeaders::parse(serialized_getheaders).unwrap();
+        assert_eq!(parsed_getheaders.version, 70015);
+        assert_eq!(parsed_getheaders.block_locator_hashes.len(), 0);
         assert_eq!(parsed_getheaders.hash_stop, vec![0; 32]);
     }
 
