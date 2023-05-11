@@ -33,10 +33,7 @@ impl Message for VerAck {
 
     /// Parsea un vector de bytes en un mensaje de verificación de conexión.
     /// Si el vector no está vacío, devuelve un CustomError.
-    fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError>
-    where
-        Self: Sized,
-    {
+    fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         if !buffer.is_empty() {
             return Err(CustomError::SerializedBufferIsInvalid);
         }

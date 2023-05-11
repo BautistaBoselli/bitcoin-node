@@ -22,10 +22,7 @@ impl Message for GetData {
         String::from("getdata")
     }
 
-    fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError>
-    where
-        Self: Sized,
-    {
+    fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         Ok(Self {
             inv: Inv::parse(buffer)?,
         })

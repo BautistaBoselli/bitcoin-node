@@ -37,7 +37,6 @@ impl Node {
         let peers_receiver = Arc::new(Mutex::new(receiver));
         let (peers_response_sender, peers_response_receiver) = mpsc::channel();
 
-        let logger_sender_clone = logger_sender.clone();
         let peers_sender_clone = peers_sender.clone();
         let mut file = OpenOptions::new()
             .read(true)
@@ -55,10 +54,8 @@ impl Node {
             Err(_) => vec![],
         };
 
-        let last_header = match headers.last() {
-            Some(header) => Some(header.hash()),
-            None => None,
-        };
+        let last_header = headers.last().map(|header| header.hash());
+
         peers_sender_clone
             .send(PeerAction::GetHeaders(last_header))
             .unwrap();
@@ -118,26 +115,12 @@ impl Node {
                         );
                     }
                     PeerResponse::GetHeadersError => {
-                        let last_header = match headers.last() {
-                            Some(header) => Some(header.hash()),
-                            None => None,
-                        };
+                        let last_header = headers.last().map(|header| header.hash());
                         peers_sender_clone
                             .send(PeerAction::GetHeaders(last_header))
                             .unwrap();
                     }
 
-                    // new_headers.headers.iter().for_each(|header| {
-                    //     // if header.timestamp > Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9) {}
-                    //     peers_sender_clone
-                    //         .send(PeerAction::GetBlock(header.to_string()))
-                    //         .unwrap();
-                    // });
-                    // for i in 0..20 {
-                    //     peers_sender_clone
-                    //         .send(PeerAction::GetBlock(i.to_string()))
-                    //         .unwrap();
-                    // }
                     _ => {}
                 }
             }
