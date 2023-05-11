@@ -1,4 +1,8 @@
 use core::fmt;
+use std::{
+    io::{Error, ErrorKind},
+    sync::mpsc::{RecvError, SendError},
+};
 
 #[derive(Debug)]
 
@@ -18,6 +22,13 @@ pub enum CustomError {
     CommandNotImplemented,
     Logging,
     CannotReadMessageHeader,
+    CannotOpenFile,
+    CannotSendMessageToChannel,
+    CloneFailed,
+    CannotLockGuard,
+    CannotReceiveMessageFromChannel,
+    CannotRemoveFile,
+    FileOperationInterrupted,
 }
 
 impl CustomError {
@@ -36,7 +47,39 @@ impl CustomError {
             Self::CommandNotImplemented => "command not implemented",
             Self::Logging => "couldn't send log",
             Self::CannotReadMessageHeader => "cannot read message header",
+            Self::CannotOpenFile => "cannot open file",
+            Self::CannotSendMessageToChannel => "receiving end of a channel is disconected",
+            Self::CloneFailed => "couldn't clone endpoint",
+            Self::CannotLockGuard => "another user of mutex panicked while holding the mutex,",
+            Self::CannotReceiveMessageFromChannel => {
+                "cannot receive message from channel because sender has disconnected"
+            }
+            Self::CannotRemoveFile => "cannot remove file",
+            Self::FileOperationInterrupted => "file operation interrupted",
         }
+    }
+}
+
+impl From<Error> for CustomError {
+    fn from(error: Error) -> Self {
+        match error.kind() {
+            ErrorKind::NotFound => CustomError::CannotOpenFile,
+            ErrorKind::PermissionDenied => CustomError::CannotOpenFile,
+            ErrorKind::AlreadyExists => CustomError::CannotOpenFile,
+            ErrorKind::InvalidInput => CustomError::CannotOpenFile,
+            ErrorKind::Interrupted => CustomError::FileOperationInterrupted,
+            _ => todo!(),
+        }
+    }
+}
+impl<T> From<SendError<T>> for CustomError {
+    fn from(_error: SendError<T>) -> Self {
+        CustomError::CannotSendMessageToChannel
+    }
+}
+impl From<RecvError> for CustomError {
+    fn from(_error: RecvError) -> Self {
+        CustomError::CannotReceiveMessageFromChannel
     }
 }
 

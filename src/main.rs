@@ -25,7 +25,13 @@ fn main() {
         }
     };
 
-    let logger = Logger::new(&config.log_file);
+    let logger = match Logger::new(&config.log_file) {
+        Ok(logger) => logger,
+        Err(error) => {
+            println!("ERROR: {}", error);
+            return;
+        }
+    };
     let logger_sender = logger.get_sender();
 
     let addresses = match get_addresses(config.seed.clone(), config.port) {
@@ -36,9 +42,21 @@ fn main() {
         }
     };
 
-    let mut my_node = Node::new(&config, &logger);
+    let mut my_node = match Node::new(&config, &logger) {
+        Ok(node) => node,
+        Err(error) => {
+            println!("ERROR: {}", error);
+            return;
+        }
+    };
 
-    my_node.connect(addresses);
+    match my_node.connect(addresses) {
+        Ok(connection) => connection,
+        Err(error) => {
+            println!("ERROR: {}", error);
+            return;
+        }
+    }
 
     println!("Terminada la tarea del main");
 }

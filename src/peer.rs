@@ -50,8 +50,8 @@ pub struct Peer {
     pub services: u64,
     pub version: i32,
     pub stream: TcpStream,
-    pub node_listener_thread: Option<thread::JoinHandle<()>>,
-    pub stream_listener_thread: Option<thread::JoinHandle<()>>,
+    pub node_listener_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
+    pub stream_listener_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
     pub logger_sender: mpsc::Sender<String>,
 }
 
@@ -83,108 +83,102 @@ impl Peer {
             logger_sender,
         };
 
-        peer.handshake(sender_address)?;
+        match peer.handshake(sender_address) {
+            Ok(handshake) => handshake,
+            Err(err) => return Err(err),
+        };
 
         let peer_response_sender_clone = peers_response_sender.clone();
         let logger_sender_clone = peer.logger_sender.clone();
-        let mut thread_stream = peer.stream.try_clone().unwrap();
+        let mut thread_stream = peer
+            .stream
+            .try_clone()
+            .map_err(|_| CustomError::CloneFailed)?;
 
         //thread que escucha al nodo
-        let node_listener_thread = thread::spawn(move || loop {
-            let peer_message = receiver.lock().unwrap().recv().unwrap();
-            match peer_message {
-                PeerAction::GetHeaders(last_header) => {
-                    handle_getheaders(
-                        last_header,
-                        version,
-                        &mut thread_stream,
-                        &logger_sender_clone,
-                        &peer_response_sender_clone,
-                    );
-                }
-                PeerAction::Terminate => {
-                    break;
-                }
-                PeerAction::GetData(inventories) => {
-                    println!("Enviando getdata...");
-                    let inventories_clone = inventories.clone();
-                    let request = GetData::new(inventories).send(&mut thread_stream);
-                    if request.is_err() {
-                        logger_sender_clone
-                            .send("Error pidiendo data".to_string())
-                            .unwrap();
-                        peer_response_sender_clone
-                            .send(PeerResponse::GetDataError(inventories_clone))
-                            .unwrap();
+        let node_listener_thread = thread::spawn(move || -> Result<(), CustomError> {
+            loop {
+                let peer_message = receiver
+                    .lock()
+                    .map_err(|_| CustomError::CannotLockGuard)?
+                    .recv()?;
+                match peer_message {
+                    PeerAction::GetHeaders(last_header) => {
+                        handle_getheaders(
+                            last_header,
+                            version,
+                            &mut thread_stream,
+                            &logger_sender_clone,
+                            &peer_response_sender_clone,
+                        )?;
+                    }
+                    PeerAction::Terminate => {
+                        break;
+                    }
+                    PeerAction::GetData(inventories) => {
+                        println!("Enviando getdata...");
+                        let inventories_clone = inventories.clone();
+                        let request = GetData::new(inventories).send(&mut thread_stream);
+                        if request.is_err() {
+                            logger_sender_clone.send("Error pidiendo data".to_string())?;
+                            peer_response_sender_clone
+                                .send(PeerResponse::GetDataError(inventories_clone))?;
+                        }
                     }
                 }
             }
+            Ok(())
         });
 
         //AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
         let peer_response_sender_clone = peers_response_sender;
         let logger_sender_clone = peer.logger_sender.clone();
-        let mut thread_stream = peer.stream.try_clone().unwrap();
+        let mut thread_stream = peer
+            .stream
+            .try_clone()
+            .map_err(|_| CustomError::CloneFailed)?;
         //Thread que escucha el stream
-        let stream_listener_thread = thread::spawn(move || loop {
-            let response_header = match MessageHeader::read(&mut thread_stream) {
-                Ok(header) => header,
-                Err(error) => {
-                    println!("{}", error);
-                    return;
-                }
-            };
+        let stream_listener_thread = thread::spawn(move || -> Result<(), CustomError> {
+            loop {
+                let response_header = MessageHeader::read(&mut thread_stream)?;
 
-            if response_header.command.as_str() == "headers" {
-                println!("Recibida la respuesta de headers...");
-                let response = match Headers::read(&mut thread_stream, response_header.payload_size)
-                {
-                    Ok(response) => response,
-                    Err(error) => {
-                        println!("Error al leer el mensaje: {}", error);
-                        return;
+                if response_header.command.as_str() == "headers" {
+                    println!("Recibida la respuesta de headers...");
+                    let response = Headers::read(&mut thread_stream, response_header.payload_size)?;
+
+                    if response.headers.len() == 2000 {
+                        let last_header = response.headers.last().map(|h| h.hash());
+                        handle_getheaders(
+                            last_header,
+                            version,
+                            &mut thread_stream,
+                            &logger_sender_clone,
+                            &peer_response_sender_clone,
+                        )?;
                     }
-                };
 
-                if response.headers.len() == 2000 {
-                    let last_header = response.headers.last().map(|h| h.hash());
-                    handle_getheaders(
-                        last_header,
-                        version,
-                        &mut thread_stream,
-                        &logger_sender_clone,
-                        &peer_response_sender_clone,
-                    );
-                }
+                    peer_response_sender_clone.send(PeerResponse::NewHeaders(response))?;
+                } else if response_header.command.as_str() == "block" {
+                    println!("Recibida la respuesta de blocks...");
+                    let mut block_buffer = vec![0; response_header.payload_size as usize];
+                    thread_stream.read_exact(&mut block_buffer)?;
+                    let header_hash = BlockHeader::parse(block_buffer[0..80].to_vec())?.hash();
 
-                peer_response_sender_clone
-                    .send(PeerResponse::NewHeaders(response))
-                    .unwrap();
-            } else if response_header.command.as_str() == "block" {
-                println!("Recibida la respuesta de blocks...");
-                let mut block_buffer = vec![0; response_header.payload_size as usize];
-                thread_stream.read_exact(&mut block_buffer).unwrap();
-                let header_hash = BlockHeader::parse(block_buffer[0..80].to_vec())
-                    .unwrap()
-                    .hash();
+                    peer_response_sender_clone
+                        .send(PeerResponse::Block((header_hash, block_buffer)))?;
+                } else {
+                    let cmd = response_header.command.as_str();
 
-                peer_response_sender_clone
-                    .send(PeerResponse::Block((header_hash, block_buffer)))
-                    .unwrap();
-            } else {
-                let cmd = response_header.command.as_str();
-
-                if cmd != "ping" && cmd != "alert" && cmd != "addr" && cmd != "inv" {
-                    logger_sender_clone
-                        .send(format!(
+                    if cmd != "ping" && cmd != "alert" && cmd != "addr" && cmd != "inv" {
+                        logger_sender_clone.send(format!(
                             "Recibido desconocido: {:?}",
                             response_header.command
-                        ))
-                        .unwrap();
+                        ))?;
+                    }
+                    let mut buffer: Vec<u8> = vec![0; response_header.payload_size as usize];
+                    thread_stream.read_exact(&mut buffer)?;
                 }
-                let mut buffer: Vec<u8> = vec![0; response_header.payload_size as usize];
-                thread_stream.read_exact(&mut buffer).unwrap();
             }
         });
 
@@ -198,8 +192,7 @@ impl Peer {
         self.share_veracks()?;
 
         self.logger_sender
-            .send(format!("Successful handshake with {}", self.address.ip()))
-            .unwrap();
+            .send(format!("Successful handshake with {}", self.address.ip()))?;
 
         Ok(())
     }
@@ -242,7 +235,7 @@ fn handle_getheaders(
     thread_stream: &mut TcpStream,
     logger_sender_clone: &mpsc::Sender<String>,
     peer_response_sender_clone: &mpsc::Sender<PeerResponse>,
-) {
+) -> Result<(), CustomError> {
     let block_header_hashes = match last_header {
         Some(header) => [header].to_vec(),
         None => [GENESIS.to_vec()].to_vec(),
@@ -251,11 +244,8 @@ fn handle_getheaders(
     let request = GetHeaders::new(version, block_header_hashes, vec![0; 32]).send(thread_stream);
 
     if request.is_err() {
-        logger_sender_clone
-            .send("Error pidiendo headers".to_string())
-            .unwrap();
-        peer_response_sender_clone
-            .send(PeerResponse::GetHeadersError)
-            .unwrap();
+        logger_sender_clone.send("Error pidiendo headers".to_string())?;
+        peer_response_sender_clone.send(PeerResponse::GetHeadersError)?;
     }
+    Ok(())
 }
