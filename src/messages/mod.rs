@@ -3,5 +3,6 @@ pub mod get_data;
 pub mod get_headers;
 pub mod headers;
 pub mod inv;
+pub mod send_headers;
 pub mod ver_ack;
 pub mod version;

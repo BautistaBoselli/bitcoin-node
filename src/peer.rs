@@ -14,6 +14,7 @@ use crate::{
         get_headers::GetHeaders,
         headers::{BlockHeader, Headers},
         inv::Inventory,
+        send_headers::SendHeaders,
         ver_ack::VerAck,
         version::Version,
     },
@@ -170,7 +171,12 @@ impl Peer {
                 } else {
                     let cmd = response_header.command.as_str();
 
-                    if cmd != "ping" && cmd != "alert" && cmd != "addr" && cmd != "inv" {
+                    if cmd != "ping"
+                        && cmd != "alert"
+                        && cmd != "addr"
+                        && cmd != "inv"
+                        && cmd != "sendheaders"
+                    {
                         logger_sender_clone.send(format!(
                             "Recibido desconocido: {:?}",
                             response_header.command
@@ -190,6 +196,7 @@ impl Peer {
     pub fn handshake(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
         self.share_versions(sender_address)?;
         self.share_veracks()?;
+        SendHeaders::new().send(&mut self.stream)?;
 
         self.logger_sender
             .send(format!("Successful handshake with {}", self.address.ip()))?;
