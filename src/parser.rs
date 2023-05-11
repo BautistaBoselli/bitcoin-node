@@ -109,9 +109,8 @@ impl BufferParser {
         let first_byte = self.extract_u8()?;
         let slice = match first_byte {
             0xFF_u8 => {
-                let i = 9;
                 let slice: [u8; 8] = self
-                    .extract_buffer(i)?
+                    .extract_buffer(8)?
                     .try_into()
                     .map_err(|_| CustomError::SerializedBufferIsInvalid)?;
 
@@ -120,18 +119,16 @@ impl BufferParser {
                 ])
             }
             0xFE_u8 => {
-                let i = 5;
                 let slice: [u8; 4] = self
-                    .extract_buffer(i)?
+                    .extract_buffer(4)?
                     .try_into()
                     .map_err(|_| CustomError::SerializedBufferIsInvalid)?;
 
                 u64::from_le_bytes([slice[0], slice[1], slice[2], slice[3], 0, 0, 0, 0])
             }
             0xFD_u8 => {
-                let i = 3;
                 let slice: [u8; 2] = self
-                    .extract_buffer(i)?
+                    .extract_buffer(2)?
                     .try_into()
                     .map_err(|_| CustomError::SerializedBufferIsInvalid)?;
 

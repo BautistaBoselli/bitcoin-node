@@ -110,7 +110,7 @@ impl Peer {
                             &mut thread_stream,
                             &logger_sender_clone,
                             &peer_response_sender_clone,
-                        );
+                        )?;
                     }
                     PeerAction::Terminate => {
                         break;
@@ -155,7 +155,7 @@ impl Peer {
                             &mut thread_stream,
                             &logger_sender_clone,
                             &peer_response_sender_clone,
-                        );
+                        )?;
                     }
 
                     peer_response_sender_clone.send(PeerResponse::NewHeaders(response))?;

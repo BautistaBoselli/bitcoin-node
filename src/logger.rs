@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::str::CharIndices;
 use std::{
     fs::OpenOptions,
     sync::mpsc::{self, Sender},
