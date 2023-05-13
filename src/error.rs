@@ -29,6 +29,7 @@ pub enum CustomError {
     CannotReceiveMessageFromChannel,
     CannotRemoveFile,
     FileOperationInterrupted,
+    HeaderInvalidPoW,
 }
 
 impl CustomError {
@@ -56,6 +57,7 @@ impl CustomError {
             }
             Self::CannotRemoveFile => "cannot remove file",
             Self::FileOperationInterrupted => "file operation interrupted",
+            Self::HeaderInvalidPoW => "header hash does not satisfy the proof of work dificulty",
         }
     }
 }
