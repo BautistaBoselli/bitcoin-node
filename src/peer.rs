@@ -164,7 +164,8 @@ impl Peer {
                     println!("Recibida la respuesta de blocks...");
                     let mut block_buffer = vec![0; response_header.payload_size as usize];
                     thread_stream.read_exact(&mut block_buffer)?;
-                    let header_hash = BlockHeader::parse(block_buffer[0..80].to_vec())?.hash();
+                    let header_hash =
+                        BlockHeader::parse(block_buffer[0..80].to_vec(), false)?.hash();
 
                     peer_response_sender_clone
                         .send(PeerResponse::Block((header_hash, block_buffer)))?;
