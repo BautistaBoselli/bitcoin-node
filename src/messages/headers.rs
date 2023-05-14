@@ -8,11 +8,19 @@ use crate::{
 
 #[derive(Debug)]
 
+///Esta estructura es la que se encarga de almacenar los headers de los bloques, esto lo hace en un vector de 'blockHeaders'
 pub struct Headers {
     pub headers: Vec<BlockHeader>,
 }
 
 #[derive(Debug)]
+///Esta estructura representa el header de un bloque, el cual contiene la siguiente información:
+/// - Version: Versión del bloque
+/// - Prev_block_hash: Hash del bloque anterior
+/// - Merkle_root: Hash de la raíz del árbol de merkle con las transacciones del bloque
+/// - Timestamp: Marca de tiempo en la que se creó el bloque
+/// - Bits: Bits de dificultad del bloque
+/// - Nonce: Número aleatorio que se utiliza para generar el hash del bloque
 pub struct BlockHeader {
     pub version: i32,
     pub prev_block_hash: Vec<u8>,
@@ -23,6 +31,7 @@ pub struct BlockHeader {
 }
 
 impl BlockHeader {
+    ///Esta funcion se encarga de dado un BlockHeader, serializarlo en un vector de bytes
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(&self.version.to_le_bytes());
@@ -33,6 +42,9 @@ impl BlockHeader {
         buffer.extend(&self.nonce.to_le_bytes());
         buffer
     }
+
+    ///Esta funcion se encarga de dado un vector de bytes, parsearlo a un BlockHeader con todos sus campos correspondientes
+    /// Tambien se encarga de validar que el header sea valido, es decir, que cumpla con la proof of work, esto solo lo hace si el parametro validate es true.
     pub fn parse(buffer: Vec<u8>, validate: bool) -> Result<Self, CustomError> {
         let mut parser = BufferParser::new(buffer);
         if parser.len() < 80 {
@@ -48,25 +60,22 @@ impl BlockHeader {
             nonce: parser.extract_u32()?,
         };
 
-        if validate {
-            let is_valid = block_header.validate();
-
-            if !is_valid {
-                return Err(CustomError::HeaderInvalidPoW);
-            }
+        if validate && !(block_header.validate()) {
+            return Err(CustomError::HeaderInvalidPoW);
         }
 
         Ok(block_header)
     }
 
+    ///Esta funcion se encarga de validar la proof of work de un bloque.
     fn validate(&self) -> bool {
         let hash = self.hash();
         let bits_vec = self.bits.to_be_bytes().to_vec();
 
-        let leading_zeros_start = *bits_vec.get(0).unwrap() as usize;
+        let leading_zeros_start = *bits_vec.first().unwrap() as usize;
         let leading_zeros = hash.get(leading_zeros_start..32).unwrap().to_vec();
 
-        if leading_zeros.iter().find(|zero| **zero != 0_u8).is_some() {
+        if leading_zeros.iter().any(|zero| *zero != 0_u8) {
             return false;
         }
 
@@ -83,8 +92,7 @@ impl BlockHeader {
             }
             bits_vec_pos += 1;
         }
-
-        return false;
+        false
     }
 
     pub fn hash(&self) -> Vec<u8> {
@@ -123,6 +131,12 @@ impl Headers {
     }
 }
 
+impl Default for Headers {
+    fn default() -> Self {
+        Headers::new()
+    }
+}
+
 impl Message for Headers {
     fn get_command(&self) -> String {
         String::from("headers")
@@ -139,7 +153,6 @@ impl Message for Headers {
     }
 
     fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
-        println!("buffer: {:?}", buffer);
         let mut parser = BufferParser::new(buffer);
 
         let header_count = parser.extract_varint()?;

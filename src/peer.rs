@@ -147,6 +147,7 @@ impl Peer {
                 if response_header.command.as_str() == "headers" {
                     println!("Recibida la respuesta de headers...");
                     let response = Headers::read(&mut thread_stream, response_header.payload_size)?;
+                    //Que pasa si el read falla? Se devuelve el custom error al thread handle y se corta la ejecucion? Le avisamos al nodo que hubo un error? Avisamos por el logger?
 
                     if response.headers.len() == 2000 {
                         let last_header = response.headers.last().map(|h| h.hash());
@@ -158,7 +159,6 @@ impl Peer {
                             &peer_response_sender_clone,
                         )?;
                     }
-
                     peer_response_sender_clone.send(PeerResponse::NewHeaders(response))?;
                 } else if response_header.command.as_str() == "block" {
                     println!("Recibida la respuesta de blocks...");
