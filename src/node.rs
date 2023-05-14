@@ -18,6 +18,8 @@ use crate::{
     peer::{Peer, PeerAction, PeerResponse},
 };
 
+const FECHA_INICIO_IBD: u32 = 1683514800;
+
 pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
@@ -39,12 +41,7 @@ impl Node {
         let (peers_response_sender, peers_response_receiver) = mpsc::channel();
 
         let peers_sender_clone = peers_sender.clone();
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .append(true)
-            .open("store/headers.txt")?;
+        let mut file = open_new_file(String::from("store/headers.txt"))?;
 
         let mut saved_headers_buffer = vec![];
         file.read_to_end(&mut saved_headers_buffer)?;
@@ -55,7 +52,6 @@ impl Node {
         };
 
         let last_header = headers.last().map(|header| header.hash());
-
         peers_sender_clone.send(PeerAction::GetHeaders(last_header))?;
 
         // thread que escucha los mensajes de los peers
@@ -68,50 +64,14 @@ impl Node {
                             for byte in block_hash {
                                 filename.push_str(format!("{:02X}", byte).as_str());
                             }
-
-                            let mut file = OpenOptions::new()
-                                .read(true)
-                                .write(true)
-                                .create(true)
-                                .open(format!("store/blocks/{}.txt", filename))?;
-
+                            let mut file = open_new_file(format!("store/blocks/{}.txt", filename))?;
                             file.write_all(&block)?;
                         }
-                        PeerResponse::NewHeaders(mut new_headers) => {
-                            let mut file = OpenOptions::new()
-                                .read(true)
-                                .write(true)
-                                .create(true)
-                                .append(true)
-                                .open("store/headers.txt")?;
-
-                            file.write_all(&new_headers.serialize_headers())?;
-
-                            let new_headers_count = new_headers.headers.len();
-                            new_headers
-                                .headers
-                                .iter()
-                                .filter(|header| header.timestamp > 1683514800)
-                                .collect::<Vec<_>>()
-                                .chunks(5)
-                                .for_each(|headers| {
-                                    let inventory = headers
-                                        .iter()
-                                        .map(|header| {
-                                            Inventory::new(InventoryType::GetBlock, header.hash())
-                                        })
-                                        .collect();
-                                    peers_sender_clone
-                                        .send(PeerAction::GetData(inventory))
-                                        .unwrap();
-                                });
-                            headers.append(&mut new_headers.headers);
-                            println!(
-                                "Hay {} headers (nuevos {})",
-                                headers.len(),
-                                new_headers_count
-                            );
-                        }
+                        PeerResponse::NewHeaders(new_headers) => handle_peer_response_new_headers(
+                            new_headers,
+                            &peers_sender_clone,
+                            &mut headers,
+                        )?,
                         PeerResponse::GetHeadersError => {
                             let last_header = headers.last().map(|header| header.hash());
                             peers_sender_clone.send(PeerAction::GetHeaders(last_header))?;
@@ -167,6 +127,45 @@ impl Node {
         self.peers_sender.send(peer_message)?;
         Ok(())
     }
+}
+
+fn handle_peer_response_new_headers(
+    mut new_headers: Headers,
+    peers_sender_clone: &mpsc::Sender<PeerAction>,
+    headers: &mut Vec<crate::messages::headers::BlockHeader>,
+) -> Result<(), CustomError> {
+    let mut file = open_new_file(String::from("store/headers.txt"))?;
+    file.write_all(&new_headers.serialize_headers())?;
+
+    let new_headers_count = new_headers.headers.len();
+    new_headers
+        .headers
+        .iter()
+        .filter(|header| header.timestamp > FECHA_INICIO_IBD)
+        .collect::<Vec<_>>()
+        .chunks(5)
+        .for_each(|headers| {
+            let inventory = headers
+                .iter()
+                .map(|header| Inventory::new(InventoryType::GetBlock, header.hash()))
+                .collect();
+            peers_sender_clone
+                .send(PeerAction::GetData(inventory))
+                .unwrap();
+        });
+    headers.append(&mut new_headers.headers);
+    println!("Hay {} headers,nuevos {}", headers.len(), new_headers_count);
+    Ok(())
+}
+
+fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(path_to_file)?;
+    Ok(file)
 }
 
 impl Drop for Node {

@@ -1,5 +1,6 @@
 use crate::{error::CustomError, message::Message, parser::BufferParser, parser::VarIntSerialize};
 
+///Esta es la estructura de un mensaje inv, la cual contiene un vector de inventories
 pub struct Inv {
     pub inventories: Vec<Inventory>,
 }
@@ -10,6 +11,7 @@ impl Inv {
     }
 }
 
+///Implementa el trait Message para el mensaje inv.
 impl Message for Inv {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
@@ -44,11 +46,14 @@ impl Message for Inv {
 }
 
 #[derive(Debug, Clone)]
+///Este enum contiene los tipos de inventarios que se pueden enviar:
+/// - GetBlock = 2
 pub enum InventoryType {
     GetBlock,
 }
 
 #[derive(Debug, Clone)]
+///Esta es la estructura de un inventario, la cual contiene un tipo de inventario y un hash del inventario en si.
 pub struct Inventory {
     pub inventory_type: InventoryType,
     pub hash: Vec<u8>,
