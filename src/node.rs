@@ -41,7 +41,7 @@ impl Node {
         let (peers_response_sender, peers_response_receiver) = mpsc::channel();
 
         let peers_sender_clone = peers_sender.clone();
-        let mut file = open_new_file(String::from("store/headers.txt"))?;
+        let mut file = open_new_file(String::from("store/headers.bin"))?;
 
         let mut saved_headers_buffer = vec![];
         file.read_to_end(&mut saved_headers_buffer)?;
@@ -64,10 +64,12 @@ impl Node {
                             for byte in block_hash {
                                 filename.push_str(format!("{:02X}", byte).as_str());
                             }
-                            let mut file = open_new_file(format!("store/blocks/{}.txt", filename))?;
-                            file.write_all(&block)?;
+                            let mut block_file =
+                                open_new_file(format!("store/blocks/{}.bin", filename))?;
+                            block_file.write_all(&block)?;
                         }
                         PeerResponse::NewHeaders(new_headers) => handle_peer_response_new_headers(
+                            &mut file,
                             new_headers,
                             &peers_sender_clone,
                             &mut headers,
@@ -77,7 +79,9 @@ impl Node {
                             peers_sender_clone.send(PeerAction::GetHeaders(last_header))?;
                         }
 
-                        _ => {}
+                        PeerResponse::GetDataError(inventory) => {
+                            peers_sender_clone.send(PeerAction::GetData(inventory))?;
+                        }
                     }
                 }
             }
@@ -130,11 +134,11 @@ impl Node {
 }
 
 fn handle_peer_response_new_headers(
+    file: &mut std::fs::File,
     mut new_headers: Headers,
     peers_sender_clone: &mpsc::Sender<PeerAction>,
     headers: &mut Vec<crate::messages::headers::BlockHeader>,
 ) -> Result<(), CustomError> {
-    let mut file = open_new_file(String::from("store/headers.txt"))?;
     file.write_all(&new_headers.serialize_headers())?;
 
     let new_headers_count = new_headers.headers.len();
