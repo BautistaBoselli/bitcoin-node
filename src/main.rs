@@ -1,5 +1,4 @@
-use bitcoin::peer::get_addresses;
-use bitcoin::{config::Config, logger::Logger, node::Node};
+use bitcoin::{config::Config, logger::Logger, network::get_addresses, node::Node};
 use std::{env, path::Path};
 
 const CANT_ARGS: usize = 2;

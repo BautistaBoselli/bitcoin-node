@@ -4,6 +4,8 @@ pub mod error;
 pub mod logger;
 pub mod message;
 pub mod messages;
+pub mod network;
 pub mod node;
 pub mod parser;
 pub mod peer;
+pub mod threads;

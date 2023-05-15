@@ -31,6 +31,7 @@ pub enum CustomError {
     FileOperationInterrupted,
     HeaderInvalidPoW,
     InvalidMerkleRoot,
+    UnknownError,
 }
 
 impl CustomError {
@@ -60,6 +61,7 @@ impl CustomError {
             Self::FileOperationInterrupted => "file operation interrupted",
             Self::HeaderInvalidPoW => "header hash does not satisfy the proof of work dificulty",
             Self::InvalidMerkleRoot => "invalid merkle root",
+            Self::UnknownError => "unknown error",
         }
     }
 }
@@ -72,7 +74,7 @@ impl From<Error> for CustomError {
             ErrorKind::AlreadyExists => CustomError::CannotOpenFile,
             ErrorKind::InvalidInput => CustomError::CannotOpenFile,
             ErrorKind::Interrupted => CustomError::FileOperationInterrupted,
-            _ => todo!(),
+            _ => CustomError::UnknownError,
         }
     }
 }
