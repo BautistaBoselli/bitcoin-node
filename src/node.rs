@@ -18,7 +18,7 @@ use crate::{
     peer::{Peer, PeerAction, PeerResponse},
 };
 
-const FECHA_INICIO_IBD: u32 = 1683514800;
+const FECHA_INICIO_IBD: u32 = 1681095630;
 
 pub struct Node {
     pub address: SocketAddrV6,

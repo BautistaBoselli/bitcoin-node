@@ -10,6 +10,7 @@ use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
     messages::{
+        block::Block,
         get_data::GetData,
         get_headers::GetHeaders,
         headers::{BlockHeader, Headers},
@@ -162,13 +163,15 @@ impl Peer {
                     peer_response_sender_clone.send(PeerResponse::NewHeaders(response))?;
                 } else if response_header.command.as_str() == "block" {
                     println!("Recibida la respuesta de blocks...");
-                    let mut block_buffer = vec![0; response_header.payload_size as usize];
-                    thread_stream.read_exact(&mut block_buffer)?;
-                    let header_hash =
-                        BlockHeader::parse(block_buffer[0..80].to_vec(), false)?.hash();
+                    // let mut block_buffer = vec![0; response_header.payload_size as usize];
+                    // thread_stream.read_exact(&mut block_buffer)?;
+                    let response = Block::read(&mut thread_stream, response_header.payload_size)?;
+                    println!("Block recibido: {:?}", response);
+                    // let header_hash =
+                    //     BlockHeader::parse(block_buffer[0..80].to_vec(), false)?.hash();
 
-                    peer_response_sender_clone
-                        .send(PeerResponse::Block((header_hash, block_buffer)))?;
+                    // peer_response_sender_clone
+                    //     .send(PeerResponse::Block((header_hash, block_buffer)))?;
                 } else {
                     let cmd = response_header.command.as_str();
 

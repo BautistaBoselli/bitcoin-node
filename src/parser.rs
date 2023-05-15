@@ -15,8 +15,20 @@ impl BufferParser {
         self.pos
     }
 
-    pub fn move_i(&mut self, pos: usize) {
+    pub fn go_foward(&mut self, pos: usize) {
+        if pos + self.pos > self.buffer.len() {
+            self.pos = self.buffer.len();
+            return;
+        }
         self.pos += pos;
+    }
+
+    pub fn go_backward(&mut self, pos: usize) {
+        if pos > self.pos {
+            self.pos = 0;
+            return;
+        }
+        self.pos -= pos;
     }
 
     pub fn total_len(&mut self) -> usize {
