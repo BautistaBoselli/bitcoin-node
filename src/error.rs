@@ -30,6 +30,7 @@ pub enum CustomError {
     CannotRemoveFile,
     FileOperationInterrupted,
     HeaderInvalidPoW,
+    InvalidMerkleRoot,
 }
 
 impl CustomError {
@@ -58,6 +59,7 @@ impl CustomError {
             Self::CannotRemoveFile => "cannot remove file",
             Self::FileOperationInterrupted => "file operation interrupted",
             Self::HeaderInvalidPoW => "header hash does not satisfy the proof of work dificulty",
+            Self::InvalidMerkleRoot => "invalid merkle root",
         }
     }
 }

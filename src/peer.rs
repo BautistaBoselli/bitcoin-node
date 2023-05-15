@@ -10,10 +10,11 @@ use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
     messages::{
+        block::Block,
         get_data::GetData,
         get_headers::GetHeaders,
-        headers::{BlockHeader, Headers},
-        inv::Inventory,
+        headers::Headers,
+        inv::{Inventory, InventoryType},
         send_headers::SendHeaders,
         ver_ack::VerAck,
         version::Version,
@@ -146,8 +147,14 @@ impl Peer {
 
                 if response_header.command.as_str() == "headers" {
                     println!("Recibida la respuesta de headers...");
-                    let response = Headers::read(&mut thread_stream, response_header.payload_size)?;
-                    //Que pasa si el read falla? Se devuelve el custom error al thread handle y se corta la ejecucion? Le avisamos al nodo que hubo un error? Avisamos por el logger?
+                    let response =
+                        match Headers::read(&mut thread_stream, response_header.payload_size) {
+                            Ok(response) => response,
+                            Err(_) => {
+                                peer_response_sender_clone.send(PeerResponse::GetHeadersError)?;
+                                continue;
+                            }
+                        };
 
                     if response.headers.len() == 2000 {
                         let last_header = response.headers.last().map(|h| h.hash());
@@ -162,13 +169,30 @@ impl Peer {
                     peer_response_sender_clone.send(PeerResponse::NewHeaders(response))?;
                 } else if response_header.command.as_str() == "block" {
                     println!("Recibida la respuesta de blocks...");
-                    let mut block_buffer = vec![0; response_header.payload_size as usize];
-                    thread_stream.read_exact(&mut block_buffer)?;
-                    let header_hash =
-                        BlockHeader::parse(block_buffer[0..80].to_vec(), false)?.hash();
 
-                    peer_response_sender_clone
-                        .send(PeerResponse::Block((header_hash, block_buffer)))?;
+                    let block = Block::read(&mut thread_stream, response_header.payload_size)?;
+                    match block.create_merkle_root() {
+                        Ok(_) => {
+                            peer_response_sender_clone.send(PeerResponse::Block((
+                                block.header.hash(),
+                                block.serialize(),
+                            )))?;
+                        }
+                        Err(_) => {
+                            let inventory =
+                                Inventory::new(InventoryType::GetBlock, block.header.hash());
+
+                            peer_response_sender_clone
+                                .send(PeerResponse::GetDataError(vec![inventory]))?;
+
+                            logger_sender_clone.send(format!(
+                                "Error de validacion de merkle root en el bloque: {:?}",
+                                block.header.hash()
+                            ))?;
+                        }
+                    }
+                    // let header_hash =
+                    //     BlockHeader::parse(block_buffer[0..80].to_vec(), false)?.hash();
                 } else {
                     let cmd = response_header.command.as_str();
 
