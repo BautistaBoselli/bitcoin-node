@@ -1,6 +1,6 @@
 use std::vec;
 
-use bitcoin_hashes::{sha256, sha256d, Hash};
+use bitcoin_hashes::{sha256, Hash};
 
 use super::headers::BlockHeader;
 

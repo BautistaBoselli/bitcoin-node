@@ -184,12 +184,20 @@ impl Drop for Node {
 
         for worker in &mut self.peers {
             if let Some(thread) = worker.node_listener_thread.take() {
-                thread.join().unwrap();
+                if let Err(error) = thread.join() {
+                    println!("Error joining thread: {:?}", error);
+                }
             }
             if let Some(thread) = worker.stream_listener_thread.take() {
-                thread.join().unwrap();
+                if let Err(error) = thread.join() {
+                    println!("Error joining thread: {:?}", error);
+                }
             }
         }
-        self.event_loop_thread.take().unwrap().join().unwrap();
+        self.event_loop_thread.take().map(|thread| {
+            if let Err(error) = thread.join() {
+                println!("Error joining event loop thread: {:?}", error);
+            }
+        });
     }
 }
