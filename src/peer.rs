@@ -8,8 +8,8 @@ use crate::{
     error::CustomError,
     message::{Message, MessageHeader},
     messages::{
-        get_headers::GetHeaders, headers::Headers, inv::Inventory, send_headers::SendHeaders,
-        ver_ack::VerAck, version::Version,
+        block::Block, get_headers::GetHeaders, headers::Headers, inv::Inventory,
+        send_headers::SendHeaders, ver_ack::VerAck, version::Version,
     },
     network::{get_address_v6, open_stream},
     threads::{peer_action::PeerActionThread, peer_response::PeerResponseThread},
@@ -29,7 +29,7 @@ pub enum PeerAction {
 pub enum PeerResponse {
     NewHeaders(Headers),
     GetHeadersError,
-    Block((Vec<u8>, Vec<u8>)),
+    Block((Vec<u8>, Block)),
     GetDataError(Vec<Inventory>),
 }
 

@@ -84,10 +84,8 @@ impl PeerResponseThread {
         let block = Block::read(&mut self.stream, response_header.payload_size)?;
         match block.create_merkle_root() {
             Ok(_) => {
-                self.peer_response_sender.send(PeerResponse::Block((
-                    block.header.hash(),
-                    block.serialize(),
-                )))?;
+                self.peer_response_sender
+                    .send(PeerResponse::Block((block.header.hash(), block)))?;
             }
             Err(_) => {
                 let inventory = Inventory::new(InventoryType::GetBlock, block.header.hash());
