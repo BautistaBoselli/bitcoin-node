@@ -119,10 +119,6 @@ impl Drop for Node {
         //     self.peers_sender.send(PeerAction::Terminate).unwrap();
         // }
 
-        self.logger_sender
-            .send("Shutting down all workers.".to_string())
-            .unwrap();
-
         for worker in &mut self.peers {
             if let Some(thread) = worker.node_listener_thread.take() {
                 if let Err(error) = thread.join() {

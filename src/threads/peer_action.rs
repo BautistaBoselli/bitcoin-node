@@ -58,7 +58,6 @@ impl PeerActionThread {
     }
 
     fn handle_getdata(&mut self, inventories: Vec<Inventory>) -> Result<(), CustomError> {
-        println!("Enviando getdata...");
         let inventories_clone = inventories.clone();
         let request = GetData::new(inventories).send(&mut self.stream);
         if request.is_err() {

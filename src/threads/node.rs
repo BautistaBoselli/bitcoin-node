@@ -85,8 +85,6 @@ impl NodeThread {
             .write_all(&new_headers.serialize_headers())?;
 
         let new_headers_count = new_headers.headers.len();
-        self.headers_sync = new_headers_count < 2000;
-        self.verify_blocks_sync()?;
 
         new_headers
             .headers
@@ -104,11 +102,14 @@ impl NodeThread {
                     .unwrap();
             });
         self.headers.append(&mut new_headers.headers);
-        println!(
+
+        self.logger_sender.send(format!(
             "Hay {} headers,nuevos {}",
             self.headers.len(),
             new_headers_count
-        );
+        ))?;
+
+        self.verify_headers_sync(new_headers_count)?;
         Ok(())
     }
 
@@ -120,20 +121,35 @@ impl NodeThread {
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
         block_file.write_all(&block.serialize())?;
 
-        if !self.blocks_sync {
-            self.verify_blocks_sync()?;
+        self.logger_sender
+            .send(format!("Nuevo bloque descargado"))?;
+
+        match self.utxo_sync {
+            true => update_utxo_set(&mut self.utxo_set, block),
+            false => self.verify_blocks_sync()?,
         }
 
-        println!("hola");
-        println!("Hay {} elementos en el utxo_set 1/2", self.utxo_set.len());
-        if self.utxo_sync {
-            update_utxo_set(&mut self.utxo_set, block);
+        Ok(())
+    }
+
+    fn verify_headers_sync(&mut self, new_headers_count: usize) -> Result<(), CustomError> {
+        if self.headers_sync {
+            return Ok(());
         }
-        println!("Hay {} elementos en el utxo_set 2/2", self.utxo_set.len());
+
+        self.headers_sync = new_headers_count < 2000;
+        if self.headers_sync {
+            self.logger_sender
+                .send("sincronizacion de headers completada".to_string())?;
+            self.verify_blocks_sync()?;
+        }
         Ok(())
     }
 
     fn verify_blocks_sync(&mut self) -> Result<(), CustomError> {
+        if self.blocks_sync {
+            return Ok(());
+        }
         //el -1 es por el archivo del gitkeep
         let blocks_downloaded = fs::read_dir("store/blocks").unwrap().into_iter().count() - 1;
         let mut blocks_should_be_downloaded = 0;
@@ -144,16 +160,10 @@ impl NodeThread {
             blocks_should_be_downloaded += 1;
         }
         self.blocks_sync = self.headers_sync && blocks_downloaded == blocks_should_be_downloaded;
-        println!("blocks_sync: {}", self.blocks_sync);
-        println!("headers_sync: {}", self.headers_sync);
-        println!(
-            "blocks_downloaded: {}, blocks_should_be_downloaded: {}",
-            blocks_downloaded, blocks_should_be_downloaded
-        );
 
         if self.blocks_sync {
             self.logger_sender
-                .send(format!("sincronizacion de bloques finalizada"))?;
+                .send(format!("sincronizacion de bloques completada"))?;
             self.generate_utxo().unwrap();
         }
         Ok(())
@@ -167,9 +177,20 @@ impl NodeThread {
             }
             blocks_after_timestamp += 1;
         }
-        println!("hay que recorrer {} bloques", blocks_after_timestamp);
+        self.logger_sender
+            .send("Comenzando la generación del utxo (0%)...".to_string())?;
+
+        let mut i = 0;
+        let mut percentage = 0;
         for header in self.headers.iter().rev().take(blocks_after_timestamp).rev() {
-            //println!("recorriendo el bloque con hash {:?}", header.hash());
+            if i > blocks_after_timestamp / 10 {
+                percentage += 10;
+                self.logger_sender.send(format!(
+                    "Comenzando la generación del utxo ({}%)...",
+                    percentage
+                ))?;
+                i = 0;
+            }
             let block_hash = header.hash();
             let mut filename = String::with_capacity(2 * block_hash.len());
             for byte in block_hash {
@@ -180,8 +201,13 @@ impl NodeThread {
             block_file.read_to_end(&mut block_buffer)?;
             let block = Block::parse(block_buffer)?;
             update_utxo_set(&mut self.utxo_set, block);
+            i += 1;
         }
         self.utxo_sync = true;
+        self.logger_sender
+            .send(format!("Comenzando la generación del utxo (100%)..."))?;
+        self.logger_sender
+            .send("Generación del utxo completada".to_string())?;
         Ok(())
     }
 }
