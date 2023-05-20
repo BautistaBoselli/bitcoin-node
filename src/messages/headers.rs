@@ -168,7 +168,10 @@ impl Message for Headers {
             )?);
         }
 
-        println!("header count: {}", header_count);
+        if header_count != headers.len() as u64 {
+            return Err(CustomError::SerializedBufferIsInvalid);
+        }
+
         Ok(Headers { headers })
     }
 }

@@ -1,6 +1,6 @@
 use std::{
     fs::OpenOptions,
-    io::{Read, Write},
+    io::Read,
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -11,15 +11,10 @@ use crate::{
     config::Config,
     error::CustomError,
     logger::Logger,
-    messages::{
-        headers::Headers,
-        inv::{Inventory, InventoryType},
-    },
+    messages::headers::Headers,
     peer::{Peer, PeerAction, PeerResponse},
+    threads::node::NodeThread,
 };
-
-const FECHA_INICIO_IBD: u32 = 1681095630;
-
 pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
@@ -40,63 +35,38 @@ impl Node {
         let peers_receiver = Arc::new(Mutex::new(receiver));
         let (peers_response_sender, peers_response_receiver) = mpsc::channel();
 
-        let peers_sender_clone = peers_sender.clone();
-        let mut file = open_new_file(String::from("store/headers.bin"))?;
+        let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
 
         let mut saved_headers_buffer = vec![];
-        file.read_to_end(&mut saved_headers_buffer)?;
+        headers_file.read_to_end(&mut saved_headers_buffer)?;
 
-        let mut headers = match Headers::parse_headers(saved_headers_buffer) {
+        let headers = match Headers::parse_headers(saved_headers_buffer) {
             Ok(headers) => headers,
             Err(_) => vec![],
         };
 
         let last_header = headers.last().map(|header| header.hash());
-        peers_sender_clone.send(PeerAction::GetHeaders(last_header))?;
+        peers_sender.send(PeerAction::GetHeaders(last_header))?;
 
-        // thread que escucha los mensajes de los peers
-        let thread = thread::spawn(move || -> Result<(), CustomError> {
-            loop {
-                while let Ok(message) = peers_response_receiver.recv() {
-                    match message {
-                        PeerResponse::Block((block_hash, block)) => {
-                            let mut filename = String::with_capacity(2 * block_hash.len());
-                            for byte in block_hash {
-                                filename.push_str(format!("{:02X}", byte).as_str());
-                            }
-                            let mut block_file =
-                                open_new_file(format!("store/blocks/{}.bin", filename))?;
-                            block_file.write_all(&block)?;
-                        }
-                        PeerResponse::NewHeaders(new_headers) => handle_peer_response_new_headers(
-                            &mut file,
-                            new_headers,
-                            &peers_sender_clone,
-                            &mut headers,
-                        )?,
-                        PeerResponse::GetHeadersError => {
-                            let last_header = headers.last().map(|header| header.hash());
-                            peers_sender_clone.send(PeerAction::GetHeaders(last_header))?;
-                        }
-
-                        PeerResponse::GetDataError(inventory) => {
-                            peers_sender_clone.send(PeerAction::GetData(inventory))?;
-                        }
-                    }
-                }
-            }
-        });
-        Ok(Self {
+        let mut node = Self {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
             services: 0x00,
             version: config.protocol_version,
-            logger_sender,
+            logger_sender: logger_sender.clone(),
             peers_sender,
             peers_receiver,
             peers_response_sender,
             peers: vec![],
-            event_loop_thread: Some(thread),
-        })
+            event_loop_thread: None,
+        };
+        node.event_loop_thread = Some(NodeThread::spawn(
+            peers_response_receiver,
+            headers_file,
+            node.peers_sender.clone(),
+            headers,
+            logger_sender.clone(),
+        ));
+        Ok(node)
     }
 
     pub fn connect(&mut self, addresses: IntoIter<SocketAddr>) -> Result<(), CustomError> {
@@ -133,36 +103,7 @@ impl Node {
     }
 }
 
-fn handle_peer_response_new_headers(
-    file: &mut std::fs::File,
-    mut new_headers: Headers,
-    peers_sender_clone: &mpsc::Sender<PeerAction>,
-    headers: &mut Vec<crate::messages::headers::BlockHeader>,
-) -> Result<(), CustomError> {
-    file.write_all(&new_headers.serialize_headers())?;
-
-    let new_headers_count = new_headers.headers.len();
-    new_headers
-        .headers
-        .iter()
-        .filter(|header| header.timestamp > FECHA_INICIO_IBD)
-        .collect::<Vec<_>>()
-        .chunks(5)
-        .for_each(|headers| {
-            let inventory = headers
-                .iter()
-                .map(|header| Inventory::new(InventoryType::GetBlock, header.hash()))
-                .collect();
-            peers_sender_clone
-                .send(PeerAction::GetData(inventory))
-                .unwrap();
-        });
-    headers.append(&mut new_headers.headers);
-    println!("Hay {} headers,nuevos {}", headers.len(), new_headers_count);
-    Ok(())
-}
-
-fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
+pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -177,10 +118,6 @@ impl Drop for Node {
         // for _ in &mut self.peers {
         //     self.peers_sender.send(PeerAction::Terminate).unwrap();
         // }
-
-        self.logger_sender
-            .send("Shutting down all workers.".to_string())
-            .unwrap();
 
         for worker in &mut self.peers {
             if let Some(thread) = worker.node_listener_thread.take() {
