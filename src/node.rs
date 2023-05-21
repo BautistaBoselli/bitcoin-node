@@ -12,28 +12,32 @@ use crate::{
     error::CustomError,
     logger::Logger,
     messages::headers::Headers,
-    peer::{Peer, PeerAction, PeerResponse},
-    threads::node::NodeThread,
+    peer::{NodeAction, Peer, PeerAction},
+    threads::node_action_loop::NodeActionLoop,
 };
 pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
     pub version: i32,
     logger_sender: mpsc::Sender<String>,
-    peers_sender: mpsc::Sender<PeerAction>,
-    peers_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
-    peers_response_sender: mpsc::Sender<PeerResponse>,
+    peer_action_sender: mpsc::Sender<PeerAction>,
+    peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+    node_action_sender: mpsc::Sender<NodeAction>,
     peers: Vec<Peer>,
     pub event_loop_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
 }
 
 impl Node {
-    pub fn new(config: &Config, logger: &Logger) -> Result<Self, CustomError> {
+    pub fn new(
+        config: &Config,
+        logger: &Logger,
+        addresses: IntoIter<SocketAddr>,
+    ) -> Result<Self, CustomError> {
         let logger_sender = logger.get_sender();
 
-        let (peers_sender, receiver) = mpsc::channel();
-        let peers_receiver = Arc::new(Mutex::new(receiver));
-        let (peers_response_sender, peers_response_receiver) = mpsc::channel();
+        let (peer_action_sender, receiver) = mpsc::channel();
+        let peer_action_receiver = Arc::new(Mutex::new(receiver));
+        let (node_action_sender, node_action_receiver) = mpsc::channel();
 
         let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
 
@@ -46,59 +50,70 @@ impl Node {
         };
 
         let last_header = headers.last().map(|header| header.hash());
-        peers_sender.send(PeerAction::GetHeaders(last_header))?;
 
         let mut node = Self {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
             services: 0x00,
             version: config.protocol_version,
             logger_sender: logger_sender.clone(),
-            peers_sender,
-            peers_receiver,
-            peers_response_sender,
+            peer_action_sender,
+            peer_action_receiver,
+            node_action_sender,
             peers: vec![],
             event_loop_thread: None,
         };
-        node.event_loop_thread = Some(NodeThread::spawn(
-            peers_response_receiver,
+        node.connect(addresses, config.npeers)?;
+        node.peer_action_sender
+            .send(PeerAction::GetHeaders(last_header))?;
+
+        node.event_loop_thread = Some(NodeActionLoop::spawn(
+            node_action_receiver,
             headers_file,
-            node.peers_sender.clone(),
+            node.peer_action_sender.clone(),
             headers,
             logger_sender.clone(),
         ));
+
         Ok(node)
     }
 
-    pub fn connect(&mut self, addresses: IntoIter<SocketAddr>) -> Result<(), CustomError> {
+    pub fn connect(
+        &mut self,
+        addresses: IntoIter<SocketAddr>,
+        mut number_of_peers: u8,
+    ) -> Result<(), CustomError> {
         self.logger_sender
             .send(format!("Handshaking with {} nodes", addresses.len()))?;
 
-        let mut num_of_threads = 10;
         for address in addresses {
-            if num_of_threads == 0 {
+            if number_of_peers == 0 {
                 break;
             }
 
-            let peer = Peer::new(
+            match Peer::new(
                 address,
                 self.address,
                 self.services,
                 self.version,
-                self.peers_receiver.clone(),
+                self.peer_action_receiver.clone(),
                 self.logger_sender.clone(),
-                self.peers_response_sender.clone(),
-            )?;
-            self.peers.push(peer);
-
-            num_of_threads -= 1;
+                self.node_action_sender.clone(),
+            ) {
+                Ok(peer) => {
+                    self.peers.push(peer);
+                    number_of_peers -= 1;
+                }
+                Err(error) => {
+                    self.logger_sender
+                        .send(format!("Error connecting to peer: {:?}", error))?;
+                }
+            };
         }
         Ok(())
-
-        // verificar que tengas todos los headers
     }
 
     pub fn execute(&self, peer_message: PeerAction) -> Result<(), CustomError> {
-        self.peers_sender.send(peer_message)?;
+        self.peer_action_sender.send(peer_message)?;
         Ok(())
     }
 }
@@ -115,17 +130,13 @@ pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError>
 
 impl Drop for Node {
     fn drop(&mut self) {
-        // for _ in &mut self.peers {
-        //     self.peers_sender.send(PeerAction::Terminate).unwrap();
-        // }
-
         for worker in &mut self.peers {
-            if let Some(thread) = worker.node_listener_thread.take() {
+            if let Some(thread) = worker.peer_action_thread.take() {
                 if let Err(error) = thread.join() {
                     println!("Error joining thread: {:?}", error);
                 }
             }
-            if let Some(thread) = worker.stream_listener_thread.take() {
+            if let Some(thread) = worker.peer_stream_thread.take() {
                 if let Err(error) = thread.join() {
                     println!("Error joining thread: {:?}", error);
                 }

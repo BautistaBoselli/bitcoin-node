@@ -8,32 +8,32 @@ use crate::{
     error::CustomError,
     message::Message,
     messages::{get_data::GetData, inv::Inventory},
-    peer::{request_headers, PeerAction, PeerResponse},
+    peer::{request_headers, NodeAction, PeerAction},
 };
 
-pub struct PeerActionThread {
-    pub receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+pub struct PeerActionLoop {
+    pub peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     pub version: i32,
     pub stream: TcpStream,
     pub logger_sender: mpsc::Sender<String>,
-    pub peer_response_sender: mpsc::Sender<PeerResponse>,
+    pub node_action_sender: mpsc::Sender<NodeAction>,
 }
 
-impl PeerActionThread {
+impl PeerActionLoop {
     pub fn spawn(
-        receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+        peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         version: i32,
         stream: TcpStream,
         logger_sender: mpsc::Sender<String>,
-        peer_response_sender: mpsc::Sender<PeerResponse>,
+        node_action_sender: mpsc::Sender<NodeAction>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut peer_action_thread = Self {
-                receiver,
+                peer_action_receiver,
                 version,
                 stream,
                 logger_sender,
-                peer_response_sender,
+                node_action_sender,
             };
             peer_action_thread.event_loop()
         })
@@ -42,7 +42,7 @@ impl PeerActionThread {
     pub fn event_loop(&mut self) -> Result<(), CustomError> {
         loop {
             let peer_message = self
-                .receiver
+                .peer_action_receiver
                 .lock()
                 .map_err(|_| CustomError::CannotLockGuard)?
                 .recv()?;
@@ -61,9 +61,8 @@ impl PeerActionThread {
         let inventories_clone = inventories.clone();
         let request = GetData::new(inventories).send(&mut self.stream);
         if request.is_err() {
-            self.logger_sender.send("Error pidiendo data".to_string())?;
-            self.peer_response_sender
-                .send(PeerResponse::GetDataError(inventories_clone))?;
+            self.node_action_sender
+                .send(NodeAction::GetDataError(inventories_clone))?;
         };
         Ok(())
     }
@@ -74,7 +73,7 @@ impl PeerActionThread {
             self.version,
             &mut self.stream,
             &self.logger_sender,
-            &self.peer_response_sender,
+            &self.node_action_sender,
         )
     }
 }

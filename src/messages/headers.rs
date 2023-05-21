@@ -72,17 +72,14 @@ impl BlockHeader {
         let hash = self.hash();
         let bits_vec = self.bits.to_be_bytes().to_vec();
 
-        let leading_zeros_start = *bits_vec.first().unwrap() as usize;
-        let leading_zeros = hash.get(leading_zeros_start..32).unwrap().to_vec();
+        let leading_zeros_start = bits_vec[0] as usize;
+        let leading_zeros = hash[leading_zeros_start..32].to_vec();
 
         if leading_zeros.iter().any(|zero| *zero != 0_u8) {
             return false;
         }
 
-        let mut significants = hash
-            .get((leading_zeros_start - 3)..leading_zeros_start)
-            .unwrap()
-            .to_vec();
+        let mut significants = hash[(leading_zeros_start - 3)..leading_zeros_start].to_vec();
         significants.reverse();
 
         let mut bits_vec_pos = 1;

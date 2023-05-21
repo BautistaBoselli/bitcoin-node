@@ -12,7 +12,7 @@ use crate::{
         send_headers::SendHeaders, ver_ack::VerAck, version::Version,
     },
     network::{get_address_v6, open_stream},
-    threads::{peer_action::PeerActionThread, peer_response::PeerResponseThread},
+    threads::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
 };
 
 pub const GENESIS: [u8; 32] = [
@@ -26,7 +26,7 @@ pub enum PeerAction {
     Terminate,
 }
 
-pub enum PeerResponse {
+pub enum NodeAction {
     NewHeaders(Headers),
     GetHeadersError,
     Block((Vec<u8>, Block)),
@@ -38,8 +38,8 @@ pub struct Peer {
     pub services: u64,
     pub version: i32,
     pub stream: TcpStream,
-    pub node_listener_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
-    pub stream_listener_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
+    pub peer_action_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
+    pub peer_stream_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
 }
 
 impl Peer {
@@ -48,24 +48,22 @@ impl Peer {
         sender_address: SocketAddrV6,
         services: u64,
         version: i32,
-        receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+        peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         mut logger_sender: mpsc::Sender<String>,
-        peers_response_sender: mpsc::Sender<PeerResponse>,
+        node_action_sender: mpsc::Sender<NodeAction>,
     ) -> Result<Self, CustomError> {
-        let address = get_address_v6(address);
         let stream = open_stream(address)?;
-
         let mut peer = Self {
-            address,
-            node_listener_thread: None,
-            stream_listener_thread: None,
+            address: get_address_v6(address),
+            peer_action_thread: None,
+            peer_stream_thread: None,
             services,
             version,
             stream,
         };
 
         peer.handshake(sender_address, &mut logger_sender)?;
-        peer.spawn_threads(receiver, peers_response_sender, logger_sender)?;
+        peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
     }
 
@@ -115,25 +113,25 @@ impl Peer {
 
     fn spawn_threads(
         &mut self,
-        receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
-        peer_response_sender: mpsc::Sender<PeerResponse>,
+        peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+        node_action_sender: mpsc::Sender<NodeAction>,
         logger_sender: mpsc::Sender<String>,
     ) -> Result<(), CustomError> {
         //thread que escucha al nodo
-        self.node_listener_thread = Some(PeerActionThread::spawn(
-            receiver,
+        self.peer_action_thread = Some(PeerActionLoop::spawn(
+            peer_action_receiver,
             self.version,
             self.stream.try_clone()?,
             logger_sender.clone(),
-            peer_response_sender.clone(),
+            node_action_sender.clone(),
         ));
 
         //Thread que escucha el stream
-        self.stream_listener_thread = Some(PeerResponseThread::spawn(
+        self.peer_stream_thread = Some(PeerStreamLoop::spawn(
             self.version,
             self.stream.try_clone()?,
             logger_sender,
-            peer_response_sender,
+            node_action_sender,
         ));
         Ok(())
     }
@@ -144,7 +142,7 @@ pub fn request_headers(
     version: i32,
     stream: &mut TcpStream,
     logger_sender: &mpsc::Sender<String>,
-    peer_response_sender: &mpsc::Sender<PeerResponse>,
+    node_action_sender: &mpsc::Sender<NodeAction>,
 ) -> Result<(), CustomError> {
     let block_header_hashes = match last_header {
         Some(header) => [header].to_vec(),
@@ -153,8 +151,8 @@ pub fn request_headers(
 
     let request = GetHeaders::new(version, block_header_hashes, vec![0; 32]).send(stream);
     if request.is_err() {
-        logger_sender.send("Error pidiendo headers".to_string())?;
-        peer_response_sender.send(PeerResponse::GetHeadersError)?;
+        logger_sender.send("Error requesting headers".to_string())?;
+        node_action_sender.send(NodeAction::GetHeadersError)?;
     }
     Ok(())
 }

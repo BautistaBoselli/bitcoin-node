@@ -198,3 +198,111 @@ impl VarIntSerialize for usize {
         buffer
     }
 }
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_u8() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03]);
+        assert_eq!(buffer.extract_u8().unwrap(), 0x01);
+        assert_eq!(buffer.extract_u8().unwrap(), 0x02);
+        assert_eq!(buffer.extract_u8().unwrap(), 0x03);
+    }
+
+    #[test]
+    fn extract_u16() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04]);
+        assert_eq!(buffer.extract_u16().unwrap(), 0x0201);
+        assert_eq!(buffer.extract_u16().unwrap(), 0x0403);
+    }
+
+    #[test]
+    fn extract_u32() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04]);
+        assert_eq!(buffer.extract_u32().unwrap(), 0x04030201);
+    }
+
+    #[test]
+    fn extract_u64() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+        assert_eq!(buffer.extract_u64().unwrap(), 0x0807060504030201);
+    }
+
+    #[test]
+    fn extract_i8() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03]);
+        assert_eq!(buffer.extract_i8().unwrap(), 0x01);
+        assert_eq!(buffer.extract_i8().unwrap(), 0x02);
+        assert_eq!(buffer.extract_i8().unwrap(), 0x03);
+    }
+
+    #[test]
+    fn extract_i16() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04]);
+        assert_eq!(buffer.extract_i16().unwrap(), 0x0201);
+        assert_eq!(buffer.extract_i16().unwrap(), 0x0403);
+    }
+
+    #[test]
+    fn extract_i32() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04]);
+        assert_eq!(buffer.extract_i32().unwrap(), 0x04030201);
+    }
+
+    #[test]
+    fn extract_i64() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+        assert_eq!(buffer.extract_u64().unwrap(), 0x0807060504030201);
+    }
+
+    #[test]
+    fn extract_invalid_returns_error() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03]);
+        assert!(buffer.extract_u8().is_ok());
+        assert!(buffer.extract_u8().is_ok());
+        assert!(buffer.extract_u8().is_ok());
+        assert!(buffer.extract_u8().is_err());
+    }
+
+    #[test]
+    fn extract_larger_than_buffer_returns_error() {
+        let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03]);
+        assert!(buffer.extract_u32().is_err());
+    }
+
+    #[test]
+    fn extract_varint() {
+        let mut buffer = BufferParser::new(vec![0x03]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x03);
+
+        let mut buffer = BufferParser::new(vec![0xFD, 0x03, 0x02]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x0203);
+
+        let mut buffer = BufferParser::new(vec![0xFE, 0x03, 0x02, 0x01, 0x00]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x010203);
+
+        let mut buffer =
+            BufferParser::new(vec![0xFF, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x00000000010203);
+    }
+
+    #[test]
+    fn extract_address() {
+        let mut buffer = BufferParser::new(vec![
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14,
+            0x15, 0x16, 0x17, 0x18,
+        ]);
+        assert_eq!(
+            buffer.extract_address().unwrap(),
+            SocketAddrV6::new(
+                Ipv6Addr::new(0x0102, 0x0304, 0x0506, 0x0708, 0x0910, 0x1112, 0x1314, 0x1516),
+                0x1718,
+                0,
+                0
+            )
+        );
+    }
+}

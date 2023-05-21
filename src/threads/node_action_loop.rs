@@ -15,15 +15,15 @@ use crate::{
         inv::{Inventory, InventoryType},
     },
     node::open_new_file,
-    peer::{PeerAction, PeerResponse},
+    peer::{NodeAction, PeerAction},
 };
 
-const FECHA_INICIO_IBD: u32 = 1681095630;
+const START_DATE_IBD: u32 = 1681095630;
 
-pub struct NodeThread {
-    pub peers_response_receiver: mpsc::Receiver<PeerResponse>,
+pub struct NodeActionLoop {
+    pub node_action_receiver: mpsc::Receiver<NodeAction>,
     pub headers_file: File,
-    pub peers_sender: mpsc::Sender<PeerAction>,
+    pub peer_action_sender: mpsc::Sender<PeerAction>,
     pub logger_sender: mpsc::Sender<String>,
     pub headers: Vec<BlockHeader>,
     pub utxo_set: HashMap<OutPoint, block::TransactionOutput>,
@@ -32,19 +32,19 @@ pub struct NodeThread {
     pub utxo_sync: bool,
 }
 
-impl NodeThread {
+impl NodeActionLoop {
     pub fn spawn(
-        peers_response_receiver: mpsc::Receiver<PeerResponse>,
+        node_action_receiver: mpsc::Receiver<NodeAction>,
         headers_file: File,
-        peers_sender: mpsc::Sender<PeerAction>,
+        peer_action_sender: mpsc::Sender<PeerAction>,
         headers: Vec<BlockHeader>,
         logger_sender: mpsc::Sender<String>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut node_thread = Self {
-                peers_response_receiver,
+                node_action_receiver,
                 headers_file,
-                peers_sender,
+                peer_action_sender,
                 logger_sender,
                 headers,
                 utxo_set: HashMap::new(),
@@ -57,25 +57,28 @@ impl NodeThread {
     }
 
     pub fn event_loop(&mut self) -> Result<(), CustomError> {
-        while let Ok(message) = self.peers_response_receiver.recv() {
+        while let Ok(message) = self.node_action_receiver.recv() {
             match message {
-                PeerResponse::Block((block_hash, block)) => self.handle_block(block_hash, block)?,
-                PeerResponse::NewHeaders(new_headers) => self.handle_new_headers(new_headers)?,
-                PeerResponse::GetHeadersError => self.handle_get_headers_error()?,
-                PeerResponse::GetDataError(inventory) => self.handle_get_data_error(inventory)?,
+                NodeAction::Block((block_hash, block)) => self.handle_block(block_hash, block)?,
+                NodeAction::NewHeaders(new_headers) => self.handle_new_headers(new_headers)?,
+                NodeAction::GetHeadersError => self.handle_get_headers_error()?,
+                NodeAction::GetDataError(inventory) => self.handle_get_data_error(inventory)?,
             }
         }
         Ok(())
     }
 
     fn handle_get_data_error(&mut self, inventory: Vec<Inventory>) -> Result<(), CustomError> {
-        self.peers_sender.send(PeerAction::GetData(inventory))?;
+        self.logger_sender
+            .send(format!("Error requesting data,trying with another peer..."))?;
+        self.peer_action_sender
+            .send(PeerAction::GetData(inventory))?;
         Ok(())
     }
 
     fn handle_get_headers_error(&mut self) -> Result<(), CustomError> {
         let last_header = self.headers.last().map(|header| header.hash());
-        self.peers_sender
+        self.peer_action_sender
             .send(PeerAction::GetHeaders(last_header))?;
         Ok(())
     }
@@ -86,30 +89,34 @@ impl NodeThread {
 
         let new_headers_count = new_headers.headers.len();
 
-        new_headers
+        let headers_after_timestamp = new_headers
             .headers
             .iter()
-            .filter(|header| header.timestamp > FECHA_INICIO_IBD)
-            .collect::<Vec<_>>()
-            .chunks(5)
-            .for_each(|headers| {
-                let inventory = headers
-                    .iter()
-                    .map(|header| Inventory::new(InventoryType::GetBlock, header.hash()))
-                    .collect();
-                self.peers_sender
-                    .send(PeerAction::GetData(inventory))
-                    .unwrap();
-            });
+            .filter(|header| header.timestamp > START_DATE_IBD)
+            .collect::<Vec<_>>();
+        let chunks: Vec<&[&BlockHeader]> = headers_after_timestamp.chunks(5).collect();
+        for chunk in chunks {
+            self.request_block(chunk)?;
+        }
         self.headers.append(&mut new_headers.headers);
 
         self.logger_sender.send(format!(
-            "Hay {} headers,nuevos {}",
+            "There are {} headers, new {}",
             self.headers.len(),
             new_headers_count
         ))?;
 
         self.verify_headers_sync(new_headers_count)?;
+        Ok(())
+    }
+
+    fn request_block(&mut self, headers: &[&BlockHeader]) -> Result<(), CustomError> {
+        let inventory = headers
+            .iter()
+            .map(|header| Inventory::new(InventoryType::GetBlock, header.hash()))
+            .collect();
+        self.peer_action_sender
+            .send(PeerAction::GetData(inventory))?;
         Ok(())
     }
 
@@ -121,14 +128,12 @@ impl NodeThread {
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
         block_file.write_all(&block.serialize())?;
 
-        self.logger_sender
-            .send(format!("Nuevo bloque descargado"))?;
+        //self.logger_sender.send(format!("New block downloaded"))?;
 
         match self.utxo_sync {
             true => update_utxo_set(&mut self.utxo_set, block),
             false => self.verify_blocks_sync()?,
         }
-
         Ok(())
     }
 
@@ -140,7 +145,7 @@ impl NodeThread {
         self.headers_sync = new_headers_count < 2000;
         if self.headers_sync {
             self.logger_sender
-                .send("sincronizacion de headers completada".to_string())?;
+                .send("headers sync completed".to_string())?;
             self.verify_blocks_sync()?;
         }
         Ok(())
@@ -151,10 +156,13 @@ impl NodeThread {
             return Ok(());
         }
         //el -1 es por el archivo del gitkeep
-        let blocks_downloaded = fs::read_dir("store/blocks").unwrap().into_iter().count() - 1;
+        let blocks_downloaded = match fs::read_dir("store/blocks") {
+            Ok(dir) => dir.count() - 1,
+            Err(_) => 0,
+        };
         let mut blocks_should_be_downloaded = 0;
         for header in self.headers.iter().rev() {
-            if header.timestamp < FECHA_INICIO_IBD {
+            if header.timestamp < START_DATE_IBD {
                 break;
             }
             blocks_should_be_downloaded += 1;
@@ -162,9 +170,8 @@ impl NodeThread {
         self.blocks_sync = self.headers_sync && blocks_downloaded == blocks_should_be_downloaded;
 
         if self.blocks_sync {
-            self.logger_sender
-                .send(format!("sincronizacion de bloques completada"))?;
-            self.generate_utxo().unwrap();
+            self.logger_sender.send(format!("blocks sync completed"))?;
+            self.generate_utxo()?;
         }
         Ok(())
     }
@@ -172,13 +179,13 @@ impl NodeThread {
     fn generate_utxo(&mut self) -> Result<(), CustomError> {
         let mut blocks_after_timestamp = 0;
         for header in self.headers.iter().rev() {
-            if header.timestamp < FECHA_INICIO_IBD {
+            if header.timestamp < START_DATE_IBD {
                 break;
             }
             blocks_after_timestamp += 1;
         }
         self.logger_sender
-            .send("Comenzando la generación del utxo (0%)...".to_string())?;
+            .send("Beginning the generation of the utxo (0%)...".to_string())?;
 
         let mut i = 0;
         let mut percentage = 0;
@@ -186,7 +193,7 @@ impl NodeThread {
             if i > blocks_after_timestamp / 10 {
                 percentage += 10;
                 self.logger_sender.send(format!(
-                    "Comenzando la generación del utxo ({}%)...",
+                    "The generation of utxo is ({}%) completed...",
                     percentage
                 ))?;
                 i = 0;
@@ -205,9 +212,9 @@ impl NodeThread {
         }
         self.utxo_sync = true;
         self.logger_sender
-            .send(format!("Comenzando la generación del utxo (100%)..."))?;
+            .send(format!("The generation of utxo is (100%) completed"))?;
         self.logger_sender
-            .send("Generación del utxo completada".to_string())?;
+            .send("Utxo generation is finished".to_string())?;
         Ok(())
     }
 }

@@ -3,7 +3,6 @@ use std::{env, path::Path};
 
 const CANT_ARGS: usize = 2;
 
-/// Obtiene la configuracion del archivo de configuracion. En esta se encuentra la semilla DNS y la version del protocolo.
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != CANT_ARGS {
@@ -36,12 +35,15 @@ fn main() {
     let addresses = match get_addresses(config.seed.clone(), config.port) {
         Ok(addresses) => addresses,
         Err(error) => {
-            logger_sender.send(format!("ERROR: {}", error)).unwrap();
+            match logger_sender.send(format!("ERROR: {}", error)) {
+                Ok(_) => (),
+                Err(error) => println!("ERROR: {}", error),
+            }
             return;
         }
     };
 
-    let mut my_node = match Node::new(&config, &logger) {
+    let _my_node = match Node::new(&config, &logger, addresses) {
         Ok(node) => node,
         Err(error) => {
             println!("ERROR: {}", error);
@@ -49,13 +51,5 @@ fn main() {
         }
     };
 
-    match my_node.connect(addresses) {
-        Ok(connection) => connection,
-        Err(error) => {
-            println!("ERROR: {}", error);
-            return;
-        }
-    }
-
-    println!("Terminada la tarea del main");
+    println!("Finished main tasks");
 }

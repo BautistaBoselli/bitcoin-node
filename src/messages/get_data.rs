@@ -11,6 +11,10 @@ impl GetData {
         let inv = Inv::new(inventories);
         Self { inv }
     }
+
+    pub fn get_inventories(&self) -> &Vec<Inventory> {
+        &self.inv.inventories
+    }
 }
 
 impl Message for GetData {
