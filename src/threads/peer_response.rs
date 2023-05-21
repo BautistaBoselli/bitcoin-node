@@ -12,6 +12,7 @@ use crate::{
         block::Block,
         headers::Headers,
         inv::{Inventory, InventoryType},
+        ping_pong::{Ping, Pong},
     },
     peer::{request_headers, PeerResponse},
 };
@@ -48,6 +49,7 @@ impl PeerResponseThread {
             match response_header.command.as_str() {
                 "headers" => self.handle_headers(&response_header)?,
                 "block" => self.handle_block(&response_header)?,
+                "ping" => self.handle_ping(&response_header)?,
                 _ => self.ignore_message(&response_header)?,
             }
         }
@@ -100,10 +102,16 @@ impl PeerResponseThread {
         Ok(())
     }
 
+    fn handle_ping(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        let ping = Ping::read(&mut self.stream, response_header.payload_size)?;
+        let pong = Pong { nonce: ping.nonce };
+        pong.send(&mut self.stream)?;
+        Ok(())
+    }
+
     fn ignore_message(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let cmd = response_header.command.as_str();
-        if cmd != "ping" && cmd != "alert" && cmd != "addr" && cmd != "inv" && cmd != "sendheaders"
-        {
+        if cmd != "alert" && cmd != "addr" && cmd != "inv" && cmd != "sendheaders" {
             self.logger_sender.send(format!(
                 "Recibido desconocido: {:?}",
                 response_header.command
