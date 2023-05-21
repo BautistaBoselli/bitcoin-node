@@ -273,15 +273,21 @@ mod tests {
         assert!(buffer.extract_u32().is_err());
     }
 
-    // #[test]
-    // fn extract_varint() {
-    //     let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03, 0x04]);
-    //     assert_eq!(buffer.extract_varint().unwrap(), 0x01);
-    //     assert_eq!(buffer.extract_varint().unwrap(), 0x0203);
-    //     assert_eq!(buffer.extract_varint().unwrap(), 0x040302);
-    // }
+    #[test]
+    fn extract_varint() {
+        let mut buffer = BufferParser::new(vec![0x03]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x03);
 
-    //test con adress invalida?
+        let mut buffer = BufferParser::new(vec![0xFD, 0x03, 0x02]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x0203);
+
+        let mut buffer = BufferParser::new(vec![0xFE, 0x03, 0x02, 0x01, 0x00]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x010203);
+
+        let mut buffer =
+            BufferParser::new(vec![0xFF, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(buffer.extract_varint().unwrap(), 0x00000000010203);
+    }
 
     #[test]
     fn extract_address() {

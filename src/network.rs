@@ -1,5 +1,6 @@
 use std::{
     net::{SocketAddr, SocketAddrV6, TcpStream, ToSocketAddrs},
+    time::Duration,
     vec::IntoIter,
 };
 
@@ -11,8 +12,9 @@ pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, Cu
         .map_err(|_| CustomError::CannotResolveSeedAddress)
 }
 
-pub fn open_stream(address: SocketAddrV6) -> Result<TcpStream, CustomError> {
-    TcpStream::connect(address).map_err(|_| CustomError::CannotConnectToNode)
+pub fn open_stream(address: SocketAddr) -> Result<TcpStream, CustomError> {
+    TcpStream::connect_timeout(&address, Duration::from_millis(500))
+        .map_err(|_| CustomError::CannotConnectToNode)
 }
 
 pub fn get_address_v6(address: SocketAddr) -> SocketAddrV6 {
@@ -32,19 +34,20 @@ mod tests {
 
     #[test]
     fn get_addresses_returns_an_iterator_of_addresses_if_given_a_seed() {
-        assert!(get_addresses("testnet-seed.bitcoin.jonasschnelli.ch".to_string(), 8333).is_ok());
+        assert!(get_addresses("google.com".to_string(), 80).is_ok());
     }
 
     #[test]
     fn get_addresses_returns_an_error_if_given_an_invalid_seed() {
-        assert!(get_addresses("invalid.seed".to_string(), 8333).is_err());
+        assert!(get_addresses("invalid.seed".to_string(), 4321).is_err());
     }
 
-    //#[test]
-    // fn open_stream_returns_a_tcp_stream_if_given_a_valid_address() {
-    //     let stream = TcpStream::connect("invalid.address:4321");
-    //     assert!(stream.is_err(), "Failed to connect to the server");
-    // }
+    #[test]
+    fn open_stream_returns_a_tcp_stream_if_given_a_valid_address() {
+        let address = "google.com:80".to_socket_addrs().unwrap().next().unwrap();
+        let stream = open_stream(address);
+        assert!(stream.is_ok());
+    }
 
     #[test]
     fn get_address_v6_with_ipv4_address_maps_to_ipv6() {

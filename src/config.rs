@@ -19,6 +19,7 @@ pub struct Config {
     pub protocol_version: i32,
     pub port: u16,
     pub log_file: String,
+    pub npeers: u8,
 }
 
 impl Config {
@@ -49,6 +50,7 @@ impl Config {
             protocol_version: 0,
             port: 0,
             log_file: String::new(),
+            npeers: 0,
         };
 
         for line in reader.lines() {
@@ -82,6 +84,9 @@ impl Config {
         if config.log_file.is_empty() {
             return Err(CustomError::ConfigMissingValue);
         }
+        if config.npeers == 0 {
+            return Err(CustomError::ConfigMissingValue);
+        }
         Ok(())
     }
 
@@ -101,6 +106,10 @@ impl Config {
                     u16::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
             "LOG" => self.log_file = String::from(value),
+            "NPEERS" => {
+                self.npeers =
+                    u8::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
+            }
             _ => (),
         }
         Ok(())
@@ -132,6 +141,7 @@ mod tests {
         let content = "SEED=\n\
         PROTOCOL_VERSION=1234\n\
         LOG=log.txt\n\
+        NPEERS=5\n\
         PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content);
@@ -144,11 +154,13 @@ mod tests {
         let content = "SEED=seed.test\n\
             PROTOCOL_VERSION=7000\n\
             LOG=log.txt\n\
+            NPEERS=5\n\
             PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
         Ok(())
@@ -159,24 +171,28 @@ mod tests {
         let content = "SEED=seed.test\n\
         VALOR_NO_REQUERIDO=1234\n\
         PROTOCOL_VERSION=7000\n\
+        NPEERS=5\n\
         LOG=log.txt\n\
         PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
 
         let content = "SEED=seed.test\n\
         VALOR_NO_REQUERIDO=\n\
         PROTOCOL_VERSION=7000\n\
+        NPEERS=5\n\
         LOG=log.txt\n\
         PORT=4321"
             .as_bytes();
         let config = Config::from_reader(content)?;
         assert_eq!(7000, config.protocol_version);
         assert_eq!("seed.test", config.seed);
+        assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
         Ok(())

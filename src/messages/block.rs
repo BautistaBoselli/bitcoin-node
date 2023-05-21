@@ -30,11 +30,6 @@ impl Block {
             hashes.push(transaction.hash());
         }
 
-        let mut hashes = vec![];
-        for transaction in &self.transactions {
-            hashes.push(transaction.hash());
-        }
-
         let merkle_tree = merkle_tree(hashes);
 
         let merkle_root = match merkle_tree.last() {
@@ -64,12 +59,12 @@ fn merkle_tree(hashes: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
 
     let mut level = vec![];
     for i in (0..hashes.len()).step_by(2) {
-        let current_hash = hashes.get(i).expect("ERROR ACA 1");
+        let current_hash = &hashes[i];
         if i + 1 >= hashes.len() {
             level.push(merge_hashes(current_hash.clone(), current_hash.clone()));
             break;
         }
-        let next_hash = hashes.get(i + 1).expect("ERROR ACA 2");
+        let next_hash = &hashes[i + 1];
         level.push(merge_hashes(current_hash.clone(), next_hash.clone()));
     }
 
@@ -257,13 +252,27 @@ mod tests {
 
     #[test]
     fn merkle_tree_test() {
-        let mut hashes = vec![];
-        for i in 0..10 {
-            hashes.push(vec![i]);
-        }
-        println!("{:?}", hashes);
+        let hashes = vec![
+            vec![0],
+            vec![1],
+            vec![2],
+            vec![3],
+            vec![4],
+            vec![5],
+            vec![6],
+            vec![7],
+            vec![8],
+            vec![9],
+        ];
         let result = merkle_tree(hashes);
-        assert!(result.len() == 4);
+        assert_eq!(
+            result[0],
+            vec![
+                168, 29, 114, 241, 146, 182, 132, 3, 243, 23, 31, 93, 95, 13, 242, 71, 223, 121,
+                159, 136, 174, 221, 242, 49, 71, 220, 41, 95, 162, 236, 216, 155
+            ]
+        );
+        assert!(result.len() == 1);
     }
 
     #[test]

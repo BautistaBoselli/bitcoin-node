@@ -134,7 +134,6 @@ impl MessageHeader {
         let mut command = match String::from_utf8(buffer[4..16].to_vec()) {
             Ok(command) => command,
             Err(_) => {
-                println!("Invalid command on buffer: {:?}", buffer);
                 return Err(CustomError::InvalidHeader);
             }
         };
