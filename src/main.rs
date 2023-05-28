@@ -1,5 +1,8 @@
-use bitcoin::{config::Config, logger::Logger, network::get_addresses, node::Node};
-use std::{env, path::Path};
+use bitcoin::{
+    config::Config, gui::init::gui_init, logger::Logger, network::get_addresses, node::Node,
+};
+use gtk::glib;
+use std::{env, path::Path, thread};
 
 const CANT_ARGS: usize = 2;
 
@@ -23,33 +26,50 @@ fn main() {
         }
     };
 
-    let logger = match Logger::new(&config.log_file) {
+    let (gui_sender, gui_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+
+    let logger = match Logger::new(&config.log_file, gui_sender.clone()) {
         Ok(logger) => logger,
         Err(error) => {
             println!("ERROR: {}", error);
             return;
         }
     };
+
     let logger_sender = logger.get_sender();
+    let logger_sender_clone = logger_sender.clone();
 
-    let addresses = match get_addresses(config.seed.clone(), config.port) {
-        Ok(addresses) => addresses,
-        Err(error) => {
-            match logger_sender.send(format!("ERROR: {}", error)) {
-                Ok(_) => (),
-                Err(error) => println!("ERROR: {}", error),
+    thread::spawn(move || {
+        let addresses = match get_addresses(config.seed.clone(), config.port) {
+            Ok(addresses) => addresses,
+            Err(error) => {
+                match logger_sender.send(format!("ERROR: {}", error)) {
+                    Ok(_) => (),
+                    Err(error) => println!("ERROR: {}", error),
+                }
+                return;
             }
-            return;
-        }
-    };
+        };
 
-    let _my_node = match Node::new(&config, &logger, addresses) {
-        Ok(node) => node,
+        let _my_node = match Node::new(&config, &logger, addresses, gui_sender.clone()) {
+            Ok(node) => node,
+            Err(error) => {
+                println!("ERROR: {}", error);
+                return;
+            }
+        };
+    });
+
+    match gui_init(gui_receiver) {
         Err(error) => {
-            println!("ERROR: {}", error);
+            logger_sender_clone
+                .send(format!("ERROR: {}", error))
+                .unwrap_or_else(|_| {
+                    println!("ERROR: {}", error);
+                    println!("ERROR: cannot send error to logger thread");
+                });
             return;
         }
+        _ => (),
     };
-
-    println!("Finished main tasks");
 }
