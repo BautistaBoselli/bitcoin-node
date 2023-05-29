@@ -18,17 +18,6 @@ Then we run the following command line:
 cargo run -- configpath
 ```
 
-## Diagrams
-In order to understand how the program works, some important diagrams are provided:
-
-### thread that listens for node requests and send messages to peers
-![thread that listens for node requests and send messages to peers](./diagrams/peer_action_loop.PNG)
-### thread that receives parsed responses from peers
-![thread that receives parsed responses from peers](./diagrams/node_action_loop.PNG)
-### thread that receives and writes information in log file
-![thread that receives and writes information in log file](./diagrams/logger.PNG)
-### interaction between threads and socket
-![interaction between threads and socket](./diagrams/socket_interaction.PNG)
 
 
 
