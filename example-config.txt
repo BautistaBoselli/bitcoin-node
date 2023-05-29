@@ -1,5 +1,5 @@
-SEED=dns
-PROTOCOL_VERSION=1
-PORT=1
-LOG=file
-NPEERS=1
+SEED=seed.testnet.bitcoin.sprovoost.nl
+PROTOCOL_VERSION=70012
+PORT=18333
+LOG=log.txt
+NPEERS=10
