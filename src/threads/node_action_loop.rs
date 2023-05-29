@@ -6,8 +6,11 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use gtk::glib;
+
 use crate::{
     error::CustomError,
+    gui::init::GUIActions,
     message::Message,
     messages::{
         block::{self, Block, OutPoint},
@@ -22,9 +25,19 @@ const START_DATE_IBD: u32 = 1681095630;
 
 pub struct NodeActionLoop {
     pub node_action_receiver: mpsc::Receiver<NodeAction>,
-    pub headers_file: File,
     pub peer_action_sender: mpsc::Sender<PeerAction>,
     pub logger_sender: mpsc::Sender<String>,
+    pub gui_sender: glib::Sender<GUIActions>,
+    pub headers_file: File,
+    pub headers: Vec<BlockHeader>,
+    pub utxo_set: HashMap<OutPoint, block::TransactionOutput>,
+    pub headers_sync: bool,
+    pub blocks_sync: bool,
+    pub utxo_sync: bool,
+}
+
+pub struct BitcoinInfo {
+    pub headers_file: File,
     pub headers: Vec<BlockHeader>,
     pub utxo_set: HashMap<OutPoint, block::TransactionOutput>,
     pub headers_sync: bool,
@@ -39,6 +52,7 @@ impl NodeActionLoop {
         peer_action_sender: mpsc::Sender<PeerAction>,
         headers: Vec<BlockHeader>,
         logger_sender: mpsc::Sender<String>,
+        gui_sender: glib::Sender<GUIActions>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut node_thread = Self {
@@ -51,6 +65,7 @@ impl NodeActionLoop {
                 headers_sync: false,
                 blocks_sync: false,
                 utxo_sync: false,
+                gui_sender,
             };
             node_thread.event_loop()
         })
@@ -128,7 +143,7 @@ impl NodeActionLoop {
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
         block_file.write_all(&block.serialize())?;
 
-        //self.logger_sender.send(format!("New block downloaded"))?;
+        self.logger_sender.send(format!("New block downloaded"))?;
 
         match self.utxo_sync {
             true => update_utxo_set(&mut self.utxo_set, block),

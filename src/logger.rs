@@ -7,14 +7,20 @@ use std::{
     thread,
 };
 
+use gtk::glib;
+
 use crate::error::CustomError;
+use crate::gui::init::GUIActions;
 
 pub struct Logger {
     tx: Sender<String>,
 }
 
 impl Logger {
-    pub fn new(filename: &String) -> Result<Self, CustomError> {
+    pub fn new(
+        filename: &String,
+        gui_sender: glib::Sender<GUIActions>,
+    ) -> Result<Self, CustomError> {
         let (tx, rx) = mpsc::channel();
 
         if Path::new(filename).exists() {
@@ -31,6 +37,7 @@ impl Logger {
             while let Ok(message) = rx.recv() {
                 println!("logger: {}", message);
                 writeln!(file, "{}", message)?;
+                gui_sender.send(GUIActions::Log(message)).unwrap();
             }
             Ok(())
         });
@@ -50,8 +57,10 @@ mod tests {
 
     #[test]
     fn log_file_gets_written() {
+        let (tx, _rx) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
         println!("Testing");
-        let logger = Logger::new(&String::from("test1.txt")).unwrap();
+
+        let logger = Logger::new(&String::from("test1.txt"), tx).unwrap();
         let sender = logger.get_sender();
         println!("Sender: {:?}", sender);
         sender.send(String::from("Sender test 1")).unwrap();
@@ -67,7 +76,9 @@ mod tests {
 
     #[test]
     fn log_file_gets_written_by_two_senders() {
-        let logger = Logger::new(&String::from("test2.txt")).unwrap();
+        let (tx, _rx) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+
+        let logger = Logger::new(&String::from("test2.txt"), tx).unwrap();
         let sender1 = logger.get_sender();
         let sender2 = logger.get_sender();
         sender1.send(String::from("Sender test 1")).unwrap();
@@ -83,7 +94,9 @@ mod tests {
 
     #[test]
     fn log_file_gets_written_by_two_threads() {
-        let logger = Logger::new(&String::from("test3.txt")).unwrap();
+        let (tx, _rx) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+
+        let logger = Logger::new(&String::from("test3.txt"), tx).unwrap();
         let sender1 = logger.get_sender();
         let sender2 = logger.get_sender();
         thread::spawn(move || sender1.send(String::from("Sender test 1")).unwrap())

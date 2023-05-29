@@ -7,9 +7,12 @@ use std::{
     vec::IntoIter,
 };
 
+use gtk::glib;
+
 use crate::{
     config::Config,
     error::CustomError,
+    gui::init::GUIActions,
     logger::Logger,
     messages::headers::Headers,
     peer::{NodeAction, Peer, PeerAction},
@@ -32,6 +35,7 @@ impl Node {
         config: &Config,
         logger: &Logger,
         addresses: IntoIter<SocketAddr>,
+        gui_sender: glib::Sender<GUIActions>,
     ) -> Result<Self, CustomError> {
         let logger_sender = logger.get_sender();
 
@@ -72,6 +76,7 @@ impl Node {
             node.peer_action_sender.clone(),
             headers,
             logger_sender.clone(),
+            gui_sender,
         ));
 
         Ok(node)

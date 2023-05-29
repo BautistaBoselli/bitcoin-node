@@ -32,6 +32,7 @@ pub enum CustomError {
     HeaderInvalidPoW,
     InvalidMerkleRoot,
     UnknownError,
+    CannotInitGUI,
 }
 
 impl CustomError {
@@ -62,6 +63,7 @@ impl CustomError {
             Self::HeaderInvalidPoW => "header hash does not satisfy the proof of work dificulty",
             Self::InvalidMerkleRoot => "invalid merkle root",
             Self::UnknownError => "unknown error",
+            Self::CannotInitGUI => "cannot init GUI",
         }
     }
 }
