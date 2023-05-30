@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use gtk::{
     glib::{self, Receiver},
     prelude::BuilderExtManual,
@@ -11,7 +13,14 @@ pub enum GUIActions {
     Headers(Vec<BlockHeader>),
 }
 
-pub fn gui_init(gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
+pub struct MyStruct {
+    pub vec: Vec<u8>,
+}
+
+pub fn gui_init(
+    gui_receiver: Receiver<GUIActions>,
+    number: Arc<Mutex<MyStruct>>,
+) -> Result<(), CustomError> {
     if gtk::init().is_err() {
         return Err(CustomError::CannotInitGUI);
     }
@@ -27,8 +36,9 @@ pub fn gui_init(gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
 
     gui_receiver.attach(None, move |message| {
         match message {
-            GUIActions::Log(message) => {
-                label.set_text(message.as_str());
+            GUIActions::Log(_message) => {
+                label.set_text(number.lock().unwrap().vec.len().to_string().as_str());
+                // label.set_text(message.as_str());
             }
             GUIActions::Headers(headers) => {
                 blocks.set_text(headers.len().to_string().as_str());

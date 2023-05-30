@@ -1,8 +1,17 @@
 use bitcoin::{
-    config::Config, gui::init::gui_init, logger::Logger, network::get_addresses, node::Node,
+    config::Config,
+    gui::init::{gui_init, MyStruct},
+    logger::Logger,
+    network::get_addresses,
+    node::Node,
 };
-use gtk::glib;
-use std::{env, path::Path, thread};
+use gtk::glib::{self, Priority};
+use std::{
+    env,
+    path::Path,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 const CANT_ARGS: usize = 2;
 
@@ -26,7 +35,7 @@ fn main() {
         }
     };
 
-    let (gui_sender, gui_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+    let (gui_sender, gui_receiver) = glib::MainContext::channel(Priority::default());
 
     let logger = match Logger::new(&config.log_file, gui_sender.clone()) {
         Ok(logger) => logger,
@@ -60,7 +69,17 @@ fn main() {
         };
     });
 
-    match gui_init(gui_receiver) {
+    let number = Arc::new(Mutex::new(MyStruct { vec: vec![] }));
+    let number_clone = number.clone();
+
+    thread::spawn(move || loop {
+        let mut number = number_clone.lock().unwrap();
+        (*number).vec.push(1);
+        drop(number);
+        thread::sleep(std::time::Duration::from_secs(1));
+    });
+
+    match gui_init(gui_receiver, number) {
         Err(error) => {
             logger_sender_clone
                 .send(format!("ERROR: {}", error))
