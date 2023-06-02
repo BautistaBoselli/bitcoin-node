@@ -1,6 +1,4 @@
 use std::{
-    fs::OpenOptions,
-    io::Read,
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -14,7 +12,7 @@ use crate::{
     error::CustomError,
     gui::init::GUIActions,
     logger::Logger,
-    messages::headers::Headers,
+    node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
     threads::node_action_loop::NodeActionLoop,
 };
@@ -36,24 +34,13 @@ impl Node {
         logger: &Logger,
         addresses: IntoIter<SocketAddr>,
         gui_sender: glib::Sender<GUIActions>,
+        node_state_ref: Arc<Mutex<NodeState>>,
     ) -> Result<Self, CustomError> {
         let logger_sender = logger.get_sender();
 
         let (peer_action_sender, receiver) = mpsc::channel();
         let peer_action_receiver = Arc::new(Mutex::new(receiver));
         let (node_action_sender, node_action_receiver) = mpsc::channel();
-
-        let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
-
-        let mut saved_headers_buffer = vec![];
-        headers_file.read_to_end(&mut saved_headers_buffer)?;
-
-        let headers = match Headers::parse_headers(saved_headers_buffer) {
-            Ok(headers) => headers,
-            Err(_) => vec![],
-        };
-
-        let last_header = headers.last().map(|header| header.hash());
 
         let mut node = Self {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
@@ -67,16 +54,20 @@ impl Node {
             event_loop_thread: None,
         };
         node.connect(addresses, config.npeers)?;
+
+        let node_state = node_state_ref.lock().unwrap();
+        let last_header = node_state.get_last_header_hash();
+        drop(node_state);
+
         node.peer_action_sender
             .send(PeerAction::GetHeaders(last_header))?;
 
         node.event_loop_thread = Some(NodeActionLoop::spawn(
             node_action_receiver,
-            headers_file,
             node.peer_action_sender.clone(),
-            headers,
-            logger_sender.clone(),
+            logger_sender,
             gui_sender,
+            node_state_ref,
         ));
 
         Ok(node)
@@ -123,16 +114,6 @@ impl Node {
     }
 }
 
-pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(path_to_file)?;
-    Ok(file)
-}
-
 impl Drop for Node {
     fn drop(&mut self) {
         for worker in &mut self.peers {
@@ -147,10 +128,11 @@ impl Drop for Node {
                 }
             }
         }
-        self.event_loop_thread.take().map(|thread| {
+
+        if let Some(thread) = self.event_loop_thread.take() {
             if let Err(error) = thread.join() {
                 println!("Error joining event loop thread: {:?}", error);
             }
-        });
+        }
     }
 }

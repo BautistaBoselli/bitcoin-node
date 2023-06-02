@@ -53,11 +53,13 @@ impl Logger {
 mod tests {
     use std::time;
 
+    use gtk::glib::Priority;
+
     use super::*;
 
     #[test]
     fn log_file_gets_written() {
-        let (tx, _rx) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+        let (tx, _rx) = glib::MainContext::channel(Priority::default());
         println!("Testing");
 
         let logger = Logger::new(&String::from("test1.txt"), tx).unwrap();
@@ -76,7 +78,7 @@ mod tests {
 
     #[test]
     fn log_file_gets_written_by_two_senders() {
-        let (tx, _rx) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+        let (tx, _rx) = glib::MainContext::channel(Priority::default());
 
         let logger = Logger::new(&String::from("test2.txt"), tx).unwrap();
         let sender1 = logger.get_sender();
@@ -94,7 +96,7 @@ mod tests {
 
     #[test]
     fn log_file_gets_written_by_two_threads() {
-        let (tx, _rx) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+        let (tx, _rx) = glib::MainContext::channel(Priority::default());
 
         let logger = Logger::new(&String::from("test3.txt"), tx).unwrap();
         let sender1 = logger.get_sender();

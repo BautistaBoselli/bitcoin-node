@@ -1,17 +1,22 @@
+use std::sync::{Arc, Mutex};
+
 use gtk::{
     glib::{self, Receiver},
     prelude::BuilderExtManual,
     traits::{LabelExt, WidgetExt},
 };
 
-use crate::{error::CustomError, messages::headers::BlockHeader};
+use crate::{error::CustomError, messages::headers::BlockHeader, node_state::NodeState};
 
 pub enum GUIActions {
     Log(String),
     Headers(Vec<BlockHeader>),
 }
 
-pub fn gui_init(gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
+pub fn gui_init(
+    gui_receiver: Receiver<GUIActions>,
+    _node_state_ref: Arc<Mutex<NodeState>>,
+) -> Result<(), CustomError> {
     if gtk::init().is_err() {
         return Err(CustomError::CannotInitGUI);
     }
