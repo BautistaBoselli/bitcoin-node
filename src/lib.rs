@@ -6,6 +6,7 @@ pub mod message;
 pub mod messages;
 pub mod network;
 pub mod node;
+pub mod node_state;
 pub mod parser;
 pub mod peer;
 pub mod threads;

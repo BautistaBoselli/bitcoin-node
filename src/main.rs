@@ -1,9 +1,6 @@
 use bitcoin::{
-    config::Config,
-    gui::init::{gui_init, MyStruct},
-    logger::Logger,
-    network::get_addresses,
-    node::Node,
+    config::Config, gui::init::gui_init, logger::Logger, network::get_addresses, node::Node,
+    node_state::NodeState,
 };
 use gtk::glib::{self, Priority};
 use std::{
@@ -44,10 +41,23 @@ fn main() {
             return;
         }
     };
-
     let logger_sender = logger.get_sender();
-    let logger_sender_clone = logger_sender.clone();
 
+    let node_state_ref = match NodeState::new(logger_sender.clone()) {
+        Ok(node_state) => Arc::new(Mutex::new(node_state)),
+        Err(error) => {
+            logger_sender
+                .send(format!("ERROR: {}", error))
+                .unwrap_or_else(|_| {
+                    println!("ERROR: {}", error);
+                    println!("ERROR: cannot send error to logger thread");
+                });
+            return;
+        }
+    };
+
+    let logger_sender_clone = logger_sender.clone();
+    let node_state_ref_clone = node_state_ref.clone();
     thread::spawn(move || {
         let addresses = match get_addresses(config.seed.clone(), config.port) {
             Ok(addresses) => addresses,
@@ -60,7 +70,13 @@ fn main() {
             }
         };
 
-        let _my_node = match Node::new(&config, &logger, addresses, gui_sender.clone()) {
+        let _my_node = match Node::new(
+            &config,
+            &logger,
+            addresses,
+            gui_sender.clone(),
+            node_state_ref_clone,
+        ) {
             Ok(node) => node,
             Err(error) => {
                 println!("ERROR: {}", error);
@@ -69,26 +85,12 @@ fn main() {
         };
     });
 
-    let number = Arc::new(Mutex::new(MyStruct { vec: vec![] }));
-    let number_clone = number.clone();
-
-    thread::spawn(move || loop {
-        let mut number = number_clone.lock().unwrap();
-        (*number).vec.push(1);
-        drop(number);
-        thread::sleep(std::time::Duration::from_secs(1));
-    });
-
-    match gui_init(gui_receiver, number) {
-        Err(error) => {
-            logger_sender_clone
-                .send(format!("ERROR: {}", error))
-                .unwrap_or_else(|_| {
-                    println!("ERROR: {}", error);
-                    println!("ERROR: cannot send error to logger thread");
-                });
-            return;
-        }
-        _ => (),
+    if let Err(error) = gui_init(gui_receiver, node_state_ref) {
+        logger_sender_clone
+            .send(format!("ERROR: {}", error))
+            .unwrap_or_else(|_| {
+                println!("ERROR: {}", error);
+                println!("ERROR: cannot send error to logger thread");
+            });
     };
 }

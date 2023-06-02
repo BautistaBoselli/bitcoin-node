@@ -18,7 +18,7 @@ impl Message for Ping {
         if buffer.len() != NONCE_BYTES {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
-        let mut parser = BufferParser::new(buffer.clone());
+        let mut parser = BufferParser::new(buffer);
         let nonce = parser.extract_u64()?;
         Ok(Ping { nonce })
     }

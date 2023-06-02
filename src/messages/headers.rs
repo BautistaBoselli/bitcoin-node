@@ -97,6 +97,18 @@ impl BlockHeader {
             .to_byte_array()
             .to_vec()
     }
+
+    pub fn hash_as_string(&self) -> String {
+        hash_as_string(self.hash())
+    }
+}
+
+pub fn hash_as_string(hash: Vec<u8>) -> String {
+    let mut filename = String::with_capacity(2 * hash.len());
+    for byte in hash {
+        filename.push_str(format!("{:02X}", byte).as_str());
+    }
+    filename
 }
 
 impl Headers {

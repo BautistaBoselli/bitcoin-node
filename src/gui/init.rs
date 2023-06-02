@@ -6,20 +6,16 @@ use gtk::{
     traits::{LabelExt, WidgetExt},
 };
 
-use crate::{error::CustomError, messages::headers::BlockHeader};
+use crate::{error::CustomError, messages::headers::BlockHeader, node_state::NodeState};
 
 pub enum GUIActions {
     Log(String),
     Headers(Vec<BlockHeader>),
 }
 
-pub struct MyStruct {
-    pub vec: Vec<u8>,
-}
-
 pub fn gui_init(
     gui_receiver: Receiver<GUIActions>,
-    number: Arc<Mutex<MyStruct>>,
+    _node_state_ref: Arc<Mutex<NodeState>>,
 ) -> Result<(), CustomError> {
     if gtk::init().is_err() {
         return Err(CustomError::CannotInitGUI);
@@ -36,9 +32,8 @@ pub fn gui_init(
 
     gui_receiver.attach(None, move |message| {
         match message {
-            GUIActions::Log(_message) => {
-                label.set_text(number.lock().unwrap().vec.len().to_string().as_str());
-                // label.set_text(message.as_str());
+            GUIActions::Log(message) => {
+                label.set_text(message.as_str());
             }
             GUIActions::Headers(headers) => {
                 blocks.set_text(headers.len().to_string().as_str());
