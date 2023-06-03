@@ -2,7 +2,8 @@ use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    sync::mpsc,
+    sync::{mpsc, Arc, Mutex},
+    time::SystemTime,
 };
 
 use crate::{
@@ -20,6 +21,7 @@ pub struct NodeState {
     logger_sender: mpsc::Sender<String>,
     headers_file: File,
     headers: Vec<BlockHeader>,
+    pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo_set: HashMap<OutPoint, block::TransactionOutput>,
     headers_sync: bool,
     blocks_sync: bool,
@@ -27,7 +29,7 @@ pub struct NodeState {
 }
 
 impl NodeState {
-    pub fn new(logger_sender: mpsc::Sender<String>) -> Result<Self, CustomError> {
+    pub fn new(logger_sender: mpsc::Sender<String>) -> Result<Arc<Mutex<Self>>, CustomError> {
         let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
 
         let mut saved_headers_buffer = vec![];
@@ -38,15 +40,20 @@ impl NodeState {
             Err(_) => vec![],
         };
 
-        Ok(Self {
+        let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
+
+        let node_state_ref = Arc::new(Mutex::new(Self {
             logger_sender,
             headers_file,
             headers,
+            pending_blocks_ref,
             utxo_set: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
             utxo_sync: false,
-        })
+        }));
+
+        Ok(node_state_ref)
     }
 
     pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
@@ -68,10 +75,40 @@ impl NodeState {
         self.verify_headers_sync(headers_count)
     }
 
+    pub fn append_pending_block(&mut self, header_hash: Vec<u8>) -> Result<(), CustomError> {
+        let current_time = get_current_timestamp()?;
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.insert(header_hash, current_time);
+        drop(pending_blocks);
+
+        Ok(())
+    }
+
+    pub fn get_stale_block_downloads(&self) -> Result<Vec<Vec<u8>>, CustomError> {
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        let mut to_remove = Vec::new();
+
+        for (block_hash, timestamp) in pending_blocks.iter() {
+            if *timestamp + 5 < get_current_timestamp()? {
+                to_remove.push(block_hash.clone());
+            }
+        }
+
+        for block_hash in to_remove.iter() {
+            pending_blocks.remove(block_hash);
+        }
+
+        Ok(to_remove)
+    }
+
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
-        let filename = hash_as_string(block_hash);
+        let filename = hash_as_string(block_hash.clone());
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
         block_file.write_all(&block.serialize())?;
+
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.remove(&block_hash);
+        drop(pending_blocks);
 
         match self.utxo_sync {
             true => update_utxo_set(&mut self.utxo_set, block),
@@ -199,4 +236,10 @@ fn update_utxo_set(utxo_set: &mut HashMap<OutPoint, block::TransactionOutput>, b
             utxo_set.insert(out_point, tx_out.clone());
         }
     }
+}
+
+pub fn get_current_timestamp() -> Result<u64, CustomError> {
+    Ok(SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs())
 }
