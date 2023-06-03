@@ -14,7 +14,7 @@ use crate::{
     logger::Logger,
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
-    threads::node_action_loop::NodeActionLoop,
+    threads::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
 };
 pub struct Node {
     pub address: SocketAddrV6,
@@ -24,6 +24,7 @@ pub struct Node {
     peer_action_sender: mpsc::Sender<PeerAction>,
     peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     node_action_sender: mpsc::Sender<NodeAction>,
+    node_state_ref: Arc<Mutex<NodeState>>,
     peers: Vec<Peer>,
     pub event_loop_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
 }
@@ -37,7 +38,6 @@ impl Node {
         node_state_ref: Arc<Mutex<NodeState>>,
     ) -> Result<Self, CustomError> {
         let logger_sender = logger.get_sender();
-
         let (peer_action_sender, receiver) = mpsc::channel();
         let peer_action_receiver = Arc::new(Mutex::new(receiver));
         let (node_action_sender, node_action_receiver) = mpsc::channel();
@@ -46,29 +46,19 @@ impl Node {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
             services: 0x00,
             version: config.protocol_version,
-            logger_sender: logger_sender.clone(),
+            logger_sender,
             peer_action_sender,
             peer_action_receiver,
             node_action_sender,
             peers: vec![],
             event_loop_thread: None,
-        };
-        node.connect(addresses, config.npeers)?;
-
-        let node_state = node_state_ref.lock().unwrap();
-        let last_header = node_state.get_last_header_hash();
-        drop(node_state);
-
-        node.peer_action_sender
-            .send(PeerAction::GetHeaders(last_header))?;
-
-        node.event_loop_thread = Some(NodeActionLoop::spawn(
-            node_action_receiver,
-            node.peer_action_sender.clone(),
-            logger_sender,
-            gui_sender,
             node_state_ref,
-        ));
+        };
+
+        node.connect(addresses, config.npeers)?;
+        node.initialize_pending_blocks_loop();
+        node.initialize_ibd()?;
+        node.initialize_event_loop(node_action_receiver, gui_sender);
 
         Ok(node)
     }
@@ -106,6 +96,37 @@ impl Node {
             };
         }
         Ok(())
+    }
+
+    fn initialize_pending_blocks_loop(&self) {
+        pending_blocks_loop(
+            self.node_state_ref.clone(),
+            self.peer_action_sender.clone(),
+            self.logger_sender.clone(),
+        );
+    }
+
+    fn initialize_ibd(&self) -> Result<(), CustomError> {
+        let node_state = self.node_state_ref.lock().unwrap();
+        let last_header = node_state.get_last_header_hash();
+        drop(node_state);
+        self.peer_action_sender
+            .send(PeerAction::GetHeaders(last_header))?;
+        Ok(())
+    }
+
+    fn initialize_event_loop(
+        &mut self,
+        node_action_receiver: mpsc::Receiver<NodeAction>,
+        gui_sender: glib::Sender<GUIActions>,
+    ) {
+        self.event_loop_thread = Some(NodeActionLoop::spawn(
+            node_action_receiver,
+            self.peer_action_sender.clone(),
+            self.logger_sender.clone(),
+            gui_sender,
+            self.node_state_ref.clone(),
+        ));
     }
 
     pub fn execute(&self, peer_message: PeerAction) -> Result<(), CustomError> {

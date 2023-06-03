@@ -29,13 +29,9 @@ impl Message for Inv {
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         let mut parser = BufferParser::new(buffer);
 
-        let inventory_count = parser.extract_varint()?;
-
         if parser.len() % 36 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
-
-        println!("inventory count: {}", inventory_count);
 
         let mut inventories = vec![];
         while !parser.is_empty() {

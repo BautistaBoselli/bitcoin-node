@@ -1,7 +1,11 @@
 use core::fmt;
 use std::{
     io::{Error, ErrorKind},
-    sync::mpsc::{RecvError, SendError},
+    sync::{
+        mpsc::{RecvError, SendError},
+        PoisonError,
+    },
+    time::SystemTimeError,
 };
 
 #[derive(Debug)]
@@ -33,6 +37,7 @@ pub enum CustomError {
     InvalidMerkleRoot,
     UnknownError,
     CannotInitGUI,
+    CannotGetTimestamp,
 }
 
 impl CustomError {
@@ -64,6 +69,7 @@ impl CustomError {
             Self::InvalidMerkleRoot => "invalid merkle root",
             Self::UnknownError => "unknown error",
             Self::CannotInitGUI => "cannot init GUI",
+            Self::CannotGetTimestamp => "cannot get timestamp",
         }
     }
 }
@@ -88,6 +94,18 @@ impl<T> From<SendError<T>> for CustomError {
 impl From<RecvError> for CustomError {
     fn from(_error: RecvError) -> Self {
         CustomError::CannotReceiveMessageFromChannel
+    }
+}
+
+impl<T> From<PoisonError<T>> for CustomError {
+    fn from(_error: PoisonError<T>) -> Self {
+        CustomError::CannotLockGuard
+    }
+}
+
+impl From<SystemTimeError> for CustomError {
+    fn from(_error: SystemTimeError) -> Self {
+        CustomError::CannotGetTimestamp
     }
 }
 

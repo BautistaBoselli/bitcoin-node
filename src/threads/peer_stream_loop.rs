@@ -47,12 +47,17 @@ impl PeerStreamLoop {
         loop {
             let response_header = MessageHeader::read(&mut self.stream)?;
 
-            match response_header.command.as_str() {
-                "headers" => self.handle_headers(&response_header)?,
-                "block" => self.handle_block(&response_header)?,
-                "ping" => self.handle_ping(&response_header)?,
-                "notfound" => self.handle_notfound(&response_header)?,
-                _ => self.ignore_message(&response_header)?,
+            let response = match response_header.command.as_str() {
+                "headers" => self.handle_headers(&response_header),
+                "block" => self.handle_block(&response_header),
+                "ping" => self.handle_ping(&response_header),
+                "notfound" => self.handle_notfound(&response_header),
+                _ => self.ignore_message(&response_header),
+            };
+
+            if let Err(error) = response {
+                self.logger_sender
+                    .send(format!("Error on NodeActionLoop: {}", error))?;
             }
         }
     }

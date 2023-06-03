@@ -49,11 +49,16 @@ impl NodeActionLoop {
 
     pub fn event_loop(&mut self) -> Result<(), CustomError> {
         while let Ok(message) = self.node_action_receiver.recv() {
-            match message {
-                NodeAction::Block((block_hash, block)) => self.handle_block(block_hash, block)?,
-                NodeAction::NewHeaders(new_headers) => self.handle_new_headers(new_headers)?,
-                NodeAction::GetHeadersError => self.handle_get_headers_error()?,
-                NodeAction::GetDataError(inventory) => self.handle_get_data_error(inventory)?,
+            let response = match message {
+                NodeAction::Block((block_hash, block)) => self.handle_block(block_hash, block),
+                NodeAction::NewHeaders(new_headers) => self.handle_new_headers(new_headers),
+                NodeAction::GetHeadersError => self.handle_get_headers_error(),
+                NodeAction::GetDataError(inventory) => self.handle_get_data_error(inventory),
+            };
+
+            if let Err(error) = response {
+                self.logger_sender
+                    .send(format!("Error on NodeActionLoop: {}", error))?;
             }
         }
         Ok(())
@@ -68,7 +73,7 @@ impl NodeActionLoop {
     }
 
     fn handle_get_headers_error(&mut self) -> Result<(), CustomError> {
-        let node_state = self.node_state_ref.lock().unwrap();
+        let node_state = self.node_state_ref.lock()?;
         let last_header = node_state.get_last_header_hash();
         drop(node_state);
 
@@ -88,24 +93,30 @@ impl NodeActionLoop {
             self.request_block(chunk)?;
         }
 
-        let mut node_state = self.node_state_ref.lock().unwrap();
+        let mut node_state = self.node_state_ref.lock()?;
         node_state.append_headers(&mut new_headers)?;
 
         Ok(())
     }
 
     fn request_block(&mut self, headers: &[&BlockHeader]) -> Result<(), CustomError> {
-        let inventory = headers
-            .iter()
-            .map(|header| Inventory::new(InventoryType::GetBlock, header.hash()))
-            .collect();
+        let mut node_state = self.node_state_ref.lock()?;
+
+        let mut inventories = vec![];
+        for header in headers {
+            node_state.append_pending_block(header.hash())?;
+            inventories.push(Inventory::new(InventoryType::GetBlock, header.hash()));
+        }
+
+        drop(node_state);
+
         self.peer_action_sender
-            .send(PeerAction::GetData(inventory))?;
+            .send(PeerAction::GetData(inventories))?;
         Ok(())
     }
 
     fn handle_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
-        let mut node_state = self.node_state_ref.lock().unwrap();
+        let mut node_state = self.node_state_ref.lock()?;
 
         node_state.append_block(block_hash, block)?;
         drop(node_state);

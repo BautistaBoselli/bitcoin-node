@@ -3,12 +3,7 @@ use bitcoin::{
     node_state::NodeState,
 };
 use gtk::glib::{self, Priority};
-use std::{
-    env,
-    path::Path,
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::{env, path::Path, thread};
 
 const CANT_ARGS: usize = 2;
 
@@ -44,7 +39,7 @@ fn main() {
     let logger_sender = logger.get_sender();
 
     let node_state_ref = match NodeState::new(logger_sender.clone()) {
-        Ok(node_state) => Arc::new(Mutex::new(node_state)),
+        Ok(node_state) => node_state,
         Err(error) => {
             logger_sender
                 .send(format!("ERROR: {}", error))

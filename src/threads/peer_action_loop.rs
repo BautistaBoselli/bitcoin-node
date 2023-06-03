@@ -46,12 +46,17 @@ impl PeerActionLoop {
                 .lock()
                 .map_err(|_| CustomError::CannotLockGuard)?
                 .recv()?;
-            match peer_message {
-                PeerAction::GetHeaders(last_header) => self.handle_getheaders(last_header)?,
-                PeerAction::GetData(inventories) => self.handle_getdata(inventories)?,
+            let response = match peer_message {
+                PeerAction::GetHeaders(last_header) => self.handle_getheaders(last_header),
+                PeerAction::GetData(inventories) => self.handle_getdata(inventories),
                 PeerAction::Terminate => {
                     break;
                 }
+            };
+
+            if let Err(error) = response {
+                self.logger_sender
+                    .send(format!("Error on PeerActionLoop: {}", error))?;
             }
         }
         Ok(())
