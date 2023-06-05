@@ -12,7 +12,7 @@ use crate::{
     messages::{
         block::{self, Block, OutPoint},
         headers::{hash_as_string, BlockHeader, Headers},
-    },
+    }, wallet::Wallet,
 };
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -21,6 +21,9 @@ pub struct NodeState {
     logger_sender: mpsc::Sender<String>,
     headers_file: File,
     headers: Vec<BlockHeader>,
+    wallets_file: File,
+    wallets: Vec<Wallet>,
+    active_wallet: Option<String>,
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo_set: HashMap<OutPoint, block::TransactionOutput>,
     headers_sync: bool,
@@ -40,12 +43,25 @@ impl NodeState {
             Err(_) => vec![],
         };
 
+        let mut wallets_file = open_new_file(String::from("store/wallets.bin"))?;
+
+        let mut saved_wallets_buffer = vec![];
+        wallets_file.read_to_end(&mut saved_wallets_buffer)?;
+
+        let wallets = match Wallet::parse_wallets(saved_wallets_buffer) {
+            Ok(wallets) => wallets,
+            Err(_) => vec![],
+        };
+
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
 
         let node_state_ref = Arc::new(Mutex::new(Self {
             logger_sender,
             headers_file,
             headers,
+            wallets_file,
+            wallets,
+            active_wallet: None,
             pending_blocks_ref,
             utxo_set: HashMap::new(),
             headers_sync: false,
@@ -106,14 +122,14 @@ impl NodeState {
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
         block_file.write_all(&block.serialize())?;
 
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        pending_blocks.remove(&block_hash);
-        drop(pending_blocks);
-
         match self.utxo_sync {
             true => update_utxo_set(&mut self.utxo_set, block),
             false => self.verify_blocks_sync()?,
         }
+        
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.remove(&block_hash);
+        drop(pending_blocks);
 
         Ok(())
     }
@@ -210,6 +226,36 @@ impl NodeState {
 
     pub fn number_of_headers(&self) -> usize {
         self.headers.len()
+    }
+
+    pub fn get_wallets(&self) -> &Vec<Wallet> {
+        &self.wallets
+    }
+
+    pub fn append_wallet(&mut self, name: String, public_key: String, private_key: String) -> Result<(), CustomError> {
+        if name.is_empty() || public_key.is_empty() || private_key.is_empty() {
+            return Err(CustomError::Validation("Name, public key and private key must not be empty".to_string()));
+        }
+        if self.wallets.iter().any(|wallet| wallet.pubkey == public_key) {
+            return Err(CustomError::Validation("Public key already exists".to_string()));
+        }
+
+        let new_wallet = Wallet::new(name, public_key, private_key);
+        self.wallets_file
+        .write_all(&new_wallet.serialize())?;
+        self.wallets.push(new_wallet);
+        Ok(())
+    }
+
+    pub fn change_wallet(&mut self, public_key: String){
+        self.active_wallet = self.wallets.iter().find(|wallet| wallet.pubkey == public_key).map(|wallet| wallet.pubkey.clone());
+    }
+
+    pub fn get_active_wallet(&self) -> Option<&Wallet> {
+        match self.active_wallet {
+            Some(ref active_wallet) => self.wallets.iter().find(|wallet| wallet.pubkey == *active_wallet),
+            None => None,
+        }
     }
 }
 

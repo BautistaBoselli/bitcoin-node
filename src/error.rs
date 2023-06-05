@@ -38,6 +38,7 @@ pub enum CustomError {
     UnknownError,
     CannotInitGUI,
     CannotGetTimestamp,
+    Validation(String),
 }
 
 impl CustomError {
@@ -70,6 +71,7 @@ impl CustomError {
             Self::UnknownError => "unknown error",
             Self::CannotInitGUI => "cannot init GUI",
             Self::CannotGetTimestamp => "cannot get timestamp",
+            Self::Validation(_) => "validation error",
         }
     }
 }
