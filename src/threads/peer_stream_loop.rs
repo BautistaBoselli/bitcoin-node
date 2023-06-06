@@ -57,7 +57,7 @@ impl PeerStreamLoop {
 
             if let Err(error) = response {
                 self.logger_sender
-                    .send(format!("Error on NodeActionLoop: {}", error))?;
+                    .send(format!("Error on PeerStreamLoop: {}", error))?;
             }
         }
     }

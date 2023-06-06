@@ -6,11 +6,12 @@ use gtk::{
     traits::{LabelExt, WidgetExt, ButtonExt, DialogExt, EntryExt, ComboBoxTextExt, ComboBoxExt, MessageDialogExt},
 };
 
-use crate::{error::CustomError, messages::headers::BlockHeader, node_state::NodeState};
+use crate::{error::CustomError, messages::headers::BlockHeader, node_state::{NodeState, self}};
 
 pub enum GUIActions {
     Log(String),
     Headers(Vec<BlockHeader>),
+    WalletChanged,
 }
 
 pub fn gui_init(
@@ -36,9 +37,19 @@ pub fn gui_init(
     let select_wallet_cb: gtk::ComboBoxText = builder.object("select-wallet-combo-box").unwrap();
     let debug_button: gtk::Button = builder.object("debug").unwrap();
     let dialog_validation_error: gtk::MessageDialog = builder.object("validation-error").unwrap();
+<<<<<<< Updated upstream
 
     update_wallet_combo_box(node_state_ref.clone(), select_wallet_cb.clone())?;
 
+=======
+    let label_balance: gtk::Label = builder.object("label-balance").unwrap();
+
+    update_wallet_combo_box(node_state_ref.clone(), select_wallet_cb.clone())?;
+
+    //update balance
+
+
+>>>>>>> Stashed changes
     //add wallet dialog
     let dialog_clone = dialog.clone();
     button.connect_clicked(move |_| {
@@ -106,7 +117,10 @@ pub fn gui_init(
         println!("active_wallet: {:?}", node_state.get_active_wallet());
         drop(node_state);
     });
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 
     window.show_all();
 
@@ -117,6 +131,14 @@ pub fn gui_init(
             }
             GUIActions::Headers(headers) => {
                 println!("Headers: {:?}", headers);
+<<<<<<< Updated upstream
+=======
+            }
+            GUIActions::WalletChanged => {
+                let node_state = node_state_ref.lock().unwrap();
+                label_balance.set_text(format!("Balance:    {}", node_state.get_balance().to_string()).as_str());
+                drop(node_state);
+>>>>>>> Stashed changes
             }
         }
 

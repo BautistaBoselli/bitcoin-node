@@ -118,11 +118,11 @@ impl NodeActionLoop {
     fn handle_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
 
+        self.logger_sender
+            .send("New block received".to_string())?;
+
         node_state.append_block(block_hash, block)?;
         drop(node_state);
-
-        self.logger_sender
-            .send("New block downloaded".to_string())?;
 
         Ok(())
     }

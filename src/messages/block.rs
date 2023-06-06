@@ -1,13 +1,13 @@
 use std::vec;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{sha256, Hash, hash160};
 
 use super::headers::BlockHeader;
 
 use crate::{
     error::CustomError,
     message::Message,
-    parser::{BufferParser, VarIntSerialize},
+    parser::{BufferParser, VarIntSerialize, self},
 };
 
 #[derive(Debug)]
@@ -230,6 +230,35 @@ impl TransactionOutput {
             script_pubkey,
         })
     }
+
+    pub fn is_locked_with_key(&self, public_key_hash: &String) -> bool {
+        //println!("{:?}", bs58::encode(self.script_pubkey.clone()).into_string());
+        let parser = &mut BufferParser::new(self.script_pubkey.clone());
+        match parser.extract_u8(){
+            Ok(0x76) => compare_p2phk(parser, public_key_hash),
+            // Ok(0x76) => println!("{:?}", self.script_pubkey),
+            _ => false,
+        }
+    }
+}
+
+
+
+
+fn compare_p2phk(parser: &mut BufferParser, public_key_hash: &String) -> bool {
+    match parser.extract_u8(){
+        Ok(0xa9) => (),
+        _ => return false,
+    }
+    match parser.extract_u8(){
+        Ok(0x14) => (),
+        _ => return false,
+    }
+    let hash = parser.extract_buffer(20).unwrap().to_vec();
+
+    //let hash = bs58::encode(hash).into_string();
+    //println!("{:?}", hash);
+    hash == bs58::decode(public_key_hash).into_vec().unwrap().get(0..20).unwrap().to_vec()
 }
 
 #[cfg(test)]

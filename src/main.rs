@@ -38,7 +38,7 @@ fn main() {
     };
     let logger_sender = logger.get_sender();
 
-    let node_state_ref = match NodeState::new(logger_sender.clone()) {
+    let node_state_ref = match NodeState::new(logger_sender.clone(), gui_sender.clone()) {
         Ok(node_state) => node_state,
         Err(error) => {
             logger_sender

@@ -6,19 +6,26 @@ use std::{
     time::SystemTime,
 };
 
+use gtk::glib::Sender;
+
 use crate::{
     error::CustomError,
     message::Message,
     messages::{
         block::{self, Block, OutPoint},
         headers::{hash_as_string, BlockHeader, Headers},
+<<<<<<< Updated upstream
     }, wallet::Wallet,
+=======
+    }, wallet::Wallet, gui::init::GUIActions,
+>>>>>>> Stashed changes
 };
 
 const START_DATE_IBD: u32 = 1681095630;
 
 pub struct NodeState {
     logger_sender: mpsc::Sender<String>,
+    gui_sender: Sender<GUIActions>,
     headers_file: File,
     headers: Vec<BlockHeader>,
     wallets_file: File,
@@ -32,7 +39,7 @@ pub struct NodeState {
 }
 
 impl NodeState {
-    pub fn new(logger_sender: mpsc::Sender<String>) -> Result<Arc<Mutex<Self>>, CustomError> {
+    pub fn new(logger_sender: mpsc::Sender<String>, gui_sender: Sender<GUIActions>) -> Result<Arc<Mutex<Self>>, CustomError> {
         let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
 
         let mut saved_headers_buffer = vec![];
@@ -57,6 +64,7 @@ impl NodeState {
 
         let node_state_ref = Arc::new(Mutex::new(Self {
             logger_sender,
+            gui_sender,
             headers_file,
             headers,
             wallets_file,
@@ -249,6 +257,10 @@ impl NodeState {
 
     pub fn change_wallet(&mut self, public_key: String){
         self.active_wallet = self.wallets.iter().find(|wallet| wallet.pubkey == public_key).map(|wallet| wallet.pubkey.clone());
+<<<<<<< Updated upstream
+=======
+        self.gui_sender.send(GUIActions::WalletChanged).unwrap();
+>>>>>>> Stashed changes
     }
 
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
@@ -257,6 +269,20 @@ impl NodeState {
             None => None,
         }
     }
+<<<<<<< Updated upstream
+=======
+
+    pub fn get_balance(&self) -> u64 {
+        let mut balance = 0;
+        for (_, tx_out) in self.utxo_set.iter() {
+            if tx_out.is_locked_with_key(&self.get_active_wallet().unwrap().pubkey) {
+                println!("found");
+                balance += tx_out.value;
+            }
+        }
+        balance
+    }
+>>>>>>> Stashed changes
 }
 
 pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
