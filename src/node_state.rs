@@ -14,11 +14,8 @@ use crate::{
     messages::{
         block::{self, Block, OutPoint},
         headers::{hash_as_string, BlockHeader, Headers},
-<<<<<<< Updated upstream
-    }, wallet::Wallet,
-=======
-    }, wallet::Wallet, gui::init::GUIActions,
->>>>>>> Stashed changes
+    },
+    wallet::Wallet, gui::init::GUIActions,
 };
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -257,10 +254,7 @@ impl NodeState {
 
     pub fn change_wallet(&mut self, public_key: String){
         self.active_wallet = self.wallets.iter().find(|wallet| wallet.pubkey == public_key).map(|wallet| wallet.pubkey.clone());
-<<<<<<< Updated upstream
-=======
         self.gui_sender.send(GUIActions::WalletChanged).unwrap();
->>>>>>> Stashed changes
     }
 
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
@@ -269,8 +263,6 @@ impl NodeState {
             None => None,
         }
     }
-<<<<<<< Updated upstream
-=======
 
     pub fn get_balance(&self) -> u64 {
         let mut balance = 0;
@@ -282,7 +274,6 @@ impl NodeState {
         }
         balance
     }
->>>>>>> Stashed changes
 }
 
 pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {

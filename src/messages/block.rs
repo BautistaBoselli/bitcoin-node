@@ -257,7 +257,8 @@ fn compare_p2phk(parser: &mut BufferParser, public_key_hash: &String) -> bool {
     let hash = parser.extract_buffer(20).unwrap().to_vec();
 
     //let hash = bs58::encode(hash).into_string();
-    //println!("{:?}", hash);
+    println!("{:?}", hash);
+    println!("{:?}", bs58::decode(public_key_hash).into_vec().unwrap().get(0..20).unwrap().to_vec());
     hash == bs58::decode(public_key_hash).into_vec().unwrap().get(0..20).unwrap().to_vec()
 }
 
