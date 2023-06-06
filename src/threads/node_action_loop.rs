@@ -77,6 +77,9 @@ impl NodeActionLoop {
         let last_header = node_state.get_last_header_hash();
         drop(node_state);
 
+        self.logger_sender
+            .send("Error requesting headers,trying with another peer...".to_string())?;
+
         self.peer_action_sender
             .send(PeerAction::GetHeaders(last_header))?;
         Ok(())
@@ -112,14 +115,18 @@ impl NodeActionLoop {
 
         self.peer_action_sender
             .send(PeerAction::GetData(inventories))?;
+
         Ok(())
     }
 
     fn handle_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        if node_state.is_blocks_sync() {
+            drop(node_state);
+            return Ok(());
+        }
 
-        self.logger_sender
-            .send("New block received".to_string())?;
+        self.logger_sender.send("New block received".to_string())?;
 
         node_state.append_block(block_hash, block)?;
         drop(node_state);

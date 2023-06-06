@@ -3,19 +3,21 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     sync::{mpsc, Arc, Mutex},
-    time::SystemTime,
+    thread,
+    time::{Duration, SystemTime},
 };
 
 use gtk::glib::Sender;
 
 use crate::{
     error::CustomError,
+    gui::init::GUIActions,
     message::Message,
     messages::{
         block::{self, Block, OutPoint},
         headers::{hash_as_string, BlockHeader, Headers},
     },
-    wallet::Wallet, gui::init::GUIActions,
+    wallet::Wallet,
 };
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -36,7 +38,10 @@ pub struct NodeState {
 }
 
 impl NodeState {
-    pub fn new(logger_sender: mpsc::Sender<String>, gui_sender: Sender<GUIActions>) -> Result<Arc<Mutex<Self>>, CustomError> {
+    pub fn new(
+        logger_sender: mpsc::Sender<String>,
+        gui_sender: Sender<GUIActions>,
+    ) -> Result<Arc<Mutex<Self>>, CustomError> {
         let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
 
         let mut saved_headers_buffer = vec![];
@@ -86,6 +91,7 @@ impl NodeState {
         let headers_count = headers.headers.len();
 
         self.headers.append(&mut headers.headers);
+        self.blocks_sync = false;
 
         self.logger_sender.send(format!(
             "There are {} headers, new {}",
@@ -94,6 +100,17 @@ impl NodeState {
         ))?;
 
         self.verify_headers_sync(headers_count)
+    }
+
+    fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
+        let pending_blocks = self.pending_blocks_ref.lock()?;
+        Ok(pending_blocks.is_empty())
+    }
+
+    fn remove_pending_blocks(&self) -> Result<(), CustomError> {
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.drain();
+        Ok(())
     }
 
     pub fn append_pending_block(&mut self, header_hash: Vec<u8>) -> Result<(), CustomError> {
@@ -127,14 +144,18 @@ impl NodeState {
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
         block_file.write_all(&block.serialize())?;
 
-        match self.utxo_sync {
-            true => update_utxo_set(&mut self.utxo_set, block),
-            false => self.verify_blocks_sync()?,
-        }
-        
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
         pending_blocks.remove(&block_hash);
         drop(pending_blocks);
+
+        match self.utxo_sync {
+            true => update_utxo_set(&mut self.utxo_set, block),
+            false => self.verify_blocks_sync().unwrap_or_else(|_| {
+                self.logger_sender
+                    .send("Error verifying blocks synchronization".to_string())
+                    .unwrap();
+            }),
+        }
 
         Ok(())
     }
@@ -157,21 +178,13 @@ impl NodeState {
         if self.blocks_sync {
             return Ok(());
         }
-        //el -1 es por el archivo del gitkeep
-        let blocks_downloaded = match fs::read_dir("store/blocks") {
-            Ok(dir) => dir.count() - 1,
-            Err(_) => 0,
-        };
-        let mut blocks_should_be_downloaded = 0;
-        for header in self.headers.iter().rev() {
-            if header.timestamp < START_DATE_IBD {
-                break;
-            }
-            blocks_should_be_downloaded += 1;
-        }
-        self.blocks_sync = self.headers_sync && blocks_downloaded == blocks_should_be_downloaded;
+
+        let pending_blocks_empty = self.is_pending_blocks_empty()?;
+
+        self.blocks_sync = self.headers_sync && pending_blocks_empty;
 
         if self.blocks_sync {
+            self.remove_pending_blocks()?;
             self.logger_sender
                 .send("blocks sync completed".to_string())?;
             self.generate_utxo()?;
@@ -237,35 +250,63 @@ impl NodeState {
         &self.wallets
     }
 
-    pub fn append_wallet(&mut self, name: String, public_key: String, private_key: String) -> Result<(), CustomError> {
+    pub fn append_wallet(
+        &mut self,
+        name: String,
+        public_key: String,
+        private_key: String,
+    ) -> Result<(), CustomError> {
         if name.is_empty() || public_key.is_empty() || private_key.is_empty() {
-            return Err(CustomError::Validation("Name, public key and private key must not be empty".to_string()));
+            return Err(CustomError::Validation(
+                "Name, public key and private key must not be empty".to_string(),
+            ));
         }
-        if self.wallets.iter().any(|wallet| wallet.pubkey == public_key) {
-            return Err(CustomError::Validation("Public key already exists".to_string()));
+        if self
+            .wallets
+            .iter()
+            .any(|wallet| wallet.pubkey == public_key)
+        {
+            return Err(CustomError::Validation(
+                "Public key already exists".to_string(),
+            ));
         }
 
         let new_wallet = Wallet::new(name, public_key, private_key);
-        self.wallets_file
-        .write_all(&new_wallet.serialize())?;
+        self.wallets_file.write_all(&new_wallet.serialize())?;
         self.wallets.push(new_wallet);
         Ok(())
     }
 
-    pub fn change_wallet(&mut self, public_key: String){
-        self.active_wallet = self.wallets.iter().find(|wallet| wallet.pubkey == public_key).map(|wallet| wallet.pubkey.clone());
+    pub fn change_wallet(&mut self, public_key: String) {
+        self.active_wallet = self
+            .wallets
+            .iter()
+            .find(|wallet| wallet.pubkey == public_key)
+            .map(|wallet| wallet.pubkey.clone());
         self.gui_sender.send(GUIActions::WalletChanged).unwrap();
     }
 
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
         match self.active_wallet {
-            Some(ref active_wallet) => self.wallets.iter().find(|wallet| wallet.pubkey == *active_wallet),
+            Some(ref active_wallet) => self
+                .wallets
+                .iter()
+                .find(|wallet| wallet.pubkey == *active_wallet),
             None => None,
         }
     }
 
     pub fn get_balance(&self) -> u64 {
         let mut balance = 0;
+
+        println!(
+            "{:?}",
+            bs58::decode(self.get_active_wallet().unwrap().pubkey.clone())
+                .into_vec()
+                .unwrap()
+                .to_vec()
+        );
+
         for (_, tx_out) in self.utxo_set.iter() {
             if tx_out.is_locked_with_key(&self.get_active_wallet().unwrap().pubkey) {
                 println!("found");

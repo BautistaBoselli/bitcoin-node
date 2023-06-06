@@ -18,11 +18,12 @@ pub fn pending_blocks_loop(
 ) {
     thread::spawn(move || -> Result<(), CustomError> {
         loop {
+            thread::sleep(Duration::from_secs(5));
             let mut node_state = node_state_ref.lock()?;
 
             if node_state.is_blocks_sync() {
                 drop(node_state);
-                return Ok(());
+                continue;
             }
 
             let blocks_to_refetch = node_state.get_stale_block_downloads()?;
@@ -49,8 +50,6 @@ pub fn pending_blocks_loop(
             } else {
                 drop(node_state);
             }
-
-            thread::sleep(Duration::from_secs(1));
         }
     });
 }
