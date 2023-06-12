@@ -231,18 +231,16 @@ impl TransactionOutput {
         })
     }
 
-    pub fn is_locked_with_key(&self, public_key_hash: &String) -> bool {
-        //println!("{:?}", bs58::encode(self.script_pubkey.clone()).into_string());
+    pub fn is_sent_to_key(&self, public_key_hash: &Vec<u8>) -> bool {
         let parser = &mut BufferParser::new(self.script_pubkey.clone());
         match parser.extract_u8() {
-            Ok(0x76) => compare_p2phk(parser, public_key_hash),
-            // Ok(0x76) => println!("{:?}", self.script_pubkey),
+            Ok(0x76) => compare_p2pkh(parser, public_key_hash),
             _ => false,
         }
     }
 }
 
-fn compare_p2phk(parser: &mut BufferParser, public_key_hash: &String) -> bool {
+fn compare_p2pkh(parser: &mut BufferParser, public_key_hash: &Vec<u8>) -> bool {
     match parser.extract_u8() {
         Ok(0xa9) => (),
         _ => return false,
@@ -253,15 +251,7 @@ fn compare_p2phk(parser: &mut BufferParser, public_key_hash: &String) -> bool {
     }
     let hash = parser.extract_buffer(20).unwrap().to_vec();
 
-    // NO OLVIDARME DE CAMBIAR LO DE HANDLE_BLOCK (VALUDAR SI ESTA EN PENDING, SINO EARLY RETURN )
-
-    //let hash = bs58::encode(hash).into_string();
-    hash == bs58::decode(public_key_hash)
-        .into_vec()
-        .unwrap()
-        .get(0..20)
-        .unwrap()
-        .to_vec()
+    hash == *public_key_hash
 }
 
 #[cfg(test)]

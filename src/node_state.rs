@@ -299,24 +299,21 @@ impl NodeState {
         }
     }
 
-    pub fn get_balance(&self) -> u64 {
+    pub fn get_balance(&self) -> Result<u64, CustomError> {
         let mut balance = 0;
 
-        println!(
-            "{:?}",
-            bs58::decode(self.get_active_wallet().unwrap().pubkey.clone())
-                .into_vec()
-                .unwrap()
-                .to_vec()
-        );
+        let active_wallet = match self.get_active_wallet() {
+            Some(active_wallet) => active_wallet,
+            None => return Err(CustomError::WalletNotFound),
+        };
+        let pubkey_hash = active_wallet.get_pubkey_hash()?;
 
         for (_, tx_out) in self.utxo_set.iter() {
-            if tx_out.is_locked_with_key(&self.get_active_wallet().unwrap().pubkey) {
-                println!("found");
+            if tx_out.is_sent_to_key(&pubkey_hash) {
                 balance += tx_out.value;
             }
         }
-        balance
+        Ok(balance)
     }
 }
 

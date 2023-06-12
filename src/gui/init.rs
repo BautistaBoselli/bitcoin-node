@@ -1,22 +1,25 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 use gtk::{
     glib::{self, Receiver},
     prelude::BuilderExtManual,
-    traits::{LabelExt, WidgetExt, ButtonExt, DialogExt, EntryExt, ComboBoxTextExt, ComboBoxExt, MessageDialogExt},
+    traits::{
+        ButtonExt, ComboBoxExt, ComboBoxTextExt, DialogExt, EntryExt, LabelExt, MessageDialogExt,
+        WidgetExt,
+    },
 };
 
-use crate::{error::CustomError, messages::headers::BlockHeader, node_state::{NodeState, self}};
+use crate::{error::CustomError, node_state::NodeState};
 
 pub enum GUIActions {
     Log(String),
-    Headers(Vec<BlockHeader>),
     WalletChanged,
 }
 
 pub fn gui_init(
     gui_receiver: Receiver<GUIActions>,
     node_state_ref: Arc<Mutex<NodeState>>,
+    logger_sender: mpsc::Sender<String>,
 ) -> Result<(), CustomError> {
     if gtk::init().is_err() {
         return Err(CustomError::CannotInitGUI);
@@ -43,7 +46,6 @@ pub fn gui_init(
 
     //update balance
 
-
     //add wallet dialog
     let dialog_clone = dialog.clone();
     button.connect_clicked(move |_| {
@@ -65,10 +67,13 @@ pub fn gui_init(
     let dialog_wallet_privkey_clone = dialog_wallet_privkey.clone();
     let node_state_ref_clone = node_state_ref.clone();
     dialog_action.connect_clicked(move |_| {
-
         let mut node_state = node_state_ref_clone.lock().unwrap();
-        match node_state.append_wallet(dialog_wallet_name_clone.text().to_string(), dialog_wallet_pubkey_clone.text().to_string(), dialog_wallet_privkey_clone.text().to_string()){
-            Ok(_) => {},
+        match node_state.append_wallet(
+            dialog_wallet_name_clone.text().to_string(),
+            dialog_wallet_pubkey_clone.text().to_string(),
+            dialog_wallet_privkey_clone.text().to_string(),
+        ) {
+            Ok(_) => {}
             Err(e) => {
                 if let CustomError::Validation(error) = e {
                     dialog_validation_error.set_secondary_text(Some(error.as_str()));
@@ -81,8 +86,8 @@ pub fn gui_init(
             }
         }
         drop(node_state);
-        match update_wallet_combo_box(node_state_ref_clone.clone(), select_wallet_cb.clone()){
-            Ok(_) => {},
+        match update_wallet_combo_box(node_state_ref_clone.clone(), select_wallet_cb.clone()) {
+            Ok(_) => {}
             Err(e) => {
                 println!("Error actualizando combo box: {}", e);
             }
@@ -119,12 +124,24 @@ pub fn gui_init(
             GUIActions::Log(message) => {
                 logs.set_text(message.as_str());
             }
-            GUIActions::Headers(headers) => {
-                println!("Headers: {:?}", headers);
-            }
+
             GUIActions::WalletChanged => {
                 let node_state = node_state_ref.lock().unwrap();
-                label_balance.set_text(format!("Balance:    {}", node_state.get_balance().to_string()).as_str());
+                match node_state.get_balance() {
+                    Ok(balance) => {
+                        let balance_btc = (balance as f64) / 100000000.0;
+                        label_balance.set_text(
+                            format!("Balance:    {} BTC", balance_btc.to_string()).as_str(),
+                        );
+                    }
+                    Err(_) => logger_sender
+                        .send(String::from("Error getting balance"))
+                        .unwrap_or_else(|_| {
+                            println!("Error sending log message");
+                            println!("Error getting balance");
+                        }),
+                }
+
                 drop(node_state);
             }
         }
@@ -137,8 +154,10 @@ pub fn gui_init(
     Ok(())
 }
 
-fn switch_active_wallet(node_state_ref: Arc<Mutex<NodeState>>, select_wallet_cb: gtk::ComboBoxText) {
-
+fn switch_active_wallet(
+    node_state_ref: Arc<Mutex<NodeState>>,
+    select_wallet_cb: gtk::ComboBoxText,
+) {
     if let Some(active_pubkey) = select_wallet_cb.active_id() {
         let mut node_state = node_state_ref.lock().unwrap();
         node_state.change_wallet(active_pubkey.to_string());
@@ -149,10 +168,12 @@ fn switch_active_wallet(node_state_ref: Arc<Mutex<NodeState>>, select_wallet_cb:
         }
         drop(node_state);
     }
-
 }
 
-fn update_wallet_combo_box(_node_state_ref: Arc<Mutex<NodeState>>, select_wallet_cb: gtk::ComboBoxText) -> Result<(), CustomError> {
+fn update_wallet_combo_box(
+    _node_state_ref: Arc<Mutex<NodeState>>,
+    select_wallet_cb: gtk::ComboBoxText,
+) -> Result<(), CustomError> {
     let node_state = _node_state_ref.lock()?;
     select_wallet_cb.remove_all();
     for wallet in node_state.get_wallets() {

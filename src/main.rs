@@ -57,7 +57,7 @@ fn main() {
         let addresses = match get_addresses(config.seed.clone(), config.port) {
             Ok(addresses) => addresses,
             Err(error) => {
-                match logger_sender.send(format!("ERROR: {}", error)) {
+                match logger_sender_clone.send(format!("ERROR: {}", error)) {
                     Ok(_) => (),
                     Err(error) => println!("ERROR: {}", error),
                 }
@@ -80,7 +80,8 @@ fn main() {
         };
     });
 
-    if let Err(error) = gui_init(gui_receiver, node_state_ref) {
+    let logger_sender_clone = logger_sender.clone();
+    if let Err(error) = gui_init(gui_receiver, node_state_ref, logger_sender) {
         logger_sender_clone
             .send(format!("ERROR: {}", error))
             .unwrap_or_else(|_| {
