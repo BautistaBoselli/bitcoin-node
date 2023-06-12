@@ -9,17 +9,21 @@ use gtk::{
     },
 };
 
-use crate::{error::CustomError, node_state::NodeState};
+use crate::{
+    error::CustomError,
+    logger::{send_log, Log},
+    node_state::NodeState,
+};
 
 pub enum GUIActions {
-    Log(String),
+    Log(Log),
     WalletChanged,
 }
 
 pub fn gui_init(
     gui_receiver: Receiver<GUIActions>,
     node_state_ref: Arc<Mutex<NodeState>>,
-    logger_sender: mpsc::Sender<String>,
+    logger_sender: mpsc::Sender<Log>,
 ) -> Result<(), CustomError> {
     if gtk::init().is_err() {
         return Err(CustomError::CannotInitGUI);
@@ -39,7 +43,7 @@ pub fn gui_init(
     let dialog_wallet_privkey: gtk::Entry = builder.object("add-wallet-privkey").unwrap();
     let select_wallet_cb: gtk::ComboBoxText = builder.object("select-wallet-combo-box").unwrap();
     let debug_button: gtk::Button = builder.object("debug").unwrap();
-    let dialog_validation_error: gtk::MessageDialog = builder.object("validation-error").unwrap();
+    let dialog_error: gtk::MessageDialog = builder.object("error-dialog").unwrap();
     let label_balance: gtk::Label = builder.object("label-balance").unwrap();
 
     update_wallet_combo_box(node_state_ref.clone(), select_wallet_cb.clone())?;
@@ -66,6 +70,7 @@ pub fn gui_init(
     let dialog_wallet_pubkey_clone = dialog_wallet_pubkey.clone();
     let dialog_wallet_privkey_clone = dialog_wallet_privkey.clone();
     let node_state_ref_clone = node_state_ref.clone();
+    let loggger_sender_clone = logger_sender.clone();
     dialog_action.connect_clicked(move |_| {
         let mut node_state = node_state_ref_clone.lock().unwrap();
         match node_state.append_wallet(
@@ -74,14 +79,19 @@ pub fn gui_init(
             dialog_wallet_privkey_clone.text().to_string(),
         ) {
             Ok(_) => {}
-            Err(e) => {
-                if let CustomError::Validation(error) = e {
-                    dialog_validation_error.set_secondary_text(Some(error.as_str()));
-                } else {
-                    dialog_validation_error.set_secondary_text(Some("unknown error"));
-                }
-                dialog_validation_error.run();
-                dialog_validation_error.hide();
+            Err(error) => {
+                send_log(&loggger_sender_clone, Log::Error(error));
+                // if let CustomError::Validation(error) = e {
+                //     dialog_error.set_secondary_text(Some(error.as_str()));
+                // } else {
+                //     dialog_error.set_secondary_text(Some("unknown error"));
+                // }
+                // dialog_error.set_text(Some("Incorrect values"));
+                // dialog_error.run();
+                // dialog_error.hide();
+                // dialog_error.set_text(Some(""));
+                // dialog_error.set_secondary_text(Some(""));
+
                 return;
             }
         }
@@ -101,7 +111,7 @@ pub fn gui_init(
     });
 
     //cancel button
-    let dialog_clone = dialog.clone();
+    let dialog_clone = dialog;
     dialog_cancel.connect_clicked(move |_| {
         dialog_wallet_name.set_text("");
         dialog_wallet_pubkey.set_text("");
@@ -121,25 +131,40 @@ pub fn gui_init(
 
     gui_receiver.attach(None, move |message| {
         match message {
-            GUIActions::Log(message) => {
-                logs.set_text(message.as_str());
-            }
+            GUIActions::Log(message) => match message {
+                Log::Message(string) => {
+                    logs.set_text(string.as_str());
+                }
+                Log::Error(error) => {
+                    dialog_error.set_text(Some("Error"));
+                    match error {
+                        CustomError::Validation(ref explanation) => {
+                            dialog_error.set_text(Some(error.description()));
+                            dialog_error.set_secondary_text(Some(&explanation.as_str()))
+                        }
+                        _ => dialog_error.set_secondary_text(Some(error.description())),
+                    }
+                    dialog_error.run();
+                    dialog_error.hide();
+                    dialog_error.set_text(Some(""));
+                    dialog_error.set_secondary_text(Some(""));
+                }
+            },
 
             GUIActions::WalletChanged => {
                 let node_state = node_state_ref.lock().unwrap();
                 match node_state.get_balance() {
                     Ok(balance) => {
                         let balance_btc = (balance as f64) / 100000000.0;
-                        label_balance.set_text(
-                            format!("Balance:    {} BTC", balance_btc.to_string()).as_str(),
+                        label_balance.set_text(format!("Balance:    {} BTC", balance_btc).as_str());
+                        send_log(
+                            &logger_sender,
+                            Log::Message(String::from("Error getting balance")),
                         );
                     }
-                    Err(_) => logger_sender
-                        .send(String::from("Error getting balance"))
-                        .unwrap_or_else(|_| {
-                            println!("Error sending log message");
-                            println!("Error getting balance");
-                        }),
+                    Err(error) => {
+                        send_log(&logger_sender, Log::Error(error));
+                    }
                 }
 
                 drop(node_state);

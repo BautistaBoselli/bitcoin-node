@@ -8,7 +8,7 @@ use std::{
     time::SystemTimeError,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 /// Custom error es un enum con los posibles errores que pueden ocurrir en el programa.
 /// Cada variante representa un error distinto.
@@ -44,7 +44,7 @@ pub enum CustomError {
 
 impl CustomError {
     /// Devuelve un string con la descripcion del error.
-    fn description(&self) -> &str {
+    pub fn description(&self) -> &str {
         match self {
             Self::ConfigInvalid => "invalid config file",
             Self::ConfigMissingValue => "missing config values",

@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     error::CustomError,
+    logger::{send_log, Log},
     message::{Message, MessageHeader},
     messages::{
         block::Block,
@@ -22,14 +23,14 @@ pub struct PeerStreamLoop {
     pub stream: TcpStream,
     pub node_action_sender: mpsc::Sender<NodeAction>,
     pub version: i32,
-    pub logger_sender: mpsc::Sender<String>,
+    pub logger_sender: mpsc::Sender<Log>,
 }
 
 impl PeerStreamLoop {
     pub fn spawn(
         version: i32,
         stream: TcpStream,
-        logger_sender: mpsc::Sender<String>,
+        logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
@@ -56,8 +57,10 @@ impl PeerStreamLoop {
             };
 
             if let Err(error) = response {
-                self.logger_sender
-                    .send(format!("Error on PeerStreamLoop: {}", error))?;
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!("Error on PeerStreamLoop: {}", error)),
+                );
             }
         }
     }
@@ -99,10 +102,13 @@ impl PeerStreamLoop {
                 self.node_action_sender
                     .send(NodeAction::GetDataError(vec![inventory]))?;
 
-                self.logger_sender.send(format!(
-                    "Error validating the merkle root in the block: {:?}",
-                    block.header.hash()
-                ))?;
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!(
+                        "Error validating the merkle root in the block: {:?}",
+                        block.header.hash()
+                    )),
+                );
             }
         };
         Ok(())
@@ -126,10 +132,13 @@ impl PeerStreamLoop {
     fn ignore_message(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let cmd = response_header.command.as_str();
         if cmd != "alert" && cmd != "addr" && cmd != "inv" && cmd != "sendheaders" {
-            self.logger_sender.send(format!(
-                "Received unknown command: {:?}",
-                response_header.command
-            ))?;
+            send_log(
+                &self.logger_sender,
+                Log::Message(format!(
+                    "Received unknown command: {:?}",
+                    response_header.command
+                )),
+            );
         }
         let mut buffer: Vec<u8> = vec![0; response_header.payload_size as usize];
         self.stream.read_exact(&mut buffer)?;

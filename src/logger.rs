@@ -12,8 +12,14 @@ use gtk::glib;
 use crate::error::CustomError;
 use crate::gui::init::GUIActions;
 
+#[derive(Debug, Clone)]
+pub enum Log {
+    Message(String),
+    Error(CustomError),
+}
+
 pub struct Logger {
-    tx: Sender<String>,
+    tx: Sender<Log>,
 }
 
 impl Logger {
@@ -21,7 +27,7 @@ impl Logger {
         filename: &String,
         gui_sender: glib::Sender<GUIActions>,
     ) -> Result<Self, CustomError> {
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = mpsc::channel::<Log>();
 
         if Path::new(filename).exists() {
             fs::remove_file(filename).map_err(|_| CustomError::CannotRemoveFile)?;
@@ -35,17 +41,33 @@ impl Logger {
 
         thread::spawn(move || -> Result<(), CustomError> {
             while let Ok(message) = rx.recv() {
-                println!("logger: {}", message);
-                writeln!(file, "{}", message)?;
-                gui_sender.send(GUIActions::Log(message)).unwrap();
+                match message {
+                    Log::Message(ref string) => {
+                        println!("logger: {}", string);
+                        writeln!(file, "{}", string)?;
+                        gui_sender.send(GUIActions::Log(message)).unwrap();
+                    }
+                    Log::Error(ref error) => {
+                        println!("logger: [ERROR] {}", error);
+                        writeln!(file, "[ERROR] {}", error)?;
+                        gui_sender.send(GUIActions::Log(message)).unwrap();
+                    }
+                }
             }
             Ok(())
         });
 
         Ok(Self { tx })
     }
-    pub fn get_sender(&self) -> Sender<String> {
+    pub fn get_sender(&self) -> Sender<Log> {
         self.tx.clone()
+    }
+}
+
+pub fn send_log(logger_sender: &Sender<Log>, message: Log) {
+    if let Err(error) = logger_sender.send(message.clone()) {
+        println!("Error sending log message: {}", error);
+        println!("Original message: {:?}", message);
     }
 }
 
@@ -65,8 +87,12 @@ mod tests {
         let logger = Logger::new(&String::from("test1.txt"), tx).unwrap();
         let sender = logger.get_sender();
         println!("Sender: {:?}", sender);
-        sender.send(String::from("Sender test 1")).unwrap();
-        sender.send(String::from("Sender test 2")).unwrap();
+        sender
+            .send(Log::Message(String::from("Sender test 1")))
+            .unwrap();
+        sender
+            .send(Log::Message(String::from("Sender test 2")))
+            .unwrap();
         thread::sleep(time::Duration::from_millis(100));
 
         assert_eq!(
@@ -83,8 +109,12 @@ mod tests {
         let logger = Logger::new(&String::from("test2.txt"), tx).unwrap();
         let sender1 = logger.get_sender();
         let sender2 = logger.get_sender();
-        sender1.send(String::from("Sender test 1")).unwrap();
-        sender2.send(String::from("Sender test 2")).unwrap();
+        sender1
+            .send(Log::Message(String::from("Sender test 1")))
+            .unwrap();
+        sender2
+            .send(Log::Message(String::from("Sender test 2")))
+            .unwrap();
         thread::sleep(time::Duration::from_millis(100));
 
         assert_eq!(
@@ -101,12 +131,20 @@ mod tests {
         let logger = Logger::new(&String::from("test3.txt"), tx).unwrap();
         let sender1 = logger.get_sender();
         let sender2 = logger.get_sender();
-        thread::spawn(move || sender1.send(String::from("Sender test 1")).unwrap())
-            .join()
-            .unwrap();
-        thread::spawn(move || sender2.send(String::from("Sender test 2")).unwrap())
-            .join()
-            .unwrap();
+        thread::spawn(move || {
+            sender1
+                .send(Log::Message(String::from("Sender test 1")))
+                .unwrap()
+        })
+        .join()
+        .unwrap();
+        thread::spawn(move || {
+            sender2
+                .send(Log::Message(String::from("Sender test 2")))
+                .unwrap()
+        })
+        .join()
+        .unwrap();
         thread::sleep(time::Duration::from_millis(100));
 
         assert_eq!(

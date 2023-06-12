@@ -8,6 +8,7 @@ use gtk::glib;
 use crate::{
     error::CustomError,
     gui::init::GUIActions,
+    logger::{send_log, Log},
     messages::{
         block::Block,
         headers::{BlockHeader, Headers},
@@ -22,7 +23,7 @@ const START_DATE_IBD: u32 = 1681095630;
 pub struct NodeActionLoop {
     pub node_action_receiver: mpsc::Receiver<NodeAction>,
     pub peer_action_sender: mpsc::Sender<PeerAction>,
-    pub logger_sender: mpsc::Sender<String>,
+    pub logger_sender: mpsc::Sender<Log>,
     pub gui_sender: glib::Sender<GUIActions>,
     pub node_state_ref: Arc<Mutex<NodeState>>,
 }
@@ -31,11 +32,11 @@ impl NodeActionLoop {
     pub fn spawn(
         node_action_receiver: mpsc::Receiver<NodeAction>,
         peer_action_sender: mpsc::Sender<PeerAction>,
-        logger_sender: mpsc::Sender<String>,
+        logger_sender: mpsc::Sender<Log>,
         gui_sender: glib::Sender<GUIActions>,
         node_state_ref: Arc<Mutex<NodeState>>,
-    ) -> JoinHandle<Result<(), CustomError>> {
-        thread::spawn(move || -> Result<(), CustomError> {
+    ) -> JoinHandle<()> {
+        thread::spawn(move || {
             let mut node_thread = Self {
                 node_action_receiver,
                 peer_action_sender,
@@ -47,7 +48,7 @@ impl NodeActionLoop {
         })
     }
 
-    pub fn event_loop(&mut self) -> Result<(), CustomError> {
+    pub fn event_loop(&mut self) {
         while let Ok(message) = self.node_action_receiver.recv() {
             let response = match message {
                 NodeAction::Block((block_hash, block)) => self.handle_block(block_hash, block),
@@ -57,16 +58,19 @@ impl NodeActionLoop {
             };
 
             if let Err(error) = response {
-                self.logger_sender
-                    .send(format!("Error on NodeActionLoop: {}", error))?;
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!("Error on NodeActionLoop: {}", error)),
+                );
             }
         }
-        Ok(())
     }
 
     fn handle_get_data_error(&mut self, inventory: Vec<Inventory>) -> Result<(), CustomError> {
-        self.logger_sender
-            .send("Error requesting data,trying with another peer...".to_string())?;
+        send_log(
+            &self.logger_sender,
+            Log::Message("Error requesting data,trying with another peer...".to_string()),
+        );
         self.peer_action_sender
             .send(PeerAction::GetData(inventory))?;
         Ok(())
@@ -77,8 +81,10 @@ impl NodeActionLoop {
         let last_header = node_state.get_last_header_hash();
         drop(node_state);
 
-        self.logger_sender
-            .send("Error requesting headers,trying with another peer...".to_string())?;
+        send_log(
+            &self.logger_sender,
+            Log::Message("Error requesting headers,trying with another peer...".to_string()),
+        );
 
         self.peer_action_sender
             .send(PeerAction::GetHeaders(last_header))?;
@@ -126,7 +132,10 @@ impl NodeActionLoop {
             return Ok(());
         }
 
-        self.logger_sender.send("New block received".to_string())?;
+        send_log(
+            &self.logger_sender,
+            Log::Message("New block received".to_string()),
+        );
 
         node_state.append_block(block_hash, block)?;
         drop(node_state);
