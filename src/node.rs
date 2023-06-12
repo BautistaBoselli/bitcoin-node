@@ -11,7 +11,7 @@ use crate::{
     config::Config,
     error::CustomError,
     gui::init::GUIActions,
-    logger::Logger,
+    logger::{send_log, Log, Logger},
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
     threads::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
@@ -20,13 +20,13 @@ pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
     pub version: i32,
-    logger_sender: mpsc::Sender<String>,
+    logger_sender: mpsc::Sender<Log>,
     peer_action_sender: mpsc::Sender<PeerAction>,
     peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     node_action_sender: mpsc::Sender<NodeAction>,
     node_state_ref: Arc<Mutex<NodeState>>,
     peers: Vec<Peer>,
-    pub event_loop_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
+    pub event_loop_thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Node {
@@ -55,7 +55,7 @@ impl Node {
             node_state_ref,
         };
 
-        node.connect(addresses, config.npeers)?;
+        node.connect(addresses, config.npeers);
         node.initialize_pending_blocks_loop();
         node.initialize_ibd()?;
         node.initialize_event_loop(node_action_receiver, gui_sender);
@@ -63,13 +63,15 @@ impl Node {
         Ok(node)
     }
 
-    pub fn connect(
-        &mut self,
-        addresses: IntoIter<SocketAddr>,
-        mut number_of_peers: u8,
-    ) -> Result<(), CustomError> {
-        self.logger_sender
-            .send(format!("Handshaking with {} nodes", addresses.len()))?;
+    pub fn connect(&mut self, addresses: IntoIter<SocketAddr>, mut number_of_peers: u8) {
+        send_log(
+            &self.logger_sender,
+            Log::Message(format!(
+                "Handshaking with {} nodes ({} available)",
+                number_of_peers,
+                addresses.len()
+            )),
+        );
 
         for address in addresses {
             if number_of_peers == 0 {
@@ -90,12 +92,13 @@ impl Node {
                     number_of_peers -= 1;
                 }
                 Err(error) => {
-                    self.logger_sender
-                        .send(format!("Error connecting to peer: {:?}", error))?;
+                    send_log(
+                        &self.logger_sender,
+                        Log::Message(format!("Error connecting to peer: {:?}", error)),
+                    );
                 }
             };
         }
-        Ok(())
     }
 
     fn initialize_pending_blocks_loop(&self) {

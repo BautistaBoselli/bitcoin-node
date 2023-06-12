@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     error::CustomError,
+    logger::{send_log, Log},
     message::{Message, MessageHeader},
     messages::{
         block::Block, get_headers::GetHeaders, headers::Headers, inv::Inventory,
@@ -49,7 +50,7 @@ impl Peer {
         services: u64,
         version: i32,
         peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
-        mut logger_sender: mpsc::Sender<String>,
+        mut logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
     ) -> Result<Self, CustomError> {
         let stream = open_stream(address)?;
@@ -70,13 +71,16 @@ impl Peer {
     pub fn handshake(
         &mut self,
         sender_address: SocketAddrV6,
-        logger_sender: &mut mpsc::Sender<String>,
+        logger_sender: &mut mpsc::Sender<Log>,
     ) -> Result<(), CustomError> {
         self.share_versions(sender_address)?;
         self.share_veracks()?;
         SendHeaders::new().send(&mut self.stream)?;
 
-        logger_sender.send(format!("Successful handshake with {}", self.address.ip()))?;
+        send_log(
+            logger_sender,
+            Log::Message(format!("Successful handshake with {}", self.address.ip())),
+        );
 
         Ok(())
     }
@@ -115,7 +119,7 @@ impl Peer {
         &mut self,
         peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         node_action_sender: mpsc::Sender<NodeAction>,
-        logger_sender: mpsc::Sender<String>,
+        logger_sender: mpsc::Sender<Log>,
     ) -> Result<(), CustomError> {
         //thread que escucha al nodo
         self.peer_action_thread = Some(PeerActionLoop::spawn(
@@ -141,7 +145,7 @@ pub fn request_headers(
     last_header: Option<Vec<u8>>,
     version: i32,
     stream: &mut TcpStream,
-    logger_sender: &mpsc::Sender<String>,
+    logger_sender: &mpsc::Sender<Log>,
     node_action_sender: &mpsc::Sender<NodeAction>,
 ) -> Result<(), CustomError> {
     let block_header_hashes = match last_header {
@@ -151,7 +155,10 @@ pub fn request_headers(
 
     let request = GetHeaders::new(version, block_header_hashes, vec![0; 32]).send(stream);
     if request.is_err() {
-        logger_sender.send("Error requesting headers".to_string())?;
+        send_log(
+            logger_sender,
+            Log::Message("Error requesting headers".to_string()),
+        );
         node_action_sender.send(NodeAction::GetHeadersError)?;
     }
     Ok(())

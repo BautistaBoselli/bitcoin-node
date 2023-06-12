@@ -30,7 +30,7 @@ impl Wallet {
     pub fn parse_wallets(buffer: Vec<u8>) -> Result<Vec<Self>, CustomError> {
         let mut parser = BufferParser::new(buffer);
         let mut wallets = Vec::new();
-        while parser.len() > 0 {
+        while !parser.is_empty() {
             let name_len = parser.extract_u8()? as usize;
             let name = parser.extract_string(name_len)?;
 

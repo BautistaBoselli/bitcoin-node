@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     error::CustomError,
+    logger::{send_log, Log},
     messages::inv::{Inventory, InventoryType},
     node_state::NodeState,
     peer::PeerAction,
@@ -14,7 +15,7 @@ use crate::{
 pub fn pending_blocks_loop(
     node_state_ref: Arc<Mutex<NodeState>>,
     peer_action_sender: mpsc::Sender<PeerAction>,
-    logger_sender: mpsc::Sender<String>,
+    logger_sender: mpsc::Sender<Log>,
 ) {
     thread::spawn(move || -> Result<(), CustomError> {
         loop {
@@ -29,10 +30,13 @@ pub fn pending_blocks_loop(
             let blocks_to_refetch = node_state.get_stale_block_downloads()?;
 
             if !blocks_to_refetch.is_empty() {
-                logger_sender.send(format!(
-                    "Refetching {} pending blocks...",
-                    blocks_to_refetch.len()
-                ))?;
+                send_log(
+                    &logger_sender,
+                    Log::Message(format!(
+                        "Refetching {} pending blocks...",
+                        blocks_to_refetch.len()
+                    )),
+                );
 
                 let mut inventories = vec![];
 

@@ -11,6 +11,7 @@ use gtk::glib::Sender;
 use crate::{
     error::CustomError,
     gui::init::GUIActions,
+    logger::{send_log, Log},
     message::Message,
     messages::{
         block::{self, Block, OutPoint},
@@ -22,7 +23,7 @@ use crate::{
 const START_DATE_IBD: u32 = 1681095630;
 
 pub struct NodeState {
-    logger_sender: mpsc::Sender<String>,
+    logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIActions>,
     headers_file: File,
     headers: Vec<BlockHeader>,
@@ -38,7 +39,7 @@ pub struct NodeState {
 
 impl NodeState {
     pub fn new(
-        logger_sender: mpsc::Sender<String>,
+        logger_sender: mpsc::Sender<Log>,
         gui_sender: Sender<GUIActions>,
     ) -> Result<Arc<Mutex<Self>>, CustomError> {
         let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
@@ -91,11 +92,14 @@ impl NodeState {
 
         self.headers.append(&mut headers.headers);
 
-        self.logger_sender.send(format!(
-            "There are {} headers, new {}",
-            self.headers.len(),
-            headers_count
-        ))?;
+        send_log(
+            &self.logger_sender,
+            Log::Message(format!(
+                "There are {} headers, new {}",
+                self.headers.len(),
+                headers_count
+            )),
+        );
 
         self.verify_headers_sync(headers_count)
     }
@@ -149,9 +153,10 @@ impl NodeState {
         match self.utxo_sync {
             true => update_utxo_set(&mut self.utxo_set, block),
             false => self.verify_blocks_sync().unwrap_or_else(|_| {
-                self.logger_sender
-                    .send("Error verifying blocks synchronization".to_string())
-                    .unwrap();
+                send_log(
+                    &self.logger_sender,
+                    Log::Message("Error verifying blocks synchronization".to_string()),
+                );
             }),
         }
 
@@ -165,8 +170,10 @@ impl NodeState {
 
         self.headers_sync = new_headers_count < 2000;
         if self.headers_sync {
-            self.logger_sender
-                .send("headers sync completed".to_string())?;
+            send_log(
+                &self.logger_sender,
+                Log::Message("headers sync completed".to_string()),
+            );
             self.verify_blocks_sync()?;
         }
         Ok(())
@@ -183,8 +190,11 @@ impl NodeState {
 
         if self.blocks_sync {
             self.remove_pending_blocks()?;
-            self.logger_sender
-                .send("blocks sync completed".to_string())?;
+            send_log(
+                &self.logger_sender,
+                Log::Message("blocks sync completed".to_string()),
+            );
+
             self.generate_utxo()?;
         }
         Ok(())
@@ -198,18 +208,24 @@ impl NodeState {
             }
             blocks_after_timestamp += 1;
         }
-        self.logger_sender
-            .send("Beginning the generation of the utxo (0%)...".to_string())?;
+
+        send_log(
+            &self.logger_sender,
+            Log::Message("Beginning the generation of the utxo (0%)...".to_string()),
+        );
 
         let mut i = 0;
         let mut percentage = 0;
         for header in self.headers.iter().rev().take(blocks_after_timestamp).rev() {
             if i > blocks_after_timestamp / 10 {
                 percentage += 10;
-                self.logger_sender.send(format!(
-                    "The generation of utxo is ({}%) completed...",
-                    percentage
-                ))?;
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!(
+                        "The generation of utxo is ({}%) completed...",
+                        percentage
+                    )),
+                );
                 i = 0;
             }
             let hash = header.hash_as_string();
@@ -221,10 +237,14 @@ impl NodeState {
             i += 1;
         }
         self.utxo_sync = true;
-        self.logger_sender
-            .send("The generation of utxo is (100%) completed".to_string())?;
-        self.logger_sender
-            .send("Utxo generation is finished".to_string())?;
+        send_log(
+            &self.logger_sender,
+            Log::Message("The generation of utxo is (100%) completed".to_string()),
+        );
+        send_log(
+            &self.logger_sender,
+            Log::Message("Utxo generation is finished".to_string()),
+        );
         Ok(())
     }
 
@@ -262,6 +282,11 @@ impl NodeState {
         if name.is_empty() || public_key.is_empty() || private_key.is_empty() {
             return Err(CustomError::Validation(
                 "Name, public key and private key must not be empty".to_string(),
+            ));
+        }
+        if public_key.len() != 35 {
+            return Err(CustomError::Validation(
+                "Public key must be 35 characters long".to_string(),
             ));
         }
         if self

@@ -1,5 +1,9 @@
 use bitcoin::{
-    config::Config, gui::init::gui_init, logger::Logger, network::get_addresses, node::Node,
+    config::Config,
+    gui::init::gui_init,
+    logger::{send_log, Log, Logger},
+    network::get_addresses,
+    node::Node,
     node_state::NodeState,
 };
 use gtk::glib::{self, Priority};
@@ -41,12 +45,7 @@ fn main() {
     let node_state_ref = match NodeState::new(logger_sender.clone(), gui_sender.clone()) {
         Ok(node_state) => node_state,
         Err(error) => {
-            logger_sender
-                .send(format!("ERROR: {}", error))
-                .unwrap_or_else(|_| {
-                    println!("ERROR: {}", error);
-                    println!("ERROR: cannot send error to logger thread");
-                });
+            send_log(&logger_sender, Log::Error(error));
             return;
         }
     };
@@ -57,10 +56,7 @@ fn main() {
         let addresses = match get_addresses(config.seed.clone(), config.port) {
             Ok(addresses) => addresses,
             Err(error) => {
-                match logger_sender_clone.send(format!("ERROR: {}", error)) {
-                    Ok(_) => (),
-                    Err(error) => println!("ERROR: {}", error),
-                }
+                send_log(&logger_sender_clone, Log::Error(error));
                 return;
             }
         };
@@ -82,11 +78,6 @@ fn main() {
 
     let logger_sender_clone = logger_sender.clone();
     if let Err(error) = gui_init(gui_receiver, node_state_ref, logger_sender) {
-        logger_sender_clone
-            .send(format!("ERROR: {}", error))
-            .unwrap_or_else(|_| {
-                println!("ERROR: {}", error);
-                println!("ERROR: cannot send error to logger thread");
-            });
+        send_log(&logger_sender_clone, Log::Error(error))
     };
 }

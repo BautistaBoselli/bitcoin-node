@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     error::CustomError,
+    logger::{send_log, Log},
     message::Message,
     messages::{get_data::GetData, inv::Inventory},
     peer::{request_headers, NodeAction, PeerAction},
@@ -15,7 +16,7 @@ pub struct PeerActionLoop {
     pub peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     pub version: i32,
     pub stream: TcpStream,
-    pub logger_sender: mpsc::Sender<String>,
+    pub logger_sender: mpsc::Sender<Log>,
     pub node_action_sender: mpsc::Sender<NodeAction>,
 }
 
@@ -24,7 +25,7 @@ impl PeerActionLoop {
         peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         version: i32,
         stream: TcpStream,
-        logger_sender: mpsc::Sender<String>,
+        logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
@@ -55,8 +56,10 @@ impl PeerActionLoop {
             };
 
             if let Err(error) = response {
-                self.logger_sender
-                    .send(format!("Error on PeerActionLoop: {}", error))?;
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!("Error on PeerActionLoop: {}", error)),
+                );
             }
         }
         Ok(())
