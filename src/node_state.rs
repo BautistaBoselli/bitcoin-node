@@ -1,10 +1,9 @@
 use std::{
     collections::HashMap,
-    fs::{self, File, OpenOptions},
+    fs::{File, OpenOptions},
     io::{Read, Write},
     sync::{mpsc, Arc, Mutex},
-    thread,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 use gtk::glib::Sender;
@@ -91,7 +90,6 @@ impl NodeState {
         let headers_count = headers.headers.len();
 
         self.headers.append(&mut headers.headers);
-        self.blocks_sync = false;
 
         self.logger_sender.send(format!(
             "There are {} headers, new {}",
@@ -236,6 +234,11 @@ impl NodeState {
 
     pub fn is_blocks_sync(&self) -> bool {
         self.blocks_sync
+    }
+
+    pub fn is_block_pending(&self, block_hash: &Vec<u8>) -> Result<bool, CustomError> {
+        let pending_blocks = self.pending_blocks_ref.lock()?;
+        Ok(pending_blocks.contains_key(block_hash))
     }
 
     pub fn is_utxo_sync(&self) -> bool {

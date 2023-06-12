@@ -121,7 +121,7 @@ impl NodeActionLoop {
 
     fn handle_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
-        if node_state.is_blocks_sync() {
+        if !node_state.is_block_pending(&block_hash)? {
             drop(node_state);
             return Ok(());
         }

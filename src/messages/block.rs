@@ -253,6 +253,8 @@ fn compare_p2phk(parser: &mut BufferParser, public_key_hash: &String) -> bool {
     }
     let hash = parser.extract_buffer(20).unwrap().to_vec();
 
+    // NO OLVIDARME DE CAMBIAR LO DE HANDLE_BLOCK (VALUDAR SI ESTA EN PENDING, SINO EARLY RETURN )
+
     //let hash = bs58::encode(hash).into_string();
     hash == bs58::decode(public_key_hash)
         .into_vec()
