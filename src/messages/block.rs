@@ -230,6 +230,28 @@ impl TransactionOutput {
             script_pubkey,
         })
     }
+
+    pub fn is_sent_to_key(&self, public_key_hash: &Vec<u8>) -> bool {
+        let parser = &mut BufferParser::new(self.script_pubkey.clone());
+        match parser.extract_u8() {
+            Ok(0x76) => compare_p2pkh(parser, public_key_hash),
+            _ => false,
+        }
+    }
+}
+
+fn compare_p2pkh(parser: &mut BufferParser, public_key_hash: &Vec<u8>) -> bool {
+    match parser.extract_u8() {
+        Ok(0xa9) => (),
+        _ => return false,
+    }
+    match parser.extract_u8() {
+        Ok(0x14) => (),
+        _ => return false,
+    }
+    let hash = parser.extract_buffer(20).unwrap().to_vec();
+
+    hash == *public_key_hash
 }
 
 #[cfg(test)]
