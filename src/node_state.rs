@@ -14,8 +14,8 @@ use crate::{
     logger::{send_log, Log},
     message::Message,
     messages::{
-        block::{self, Block, OutPoint},
-        headers::{hash_as_string, BlockHeader, Headers},
+        block::Block,
+        headers::{hash_as_string, BlockHeader, Headers}, transaction::{TransactionOutput, OutPoint},
     },
     wallet::Wallet,
 };
@@ -31,7 +31,7 @@ pub struct NodeState {
     wallets: Vec<Wallet>,
     active_wallet: Option<String>,
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
-    utxo_set: HashMap<OutPoint, block::TransactionOutput>,
+    utxo_set: HashMap<OutPoint, TransactionOutput>,
     headers_sync: bool,
     blocks_sync: bool,
     utxo_sync: bool,
@@ -352,7 +352,7 @@ pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError>
     Ok(file)
 }
 
-fn update_utxo_set(utxo_set: &mut HashMap<OutPoint, block::TransactionOutput>, block: Block) {
+fn update_utxo_set(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, block: Block) {
     for tx in block.transactions.iter() {
         for tx_in in tx.inputs.iter() {
             utxo_set.remove(&tx_in.previous_output);

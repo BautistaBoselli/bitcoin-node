@@ -29,23 +29,37 @@ impl Message for Inv {
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         let mut parser = BufferParser::new(buffer);
 
+        let count = parser.extract_varint()? as usize;
+
         if parser.len() % 36 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
         let mut inventories = vec![];
-        while !parser.is_empty() {
+        for _i in 0..count {
             inventories.push(Inventory::parse(parser.extract_buffer(36)?.to_vec())?);
         }
         Ok(Self { inventories })
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 ///Este enum contiene los tipos de inventarios que se pueden enviar:
-/// - GetBlock = 2
+/// - Tx = 1
+/// - Block = 2
+/// - FilteredBlock = 3
+/// - CompactBlock = 4
+/// - WitnessTx = 5
+/// - WitnessBlock = 6
+/// - FilteredWitnessBlock = 7
 pub enum InventoryType {
-    GetBlock,
+    Tx,
+    Block,
+    FilteredBlock,
+    CompactBlock,
+    WitnessTx,
+    WitnessBlock,
+    FilteredWitnessBlock,
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +80,13 @@ impl Inventory {
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         let inventory_type = match self.inventory_type {
-            InventoryType::GetBlock => 2_u32,
+            InventoryType::Tx => 1_u32,
+            InventoryType::Block => 2_u32,
+            InventoryType::FilteredBlock => 3_u32,
+            InventoryType::CompactBlock => 4_u32,
+            InventoryType::WitnessTx => 0x40000001,
+            InventoryType::WitnessBlock => 0x40000002,
+            InventoryType::FilteredWitnessBlock => 0x40000003,
         };
         buffer.extend(inventory_type.to_le_bytes());
         buffer.extend(&self.hash);
@@ -79,8 +99,17 @@ impl Inventory {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
         let inventory_type = match parser.extract_u32()? {
-            2_u32 => InventoryType::GetBlock,
-            _ => return Err(CustomError::SerializedBufferIsInvalid),
+            1_u32 => InventoryType::Tx,
+            2_u32 => InventoryType::Block,
+            3_u32 => InventoryType::FilteredBlock,
+            4_u32 => InventoryType::CompactBlock,
+            0x40000001 => InventoryType::WitnessTx,
+            0x40000002 => InventoryType::WitnessBlock,
+            0x40000003 => InventoryType::FilteredWitnessBlock,
+            _ => {
+                println!("inventory type: {}", parser.extract_u32()?);
+                return Err(CustomError::SerializedBufferIsInvalid)
+            }
         };
         Ok(Self {
             inventory_type,

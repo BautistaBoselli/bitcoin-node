@@ -40,6 +40,7 @@ pub enum CustomError {
     CannotGetTimestamp,
     WalletNotFound,
     Validation(String),
+    CannotReadStream,
 }
 
 impl CustomError {
@@ -74,6 +75,7 @@ impl CustomError {
             Self::CannotGetTimestamp => "cannot get timestamp",
             Self::WalletNotFound => "wallet not found",
             Self::Validation(_) => "validation error",
+            Self::CannotReadStream => "cannot read stream",
         }
     }
 }

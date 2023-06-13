@@ -114,7 +114,7 @@ impl NodeActionLoop {
         let mut inventories = vec![];
         for header in headers {
             node_state.append_pending_block(header.hash())?;
-            inventories.push(Inventory::new(InventoryType::GetBlock, header.hash()));
+            inventories.push(Inventory::new(InventoryType::Block, header.hash()));
         }
 
         drop(node_state);

@@ -13,8 +13,8 @@ use crate::{
         block::Block,
         get_data::GetData,
         headers::Headers,
-        inv::{Inventory, InventoryType},
-        ping_pong::{Ping, Pong},
+        inv::{Inventory, InventoryType, Inv},
+        ping_pong::{Ping, Pong}, transaction::Transaction,
     },
     peer::{request_headers, NodeAction},
 };
@@ -52,6 +52,8 @@ impl PeerStreamLoop {
                 "headers" => self.handle_headers(&response_header),
                 "block" => self.handle_block(&response_header),
                 "ping" => self.handle_ping(&response_header),
+                "inv" => self.handle_inv(&response_header),
+                "tx" => self.handle_tx(&response_header),
                 "notfound" => self.handle_notfound(&response_header),
                 _ => self.ignore_message(&response_header),
             };
@@ -97,7 +99,7 @@ impl PeerStreamLoop {
                     .send(NodeAction::Block((block.header.hash(), block)))?;
             }
             Err(_) => {
-                let inventory = Inventory::new(InventoryType::GetBlock, block.header.hash());
+                let inventory = Inventory::new(InventoryType::Block, block.header.hash());
 
                 self.node_action_sender
                     .send(NodeAction::GetDataError(vec![inventory]))?;
@@ -121,6 +123,23 @@ impl PeerStreamLoop {
         Ok(())
     }
 
+    fn handle_inv(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        let inv = Inv::read(&mut self.stream, response_header.payload_size)?;
+        for inventory in inv.inventories {
+            if inventory.inventory_type == InventoryType::Tx {
+                let message = GetData::new(vec![inventory]);
+                message.send(&mut self.stream)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_tx(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        let tx = Transaction::read(&mut self.stream, response_header.payload_size)?;
+        println!("Transaction: {:?}", tx);
+        Ok(())
+    }
+
     fn handle_notfound(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let notfound = GetData::read(&mut self.stream, response_header.payload_size)?;
         let inventories = notfound.get_inventories().to_owned();
@@ -131,7 +150,7 @@ impl PeerStreamLoop {
 
     fn ignore_message(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let cmd = response_header.command.as_str();
-        if cmd != "alert" && cmd != "addr" && cmd != "inv" && cmd != "sendheaders" {
+        if cmd != "alert" && cmd != "addr" && cmd != "sendheaders" {
             send_log(
                 &self.logger_sender,
                 Log::Message(format!(
