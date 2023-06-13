@@ -30,14 +30,15 @@ impl Block {
             hashes.push(transaction.hash());
         }
 
-        let merkle_tree = merkle_tree(hashes);
+        let mut merkle_tree = vec![];
+        generate_merkle_tree(hashes, &mut merkle_tree);
 
         let merkle_root = match merkle_tree.last() {
-            Some(root) => root,
+            Some(root_level) => root_level[0].to_vec(),
             None => return Err(CustomError::InvalidMerkleRoot),
         };
 
-        if merkle_root != &self.header.merkle_root {
+        if merkle_root != self.header.merkle_root {
             return Err(CustomError::InvalidMerkleRoot);
         }
         Ok(())
@@ -52,9 +53,9 @@ fn merge_hashes(mut left: Vec<u8>, mut right: Vec<u8>) -> Vec<u8> {
     hash
 }
 
-fn merkle_tree(hashes: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+fn generate_merkle_tree(hashes: Vec<Vec<u8>>, merkle_tree: &mut Vec<Vec<Vec<u8>>>) {
     if hashes.len() == 1 {
-        return hashes;
+        return;
     }
 
     let mut level = vec![];
@@ -68,7 +69,8 @@ fn merkle_tree(hashes: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
         level.push(merge_hashes(current_hash.clone(), next_hash.clone()));
     }
 
-    merkle_tree(level)
+    merkle_tree.push(level.clone());
+    generate_merkle_tree(level, merkle_tree);
 }
 
 impl Message for Block {
@@ -286,15 +288,22 @@ mod tests {
             vec![8],
             vec![9],
         ];
-        let result = merkle_tree(hashes);
+        let mut result = vec![];
+        generate_merkle_tree(hashes, &mut result);
         assert_eq!(
-            result[0],
+            result.last().unwrap()[0],
             vec![
                 168, 29, 114, 241, 146, 182, 132, 3, 243, 23, 31, 93, 95, 13, 242, 71, 223, 121,
                 159, 136, 174, 221, 242, 49, 71, 220, 41, 95, 162, 236, 216, 155
             ]
         );
-        assert!(result.len() == 1);
+        assert!(
+            result.len() == 4
+                && result[0].len() == 5
+                && result[1].len() == 3
+                && result[2].len() == 2
+                && result[3].len() == 1
+        );
     }
 
     #[test]
