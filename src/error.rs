@@ -14,6 +14,7 @@ use std::{
 /// Cada variante representa un error distinto.
 /// Cada variante debe tener un metodo description que devuelve un string con la descripcion del error.
 pub enum CustomError {
+    TransactionNotFound,
     ConfigInvalid,
     ConfigMissingValue,
     ConfigMissingFile,
@@ -46,6 +47,7 @@ impl CustomError {
     /// Devuelve un string con la descripcion del error.
     pub fn description(&self) -> &str {
         match self {
+            Self::TransactionNotFound => "transaction not found",
             Self::ConfigInvalid => "invalid config file",
             Self::ConfigMissingValue => "missing config values",
             Self::ConfigMissingFile => "missing config file",

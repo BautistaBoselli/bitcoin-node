@@ -24,14 +24,19 @@ impl Block {
         }
     }
 
-    pub fn create_merkle_root(&self) -> Result<(), CustomError> {
+    fn create_merkle_tree(&self) -> Vec<Vec<Vec<u8>>> {
         let mut hashes = vec![];
         for transaction in &self.transactions {
             hashes.push(transaction.hash());
         }
 
-        let mut merkle_tree = vec![];
+        let mut merkle_tree = vec![hashes.clone()];
         generate_merkle_tree(hashes, &mut merkle_tree);
+        merkle_tree
+    }
+
+    pub fn create_merkle_root(&self) -> Result<(), CustomError> {
+        let merkle_tree = self.create_merkle_tree();
 
         let merkle_root = match merkle_tree.last() {
             Some(root_level) => root_level[0].to_vec(),
@@ -42,6 +47,44 @@ impl Block {
             return Err(CustomError::InvalidMerkleRoot);
         }
         Ok(())
+    }
+
+    fn find_transaction_index(&self, transaction_hash: &Vec<u8>) -> Result<usize, CustomError> {
+        for i in 0..self.transactions.len() {
+            if self.transactions[i].hash() == *transaction_hash {
+                return Ok(i);
+            }
+        }
+        Err(CustomError::InvalidMerkleRoot)
+    }
+
+    pub fn generate_merkle_path(
+        &self,
+        transaction_hash: Vec<u8>,
+    ) -> Result<(Vec<u8>, Vec<Vec<u8>>), CustomError> {
+        let merkle_tree = self.create_merkle_tree();
+        let mut hash_index = self.find_transaction_index(&transaction_hash)?;
+
+        let mut mp_instructions: Vec<u8> = vec![1];
+        let mut mp_hashes = vec![transaction_hash];
+
+        for level in merkle_tree {
+            if level.len() == 1 {
+                break;
+            }
+            if hash_index % 2 == 0 {
+                mp_instructions.insert(0, 1);
+                mp_instructions.push(0);
+                mp_hashes.push(level[hash_index + 1].clone());
+            } else {
+                mp_instructions.insert(0, 0);
+                mp_instructions.insert(0, 1);
+                mp_hashes.insert(0, level[hash_index - 1].clone());
+            }
+            hash_index = hash_index / 2;
+        }
+
+        Ok((mp_instructions, mp_hashes))
     }
 }
 
@@ -259,6 +302,10 @@ fn compare_p2pkh(parser: &mut BufferParser, public_key_hash: &Vec<u8>) -> bool {
 #[cfg(test)]
 
 mod tests {
+    use std::io::Read;
+
+    use crate::node_state::open_new_file;
+
     use super::*;
 
     #[test]
@@ -272,38 +319,6 @@ mod tests {
         .as_byte_array()
         .to_vec();
         assert_eq!(result, hash);
-    }
-
-    #[test]
-    fn merkle_tree_test() {
-        let hashes = vec![
-            vec![0],
-            vec![1],
-            vec![2],
-            vec![3],
-            vec![4],
-            vec![5],
-            vec![6],
-            vec![7],
-            vec![8],
-            vec![9],
-        ];
-        let mut result = vec![];
-        generate_merkle_tree(hashes, &mut result);
-        assert_eq!(
-            result.last().unwrap()[0],
-            vec![
-                168, 29, 114, 241, 146, 182, 132, 3, 243, 23, 31, 93, 95, 13, 242, 71, 223, 121,
-                159, 136, 174, 221, 242, 49, 71, 220, 41, 95, 162, 236, 216, 155
-            ]
-        );
-        assert!(
-            result.len() == 4
-                && result[0].len() == 5
-                && result[1].len() == 3
-                && result[2].len() == 2
-                && result[3].len() == 1
-        );
     }
 
     #[test]
@@ -356,5 +371,51 @@ mod tests {
         let script_pubkey1 = output1.script_pubkey.clone();
         assert_eq!(script_pubkey1.len(), 25);
         assert_eq!(tx.lock_time, 0);
+    }
+
+    #[test]
+    fn test_merkle_tree() {
+        let mut file = open_new_file("tests/test_block.bin".to_string()).unwrap();
+        let mut buffer = vec![];
+        file.read_to_end(&mut buffer).unwrap();
+        let block = Block::parse(buffer).unwrap();
+
+        let merkle_tree = block.create_merkle_tree();
+        assert_eq!(merkle_tree.last().unwrap()[0], block.header.merkle_root);
+        assert!(
+            merkle_tree.len() == 6
+                && merkle_tree[0].len() == 20
+                && merkle_tree[1].len() == 10
+                && merkle_tree[2].len() == 5
+                && merkle_tree[3].len() == 3
+                && merkle_tree[4].len() == 2
+                && merkle_tree[5].len() == 1
+        );
+    }
+
+    #[test]
+    fn test_merkle_path() {
+        let mut file = open_new_file("tests/test_block.bin".to_string()).unwrap();
+        let mut buffer = vec![];
+        file.read_to_end(&mut buffer).unwrap();
+        let block = Block::parse(buffer).unwrap();
+
+        let merkle_tree = block.create_merkle_tree();
+        let transactions_hashes = merkle_tree.get(0).unwrap();
+        let (instructions, hashes) = block
+            .generate_merkle_path(transactions_hashes[6].clone())
+            .unwrap();
+
+        assert_eq!(instructions, vec![1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0]);
+        assert_eq!(hashes.len(), 6);
+
+        let merging = merge_hashes(hashes[2].clone(), hashes[3].clone());
+        let merging = merge_hashes(hashes[1].clone(), merging);
+        let merging = merge_hashes(hashes[0].clone(), merging);
+        let merging = merge_hashes(merging, hashes[4].clone());
+        let merging = merge_hashes(merging, hashes[5].clone());
+
+        assert_eq!(hashes.len(), 6);
+        assert_eq!(merging, block.header.merkle_root);
     }
 }
