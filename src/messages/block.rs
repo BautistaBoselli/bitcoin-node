@@ -64,8 +64,7 @@ impl Block {
     ) -> Result<(Vec<u8>, Vec<Vec<u8>>), CustomError> {
         let merkle_tree = self.create_merkle_tree();
         let mut hash_index = self.find_transaction_index(&transaction_hash)?;
-
-        let mut mp_instructions: Vec<u8> = vec![1];
+        let mut mp_flags: Vec<u8> = vec![1];
         let mut mp_hashes = vec![transaction_hash];
 
         for level in merkle_tree {
@@ -73,18 +72,22 @@ impl Block {
                 break;
             }
             if hash_index % 2 == 0 {
-                mp_instructions.insert(0, 1);
-                mp_instructions.push(0);
+                mp_flags.insert(0, 1);
+                mp_flags.push(0);
                 mp_hashes.push(level[hash_index + 1].clone());
             } else {
-                mp_instructions.insert(0, 0);
-                mp_instructions.insert(0, 1);
+                mp_flags.insert(0, 0);
+                mp_flags.insert(0, 1);
                 mp_hashes.insert(0, level[hash_index - 1].clone());
             }
             hash_index = hash_index / 2;
         }
 
-        Ok((mp_instructions, mp_hashes))
+        if mp_flags.len() % 8 != 0 {
+            mp_flags.append(&mut vec![0; 8 - mp_flags.len() % 8]);
+        }
+
+        Ok((mp_flags, mp_hashes))
     }
 }
 
@@ -402,11 +405,11 @@ mod tests {
 
         let merkle_tree = block.create_merkle_tree();
         let transactions_hashes = merkle_tree.get(0).unwrap();
-        let (instructions, hashes) = block
+        let (flags, hashes) = block
             .generate_merkle_path(transactions_hashes[6].clone())
             .unwrap();
 
-        assert_eq!(instructions, vec![1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0]);
+        assert_eq!(flags, vec![1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(hashes.len(), 6);
 
         let merging = merge_hashes(hashes[2].clone(), hashes[3].clone());
