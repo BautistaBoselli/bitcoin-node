@@ -32,7 +32,7 @@ pub struct NodeState {
     active_wallet: Option<String>,
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo_set: HashMap<OutPoint, TransactionOutput>,
-    pending_tx_set: HashMap<OutPoint, TransactionOutput>,
+    pending_tx_set: HashMap<Vec<u8>, Transaction>,
     headers_sync: bool,
     blocks_sync: bool,
     utxo_sync: bool,
@@ -343,16 +343,12 @@ impl NodeState {
         Ok(balance)
     }
 
-    pub fn append_pending_transaction(&mut self, transaction: Transaction){
-        for (index, tx_out) in transaction.outputs.iter().enumerate() {
-            let out_point = OutPoint {
-                hash: transaction.hash().clone(),
-                index: index as u32,
-            };
-            if !self.pending_tx_set.contains_key(&out_point){
-                self.pending_tx_set.insert(out_point, tx_out.clone());
-            }
+    pub fn append_pending_transaction(&mut self, transaction: Transaction){ 
+        let tx_hash = transaction.hash();
+        if !self.pending_tx_set.contains_key(&tx_hash){
+            self.pending_tx_set.insert(tx_hash, transaction);
         }
+        
     }
 }
 
@@ -366,7 +362,7 @@ pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError>
     Ok(file)
 }
 
-fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, pending_tx_set: &mut HashMap<OutPoint, TransactionOutput>, block: Block) {
+fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, pending_tx_set: &mut HashMap<Vec<u8>, Transaction>, block: Block) {
     for tx in block.transactions.iter() {
         for tx_in in tx.inputs.iter() {
             utxo_set.remove(&tx_in.previous_output);
@@ -376,12 +372,13 @@ fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, 
                 hash: tx.hash().clone(),
                 index: index as u32,
             };
-            if pending_tx_set.contains_key(&out_point){
-                pending_tx_set.remove(&out_point);
-            }
             utxo_set.insert(out_point, tx_out.clone());
         }
+        if pending_tx_set.contains_key(&tx.hash()){
+            pending_tx_set.remove(&tx.hash());
+        }
     }
+    
 }
 
 pub fn get_current_timestamp() -> Result<u64, CustomError> {
