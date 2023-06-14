@@ -12,7 +12,7 @@ use crate::{
     messages::{
         block::Block,
         headers::{BlockHeader, Headers},
-        inv::{Inventory, InventoryType},
+        inv::{Inventory, InventoryType}, transaction::Transaction,
     },
     node_state::NodeState,
     peer::{NodeAction, PeerAction},
@@ -55,6 +55,7 @@ impl NodeActionLoop {
                 NodeAction::NewHeaders(new_headers) => self.handle_new_headers(new_headers),
                 NodeAction::GetHeadersError => self.handle_get_headers_error(),
                 NodeAction::GetDataError(inventory) => self.handle_get_data_error(inventory),
+                NodeAction::PendingTransaction(transaction) => self.handle_pending_transaction(transaction),
             };
 
             if let Err(error) = response {
@@ -140,6 +141,13 @@ impl NodeActionLoop {
         node_state.append_block(block_hash, block)?;
         drop(node_state);
 
+        Ok(())
+    }
+
+    fn handle_pending_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        node_state.append_pending_transaction(transaction);
+        drop(node_state);
         Ok(())
     }
 }

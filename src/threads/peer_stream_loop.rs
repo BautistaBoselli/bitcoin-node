@@ -136,7 +136,7 @@ impl PeerStreamLoop {
 
     fn handle_tx(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let tx = Transaction::read(&mut self.stream, response_header.payload_size)?;
-        println!("Transaction: {:?}", tx);
+        self.node_action_sender.send(NodeAction::PendingTransaction(tx))?;
         Ok(())
     }
 

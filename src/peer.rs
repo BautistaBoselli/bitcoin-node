@@ -10,7 +10,7 @@ use crate::{
     message::{Message, MessageHeader},
     messages::{
         block::Block, get_headers::GetHeaders, headers::Headers, inv::Inventory,
-        send_headers::SendHeaders, ver_ack::VerAck, version::Version,
+        send_headers::SendHeaders, ver_ack::VerAck, version::Version, transaction::Transaction,
     },
     network::{get_address_v6, open_stream},
     threads::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
@@ -32,6 +32,7 @@ pub enum NodeAction {
     GetHeadersError,
     Block((Vec<u8>, Block)),
     GetDataError(Vec<Inventory>),
+    PendingTransaction(Transaction),
 }
 
 pub struct Peer {
