@@ -157,10 +157,6 @@ pub fn gui_init(
                     Ok(balance) => {
                         let balance_btc = (balance as f64) / 100000000.0;
                         label_balance.set_text(format!("Balance:    {} BTC", balance_btc).as_str());
-                        send_log(
-                            &logger_sender,
-                            Log::Message(String::from("Error getting balance")),
-                        );
                     }
                     Err(error) => {
                         send_log(&logger_sender, Log::Error(error));
