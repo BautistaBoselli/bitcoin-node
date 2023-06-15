@@ -15,7 +15,8 @@ use crate::{
     message::Message,
     messages::{
         block::Block,
-        headers::{hash_as_string, BlockHeader, Headers}, transaction::{TransactionOutput, OutPoint, Transaction},
+        headers::{hash_as_string, BlockHeader, Headers},
+        transaction::{OutPoint, Transaction, TransactionOutput},
     },
     wallet::Wallet,
 };
@@ -343,12 +344,10 @@ impl NodeState {
         Ok(balance)
     }
 
-    pub fn append_pending_transaction(&mut self, transaction: Transaction){ 
+    pub fn append_pending_transaction(&mut self, transaction: Transaction) {
         let tx_hash = transaction.hash();
-        if !self.pending_tx_set.contains_key(&tx_hash){
-            self.pending_tx_set.insert(tx_hash, transaction);
-        }
-        
+
+        self.pending_tx_set.entry(tx_hash).or_insert(transaction);
     }
 }
 
@@ -362,7 +361,11 @@ pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError>
     Ok(file)
 }
 
-fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, pending_tx_set: &mut HashMap<Vec<u8>, Transaction>, block: Block) {
+fn update_transaction_sets(
+    utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    pending_tx_set: &mut HashMap<Vec<u8>, Transaction>,
+    block: Block,
+) {
     for tx in block.transactions.iter() {
         for tx_in in tx.inputs.iter() {
             utxo_set.remove(&tx_in.previous_output);
@@ -374,11 +377,10 @@ fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, 
             };
             utxo_set.insert(out_point, tx_out.clone());
         }
-        if pending_tx_set.contains_key(&tx.hash()){
+        if pending_tx_set.contains_key(&tx.hash()) {
             pending_tx_set.remove(&tx.hash());
         }
     }
-    
 }
 
 pub fn get_current_timestamp() -> Result<u64, CustomError> {

@@ -43,6 +43,7 @@ pub enum CustomError {
     Validation(String),
     CannotReadStream,
     CannotSendToStream,
+    MissingGUIElement,
 }
 
 impl CustomError {
@@ -80,6 +81,7 @@ impl CustomError {
             Self::Validation(_) => "validation error",
             Self::CannotReadStream => "cannot read stream",
             Self::CannotSendToStream => "cannot send message to stream",
+            Self::MissingGUIElement => "missing GUI element",
         }
     }
 }

@@ -1,6 +1,6 @@
 use bitcoin::{
     config::Config,
-    gui::init::gui_init,
+    gui::init::GUI,
     logger::{send_log, Log, Logger},
     network::get_addresses,
     node::Node,
@@ -77,7 +77,8 @@ fn main() {
     });
 
     let logger_sender_clone = logger_sender.clone();
-    if let Err(error) = gui_init(gui_receiver, node_state_ref, logger_sender) {
+
+    if let Err(error) = GUI::start(gui_receiver, node_state_ref, logger_sender) {
         send_log(&logger_sender_clone, Log::Error(error))
     };
 }
