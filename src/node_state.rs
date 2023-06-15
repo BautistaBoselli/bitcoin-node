@@ -15,7 +15,8 @@ use crate::{
     message::Message,
     messages::{
         block::Block,
-        headers::{hash_as_string, BlockHeader, Headers}, transaction::{TransactionOutput, OutPoint, Transaction},
+        headers::{hash_as_string, BlockHeader, Headers},
+        transaction::{OutPoint, Transaction, TransactionOutput},
     },
     wallet::Wallet,
 };
@@ -343,15 +344,15 @@ impl NodeState {
         Ok(balance)
     }
 
-    pub fn append_pending_transaction(&mut self, transaction: Transaction){ 
+    pub fn append_pending_transaction(&mut self, transaction: Transaction) {
         let tx_hash = transaction.hash();
-        if !self.pending_tx_set.contains_key(&tx_hash){
-            self.pending_tx_set.insert(tx_hash, transaction);
-        }
-        
+
+        self.pending_tx_set.entry(tx_hash).or_insert(transaction);
     }
 
-    pub fn get_pending_tx_from_wallet(&self) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError>{
+    pub fn get_pending_tx_from_wallet(
+        &self,
+    ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
         let mut pending_transactions = HashMap::new();
         let active_wallet = match self.get_active_wallet() {
             Some(active_wallet) => active_wallet,
@@ -359,15 +360,15 @@ impl NodeState {
         };
         let pubkey_hash = active_wallet.get_pubkey_hash()?;
 
-        for (tx_hash,tx) in self.pending_tx_set.iter(){
-            for (index, tx_out) in tx.outputs.iter().enumerate(){
-                if tx_out.is_sent_to_key(&pubkey_hash) {
-                    let out_point = OutPoint{
-                        hash: tx_hash.clone(),
-                        index: index as u32,
-                    };
-                    pending_transactions.insert(out_point, tx_out.clone());
-                }
+        for (tx_hash, tx) in self.pending_tx_set.iter() {
+            for (index, tx_out) in tx.outputs.iter().enumerate() {
+                // if tx_out.is_sent_to_key(&pubkey_hash) {
+                let out_point = OutPoint {
+                    hash: tx_hash.clone(),
+                    index: index as u32,
+                };
+                pending_transactions.insert(out_point, tx_out.clone());
+                // }
             }
         }
         Ok(pending_transactions)
@@ -384,7 +385,11 @@ pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError>
     Ok(file)
 }
 
-fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, pending_tx_set: &mut HashMap<Vec<u8>, Transaction>, block: Block) {
+fn update_transaction_sets(
+    utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    pending_tx_set: &mut HashMap<Vec<u8>, Transaction>,
+    block: Block,
+) {
     for tx in block.transactions.iter() {
         for tx_in in tx.inputs.iter() {
             utxo_set.remove(&tx_in.previous_output);
@@ -396,11 +401,10 @@ fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, 
             };
             utxo_set.insert(out_point, tx_out.clone());
         }
-        if pending_tx_set.contains_key(&tx.hash()){
+        if pending_tx_set.contains_key(&tx.hash()) {
             pending_tx_set.remove(&tx.hash());
         }
     }
-    
 }
 
 pub fn get_current_timestamp() -> Result<u64, CustomError> {
