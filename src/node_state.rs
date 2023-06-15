@@ -350,6 +350,28 @@ impl NodeState {
         }
         
     }
+
+    pub fn get_pending_tx_from_wallet(&self) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError>{
+        let mut pending_transactions = HashMap::new();
+        let active_wallet = match self.get_active_wallet() {
+            Some(active_wallet) => active_wallet,
+            None => return Err(CustomError::WalletNotFound),
+        };
+        let pubkey_hash = active_wallet.get_pubkey_hash()?;
+
+        for (tx_hash,tx) in self.pending_tx_set.iter(){
+            for (index, tx_out) in tx.outputs.iter().enumerate(){
+                if tx_out.is_sent_to_key(&pubkey_hash) {
+                    let out_point = OutPoint{
+                        hash: tx_hash.clone(),
+                        index: index as u32,
+                    };
+                    pending_transactions.insert(out_point, tx_out.clone());
+                }
+            }
+        }
+        Ok(pending_transactions)
+    }
 }
 
 pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {

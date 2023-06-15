@@ -5,7 +5,7 @@ use gtk::{
     prelude::BuilderExtManual,
     traits::{
         ButtonExt, ComboBoxExt, ComboBoxTextExt, DialogExt, EntryExt, LabelExt, MessageDialogExt,
-        WidgetExt,
+        WidgetExt, ContainerExt
     },
 };
 
@@ -45,8 +45,23 @@ pub fn gui_init(
     let debug_button: gtk::Button = builder.object("debug").unwrap();
     let dialog_error: gtk::MessageDialog = builder.object("error-dialog").unwrap();
     let label_balance: gtk::Label = builder.object("label-balance").unwrap();
+    let pending_tx_list_box: gtk::ListBox = builder.object("pending-transactions-list").unwrap();
 
     update_wallet_combo_box(node_state_ref.clone(), select_wallet_cb.clone())?;
+
+    //Pending transactions (provisorio)
+    {
+        let node_state_ref_clone = node_state_ref.clone();
+        let node_state = node_state_ref_clone.lock().unwrap();
+        let pending_transactions = node_state.get_pending_tx_from_wallet().unwrap();
+        for (_, tx_output) in pending_transactions{
+            let pending_tx_row = gtk::ListBoxRow::new();
+            pending_tx_row.add(&gtk::Label::new(Some(tx_output.value.to_string().as_str())));
+            pending_tx_list_box.add(&pending_tx_row);
+        }
+        drop(node_state);
+    }
+
 
     //update balance
 
