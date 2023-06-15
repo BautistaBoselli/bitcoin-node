@@ -286,9 +286,9 @@ impl NodeState {
                 "Name, public key and private key must not be empty".to_string(),
             ));
         }
-        if public_key.len() != 35 {
+        if public_key.len() != 34 {
             return Err(CustomError::Validation(
-                "Public key must be 35 characters long".to_string(),
+                "Public key must be 34 characters long".to_string(),
             ));
         }
         if self
