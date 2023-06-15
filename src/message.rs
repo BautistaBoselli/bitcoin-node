@@ -58,7 +58,7 @@ pub trait Message {
 
         stream
             .read_exact(&mut payload_buffer)
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
+            .map_err(|_| CustomError::CannotReadStream)?;
 
         Self::parse(payload_buffer)
     }

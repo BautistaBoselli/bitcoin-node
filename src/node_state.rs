@@ -14,8 +14,8 @@ use crate::{
     logger::{send_log, Log},
     message::Message,
     messages::{
-        block::{self, Block, OutPoint},
-        headers::{hash_as_string, BlockHeader, Headers},
+        block::Block,
+        headers::{hash_as_string, BlockHeader, Headers}, transaction::{TransactionOutput, OutPoint, Transaction},
     },
     wallet::Wallet,
 };
@@ -31,7 +31,8 @@ pub struct NodeState {
     wallets: Vec<Wallet>,
     active_wallet: Option<String>,
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
-    utxo_set: HashMap<OutPoint, block::TransactionOutput>,
+    utxo_set: HashMap<OutPoint, TransactionOutput>,
+    pending_tx_set: HashMap<Vec<u8>, Transaction>,
     headers_sync: bool,
     blocks_sync: bool,
     utxo_sync: bool,
@@ -74,6 +75,7 @@ impl NodeState {
             active_wallet: None,
             pending_blocks_ref,
             utxo_set: HashMap::new(),
+            pending_tx_set: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
             utxo_sync: false,
@@ -151,7 +153,7 @@ impl NodeState {
         drop(pending_blocks);
 
         match self.utxo_sync {
-            true => update_utxo_set(&mut self.utxo_set, block),
+            true => update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block),
             false => self.verify_blocks_sync().unwrap_or_else(|_| {
                 send_log(
                     &self.logger_sender,
@@ -233,7 +235,7 @@ impl NodeState {
             let mut block_buffer = Vec::new();
             block_file.read_to_end(&mut block_buffer)?;
             let block = Block::parse(block_buffer)?;
-            update_utxo_set(&mut self.utxo_set, block);
+            update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block);
             i += 1;
         }
         self.utxo_sync = true;
@@ -340,6 +342,14 @@ impl NodeState {
         }
         Ok(balance)
     }
+
+    pub fn append_pending_transaction(&mut self, transaction: Transaction){ 
+        let tx_hash = transaction.hash();
+        if !self.pending_tx_set.contains_key(&tx_hash){
+            self.pending_tx_set.insert(tx_hash, transaction);
+        }
+        
+    }
 }
 
 pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
@@ -352,7 +362,7 @@ pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError>
     Ok(file)
 }
 
-fn update_utxo_set(utxo_set: &mut HashMap<OutPoint, block::TransactionOutput>, block: Block) {
+fn update_transaction_sets(utxo_set: &mut HashMap<OutPoint, TransactionOutput>, pending_tx_set: &mut HashMap<Vec<u8>, Transaction>, block: Block) {
     for tx in block.transactions.iter() {
         for tx_in in tx.inputs.iter() {
             utxo_set.remove(&tx_in.previous_output);
@@ -364,7 +374,11 @@ fn update_utxo_set(utxo_set: &mut HashMap<OutPoint, block::TransactionOutput>, b
             };
             utxo_set.insert(out_point, tx_out.clone());
         }
+        if pending_tx_set.contains_key(&tx.hash()){
+            pending_tx_set.remove(&tx.hash());
+        }
     }
+    
 }
 
 pub fn get_current_timestamp() -> Result<u64, CustomError> {

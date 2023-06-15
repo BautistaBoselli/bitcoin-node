@@ -42,7 +42,7 @@ pub fn pending_blocks_loop(
 
                 for block_hash in blocks_to_refetch.iter() {
                     node_state.append_pending_block(block_hash.clone())?;
-                    inventories.push(Inventory::new(InventoryType::GetBlock, block_hash.clone()));
+                    inventories.push(Inventory::new(InventoryType::Block, block_hash.clone()));
                 }
                 drop(node_state);
 
