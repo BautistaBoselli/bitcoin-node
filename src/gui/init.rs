@@ -3,17 +3,17 @@ use std::sync::{mpsc, Arc, Mutex};
 use gtk::{
     glib::{self, Object, Receiver},
     prelude::{BuilderExtManual, IsA},
-    traits::WidgetExt,
 };
 
 use crate::{error::CustomError, logger::Log, node_state::NodeState};
 
-use super::{balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet};
+use super::{balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet, window::GUIWindow};
 
 pub enum GUIActions {
     Log(Log),
     WalletChanged,
     NewPendingTx,
+    NodeStateReady,
 }
 
 pub struct GUI {
@@ -22,6 +22,7 @@ pub struct GUI {
     balance: GUIBalance,
     logs: GUILogs,
     debug: GUIDebug,
+    window: GUIWindow,
 }
 
 impl GUI {
@@ -51,12 +52,17 @@ impl GUI {
 
         let logs = GUILogs {
             builder: builder.clone(),
-            logger_sender,
+            logger_sender: logger_sender.clone(),
         };
 
         let debug = GUIDebug {
             builder: builder.clone(),
             node_state_ref,
+        };
+
+        let window = GUIWindow {
+            builder: builder.clone(),
+            logger_sender: logger_sender.clone(),
         };
 
         let gui = Self {
@@ -65,6 +71,7 @@ impl GUI {
             balance,
             logs,
             debug,
+            window,
         };
 
         gui.handle_interactivity()?;
@@ -78,9 +85,7 @@ impl GUI {
     pub fn handle_interactivity(&self) -> Result<(), CustomError> {
         // initialize
         self.wallet.initialize()?;
-        //self.window.initialize()?;
-        // self.show_loading_window()?;
-        self.show_main_window()?;
+        self.window.initialize()?;
 
         // interactivity
         self.wallet.handle_interactivity()?;
@@ -89,26 +94,15 @@ impl GUI {
         Ok(())
     }
 
-    fn show_main_window(&self) -> Result<(), CustomError> {
-        let window: gtk::Window = get_gui_element(&self.builder, "window1")?;
-        window.show_all();
-        Ok(())
-    }
-
     fn gui_actions_loop(&self, gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
         let balance = self.balance.clone();
         let logs = self.logs.clone();
+        let window = self.window.clone();
 
         gui_receiver.attach(None, move |message| {
-            // if message == GUIActions::NodeStateReady {
-            //     // balance.handle_events(&message);
-            //     hide_loading_window(&message);
-            //     show_main_window(&message);
-            // }
-
             balance.handle_events(&message);
             logs.handle_events(&message);
-            // window.handle_events(&message);
+            window.handle_events(&message);
 
             glib::Continue(true)
         });

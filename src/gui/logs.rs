@@ -29,11 +29,13 @@ impl GUILogs {
 
     pub fn handle_log(&self, log: &Log) -> Result<(), CustomError> {
         let logs: gtk::Label = get_gui_element(&self.builder, "logs")?;
+        let load_screen_logs: gtk::Label = get_gui_element(&self.builder, "load-screen-logs")?;
         let dialog_error: gtk::MessageDialog = get_gui_element(&self.builder, "error-dialog")?;
 
         match log {
             Log::Message(string) => {
                 logs.set_text(string.as_str());
+                load_screen_logs.set_text(string.as_str());
             }
             Log::Error(error) => {
                 dialog_error.set_text(Some("Error"));
