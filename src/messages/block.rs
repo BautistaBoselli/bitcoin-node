@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_merkle_tree() {
-        let mut file = open_new_file("tests/test_block.bin".to_string()).unwrap();
+        let mut file = open_new_file("tests/test_block.bin".to_string(), true).unwrap();
         let mut buffer = vec![];
         file.read_to_end(&mut buffer).unwrap();
         let block = Block::parse(buffer).unwrap();
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_merkle_path() {
-        let mut file = open_new_file("tests/test_block.bin".to_string()).unwrap();
+        let mut file = open_new_file("tests/test_block.bin".to_string(), true).unwrap();
         let mut buffer = vec![];
         file.read_to_end(&mut buffer).unwrap();
         let block = Block::parse(buffer).unwrap();

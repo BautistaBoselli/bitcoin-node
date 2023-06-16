@@ -1,6 +1,6 @@
 use std::sync::{mpsc, Arc, Mutex};
 
-use gtk::traits::{ContainerExt, LabelExt};
+use gtk::traits::{ContainerExt, LabelExt, WidgetExt};
 
 use crate::{
     error::CustomError,
@@ -31,7 +31,8 @@ impl GUIBalance {
 
     fn handle_wallet_changed(&self) -> Result<(), CustomError> {
         self.update_available_balance()?;
-        self.update_pending_txs()
+        self.update_pending_txs()?;
+        self.update_txs()
     }
 
     fn update_available_balance(&self) -> Result<(), CustomError> {
@@ -58,14 +59,40 @@ impl GUIBalance {
         let node_state = node_state_ref_clone.lock().unwrap();
         let pending_transactions = node_state.get_pending_tx_from_wallet().unwrap();
         println!("POR MOSTRAR {} transacciones", pending_transactions.len());
+        pending_tx_list_box.foreach(|child| {
+            pending_tx_list_box.remove(child);
+        });
         for (_, tx_output) in pending_transactions {
             println!("tx: {:?}", tx_output);
             let pending_tx_row = gtk::ListBoxRow::new();
             pending_tx_row.add(&gtk::Label::new(Some(tx_output.value.to_string().as_str())));
+            pending_tx_row.show_all();
             pending_tx_list_box.add(&pending_tx_row);
+
         }
         drop(node_state);
 
+        Ok(())
+    }
+
+    fn update_txs(&self) -> Result<(), CustomError> {
+        let tx_list_box: gtk::ListBox =
+            get_gui_element(&self.builder, "transactions-list")?;
+        let node_state_ref_clone = self.node_state_ref.clone();
+        let node_state = node_state_ref_clone.lock().unwrap();
+        let history = node_state.get_active_wallet().unwrap().get_history();
+        println!("POR MOSTRAR {} transacciones", history.len());
+        tx_list_box.foreach(|child| {
+            tx_list_box.remove(child);
+        });
+        for movement in history {
+            let tx_row = gtk::ListBoxRow::new();
+            tx_row.add(&gtk::Label::new(Some(movement.value.to_string().as_str())));
+            tx_row.show_all();
+            tx_list_box.add(&tx_row);
+
+        }
+        drop(node_state);
         Ok(())
     }
 }
