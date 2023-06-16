@@ -19,7 +19,10 @@ impl GUIDebug {
 
         debug_button.connect_clicked(move |_| {
             let node_state = node_state_ref.lock().unwrap();
-            println!("active_wallet: {:?}", node_state.get_active_wallet());
+            println!(
+                "active_wallet: {:?}",
+                node_state.get_pending_tx_from_wallet()
+            );
             drop(node_state);
         });
 

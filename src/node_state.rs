@@ -28,7 +28,6 @@ pub struct NodeState {
     gui_sender: Sender<GUIActions>,
     headers_file: File,
     headers: Vec<BlockHeader>,
-    wallets_file: File,
     wallets: Vec<Wallet>,
     active_wallet: Option<String>,
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
@@ -44,7 +43,7 @@ impl NodeState {
         logger_sender: mpsc::Sender<Log>,
         gui_sender: Sender<GUIActions>,
     ) -> Result<Arc<Mutex<Self>>, CustomError> {
-        let mut headers_file = open_new_file(String::from("store/headers.bin"))?;
+        let mut headers_file = open_new_file(String::from("store/headers.bin"), true)?;
 
         let mut saved_headers_buffer = vec![];
         headers_file.read_to_end(&mut saved_headers_buffer)?;
@@ -54,15 +53,7 @@ impl NodeState {
             Err(_) => vec![],
         };
 
-        let mut wallets_file = open_new_file(String::from("store/wallets.bin"))?;
-
-        let mut saved_wallets_buffer = vec![];
-        wallets_file.read_to_end(&mut saved_wallets_buffer)?;
-
-        let wallets = match Wallet::parse_wallets(saved_wallets_buffer) {
-            Ok(wallets) => wallets,
-            Err(_) => vec![],
-        };
+        let wallets= restore_wallets()?;
 
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
 
@@ -71,7 +62,6 @@ impl NodeState {
             gui_sender,
             headers_file,
             headers,
-            wallets_file,
             wallets,
             active_wallet: None,
             pending_blocks_ref,
@@ -146,7 +136,7 @@ impl NodeState {
 
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let filename = hash_as_string(block_hash.clone());
-        let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename))?;
+        let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename), true)?;
         block_file.write_all(&block.serialize())?;
 
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
@@ -154,7 +144,7 @@ impl NodeState {
         drop(pending_blocks);
 
         match self.utxo_sync {
-            true => update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block),
+            true => update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?,
             false => self.verify_blocks_sync().unwrap_or_else(|_| {
                 send_log(
                     &self.logger_sender,
@@ -232,11 +222,11 @@ impl NodeState {
                 i = 0;
             }
             let hash = header.hash_as_string();
-            let mut block_file = open_new_file(format!("store/blocks/{}.bin", hash))?;
+            let mut block_file = open_new_file(format!("store/blocks/{}.bin", hash), true)?;
             let mut block_buffer = Vec::new();
             block_file.read_to_end(&mut block_buffer)?;
             let block = Block::parse(block_buffer)?;
-            update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block);
+            update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?;
             i += 1;
         }
         self.utxo_sync = true;
@@ -287,9 +277,9 @@ impl NodeState {
                 "Name, public key and private key must not be empty".to_string(),
             ));
         }
-        if public_key.len() != 35 {
+        if public_key.len() != 34 {
             return Err(CustomError::Validation(
-                "Public key must be 35 characters long".to_string(),
+                "Public key must be 34 characters long".to_string(),
             ));
         }
         if self
@@ -302,9 +292,9 @@ impl NodeState {
             ));
         }
 
-        let new_wallet = Wallet::new(name, public_key, private_key);
-        self.wallets_file.write_all(&new_wallet.serialize())?;
+        let new_wallet = Wallet::new(name, public_key, private_key, &self.utxo_set)?;
         self.wallets.push(new_wallet);
+        save_wallets(&mut self.wallets)?;
         Ok(())
     }
 
@@ -349,14 +339,60 @@ impl NodeState {
 
         self.pending_tx_set.entry(tx_hash).or_insert(transaction);
     }
+
+    pub fn get_pending_tx_from_wallet(
+        &self,
+    ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
+        let mut pending_transactions = HashMap::new();
+        let active_wallet = match self.get_active_wallet() {
+            Some(active_wallet) => active_wallet,
+            None => return Err(CustomError::WalletNotFound),
+        };
+        let pubkey_hash = active_wallet.get_pubkey_hash()?;
+
+        for (tx_hash, tx) in self.pending_tx_set.iter() {
+            for (index, tx_out) in tx.outputs.iter().enumerate() {
+                if tx_out.is_sent_to_key(&pubkey_hash) {
+                let out_point = OutPoint {
+                    hash: tx_hash.clone(),
+                    index: index as u32,
+                };
+                pending_transactions.insert(out_point, tx_out.clone());
+                }
+            }
+        }
+        Ok(pending_transactions)
+    }
+
 }
 
-pub fn open_new_file(path_to_file: String) -> Result<std::fs::File, CustomError> {
+fn save_wallets(wallets: &mut Vec<Wallet>) -> Result<(), CustomError> {
+    let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
+    let mut wallets_buffer = vec![];
+    for wallet in wallets.iter() {
+        wallets_buffer.append(&mut wallet.serialize());
+    }
+    wallets_file.write_all(&wallets_buffer)?;
+    Ok(())
+}
+
+fn restore_wallets() -> Result<Vec<Wallet>, CustomError> {
+    let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
+    let mut saved_wallets_buffer = vec![];
+    wallets_file.read_to_end(&mut saved_wallets_buffer)?;
+    let wallets = match Wallet::parse_wallets(saved_wallets_buffer) {
+        Ok(wallets) => wallets,
+        Err(_) => vec![],
+    };
+    Ok(wallets)
+}
+
+pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File, CustomError> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .append(true)
+        .append(append)
         .open(path_to_file)?;
     Ok(file)
 }
@@ -365,7 +401,9 @@ fn update_transaction_sets(
     utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
     pending_tx_set: &mut HashMap<Vec<u8>, Transaction>,
     block: Block,
-) {
+    wallets: &mut Vec<Wallet>,
+) -> Result<(), CustomError> {
+    let mut wallets_updated = false;
     for tx in block.transactions.iter() {
         for tx_in in tx.inputs.iter() {
             utxo_set.remove(&tx_in.previous_output);
@@ -377,10 +415,22 @@ fn update_transaction_sets(
             };
             utxo_set.insert(out_point, tx_out.clone());
         }
+        for wallet in wallets.into_iter() {
+            let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo_set);
+            if let Some(mut movement) = movement {
+                movement.block_hash = Some(block.header.hash());
+                wallet.update_history(movement);
+                wallets_updated = true;
+            }
+        }
         if pending_tx_set.contains_key(&tx.hash()) {
             pending_tx_set.remove(&tx.hash());
         }
     }
+    if wallets_updated {
+        save_wallets(wallets)?;
+    }
+    Ok(())
 }
 
 pub fn get_current_timestamp() -> Result<u64, CustomError> {

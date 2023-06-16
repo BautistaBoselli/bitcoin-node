@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use bitcoin_hashes::{sha256, Hash};
 
-use crate::{parser::{BufferParser, VarIntSerialize}, error::CustomError, message::Message};
+use crate::{parser::{BufferParser, VarIntSerialize}, error::CustomError, message::Message, wallet::{Movement}};
 
 #[derive(Debug)]
 pub struct Transaction {
@@ -52,6 +54,33 @@ impl Transaction {
             outputs,
             lock_time,
         })
+    }
+
+    pub fn get_movement(&self, public_key_hash: &Vec<u8>, utxo_set: &HashMap<OutPoint, TransactionOutput>,
+    ) -> Option<Movement> {
+        let mut value = 0;
+        
+        for output in &self.outputs {
+            if output.is_sent_to_key(public_key_hash) {
+                value += output.value;
+            }
+        }
+        for input in &self.inputs {
+            if let Some(output) = utxo_set.get(&input.previous_output) {
+                if output.is_sent_to_key(public_key_hash) {
+                    value -= output.value;
+                }
+            }
+        }
+        if value != 0 {
+            Some(Movement {
+                tx_hash: self.hash(),
+                value,
+                block_hash: None,
+            })
+        } else {
+            None
+        }
     }
 }
 

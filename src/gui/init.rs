@@ -78,6 +78,7 @@ impl GUI {
     pub fn handle_interactivity(&self) -> Result<(), CustomError> {
         // initialize
         self.wallet.initialize()?;
+        //self.window.initialize()?;
         // self.show_loading_window()?;
         self.show_main_window()?;
 
@@ -107,6 +108,7 @@ impl GUI {
 
             balance.handle_events(&message);
             logs.handle_events(&message);
+            // window.handle_events(&message);
 
             glib::Continue(true)
         });
