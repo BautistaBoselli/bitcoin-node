@@ -3,3 +3,4 @@ pub mod debug;
 pub mod init;
 pub mod logs;
 pub mod wallet;
+pub mod window;

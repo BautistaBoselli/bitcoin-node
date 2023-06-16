@@ -238,6 +238,10 @@ impl NodeState {
             &self.logger_sender,
             Log::Message("Utxo generation is finished".to_string()),
         );
+        self.gui_sender
+            .send(GUIActions::NodeStateReady)
+            .map_err(|_| CustomError::CannotInitGUI)?;
+        //no se si ese custom va, o hacemos uno especifico?
         Ok(())
     }
 
