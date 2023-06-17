@@ -53,7 +53,7 @@ impl NodeState {
             Err(_) => vec![],
         };
 
-        let wallets= restore_wallets()?;
+        let wallets = restore_wallets()?;
 
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
 
@@ -144,7 +144,19 @@ impl NodeState {
         drop(pending_blocks);
 
         match self.utxo_sync {
-            true => update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?,
+            true => {
+                update_transaction_sets(
+                    &mut self.utxo_set,
+                    &mut self.pending_tx_set,
+                    block,
+                    &mut self.wallets,
+                )?;
+                if let Some(_wallet) = &self.active_wallet {
+                    self.gui_sender
+                        .send(GUIActions::NewBlock)
+                        .map_err(|_| CustomError::CannotInitGUI)?;
+                }
+            }
             false => self.verify_blocks_sync().unwrap_or_else(|_| {
                 send_log(
                     &self.logger_sender,
@@ -226,7 +238,13 @@ impl NodeState {
             let mut block_buffer = Vec::new();
             block_file.read_to_end(&mut block_buffer)?;
             let block = Block::parse(block_buffer)?;
-            update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?;
+            update_transaction_sets(
+                &mut self.utxo_set,
+                &mut self.pending_tx_set,
+                block,
+                &mut self.wallets,
+            )
+            .unwrap();
             i += 1;
         }
         self.utxo_sync = true;
@@ -242,6 +260,7 @@ impl NodeState {
             .send(GUIActions::NodeStateReady)
             .map_err(|_| CustomError::CannotInitGUI)?;
         //no se si ese custom va, o hacemos uno especifico?
+        println!("entra");
         Ok(())
     }
 
@@ -338,10 +357,21 @@ impl NodeState {
         Ok(balance)
     }
 
-    pub fn append_pending_transaction(&mut self, transaction: Transaction) {
+    pub fn append_pending_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> Result<(), CustomError> {
         let tx_hash = transaction.hash();
 
+        if !self.pending_tx_set.contains_key(&tx_hash) {
+            if let Some(_wallet) = &self.active_wallet {
+                self.gui_sender
+                    .send(GUIActions::NewPendingTx)
+                    .map_err(|_| CustomError::CannotInitGUI)?;
+            }
+        }
         self.pending_tx_set.entry(tx_hash).or_insert(transaction);
+        Ok(())
     }
 
     pub fn get_pending_tx_from_wallet(
@@ -357,17 +387,16 @@ impl NodeState {
         for (tx_hash, tx) in self.pending_tx_set.iter() {
             for (index, tx_out) in tx.outputs.iter().enumerate() {
                 if tx_out.is_sent_to_key(&pubkey_hash) {
-                let out_point = OutPoint {
-                    hash: tx_hash.clone(),
-                    index: index as u32,
-                };
-                pending_transactions.insert(out_point, tx_out.clone());
+                    let out_point = OutPoint {
+                        hash: tx_hash.clone(),
+                        index: index as u32,
+                    };
+                    pending_transactions.insert(out_point, tx_out.clone());
                 }
             }
         }
         Ok(pending_transactions)
     }
-
 }
 
 fn save_wallets(wallets: &mut Vec<Wallet>) -> Result<(), CustomError> {

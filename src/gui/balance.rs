@@ -21,6 +21,8 @@ impl GUIBalance {
     pub fn handle_events(&self, message: &GUIActions) {
         let result = match message {
             GUIActions::WalletChanged => self.handle_wallet_changed(),
+            GUIActions::NewPendingTx => self.handle_new_pending_tx(),
+            GUIActions::NewBlock => self.handle_new_block(),
             _ => Ok(()),
         };
 
@@ -33,6 +35,15 @@ impl GUIBalance {
         self.update_available_balance()?;
         self.update_pending_txs()?;
         self.update_txs()
+    }
+
+    fn handle_new_block(&self) -> Result<(), CustomError> {
+        self.update_txs()
+    }
+
+    fn handle_new_pending_tx(&self) -> Result<(), CustomError> {
+        self.update_available_balance()?;
+        self.update_pending_txs()
     }
 
     fn update_available_balance(&self) -> Result<(), CustomError> {
@@ -68,7 +79,6 @@ impl GUIBalance {
             pending_tx_row.add(&gtk::Label::new(Some(tx_output.value.to_string().as_str())));
             pending_tx_row.show_all();
             pending_tx_list_box.add(&pending_tx_row);
-
         }
         drop(node_state);
 
@@ -76,8 +86,7 @@ impl GUIBalance {
     }
 
     fn update_txs(&self) -> Result<(), CustomError> {
-        let tx_list_box: gtk::ListBox =
-            get_gui_element(&self.builder, "transactions-list")?;
+        let tx_list_box: gtk::ListBox = get_gui_element(&self.builder, "transactions-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
         let node_state = node_state_ref_clone.lock().unwrap();
         let history = node_state.get_active_wallet().unwrap().get_history();
@@ -90,7 +99,6 @@ impl GUIBalance {
             tx_row.add(&gtk::Label::new(Some(movement.value.to_string().as_str())));
             tx_row.show_all();
             tx_list_box.add(&tx_row);
-
         }
         drop(node_state);
         Ok(())
