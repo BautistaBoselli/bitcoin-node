@@ -1,6 +1,9 @@
 use std::sync::{mpsc, Arc, Mutex};
 
-use gtk::traits::{ContainerExt, LabelExt, WidgetExt};
+use gtk::{
+    traits::{ContainerExt, LabelExt, WidgetExt},
+    ListBox,
+};
 
 use crate::{
     error::CustomError,
@@ -70,9 +73,7 @@ impl GUIBalance {
         let node_state = node_state_ref_clone.lock().unwrap();
         let pending_transactions = node_state.get_pending_tx_from_wallet().unwrap();
         println!("POR MOSTRAR {} transacciones", pending_transactions.len());
-        pending_tx_list_box.foreach(|child| {
-            pending_tx_list_box.remove(child);
-        });
+        remove_transactions(&pending_tx_list_box);
         for (_, tx_output) in pending_transactions {
             println!("tx: {:?}", tx_output);
             let pending_tx_row = gtk::ListBoxRow::new();
@@ -91,9 +92,7 @@ impl GUIBalance {
         let node_state = node_state_ref_clone.lock().unwrap();
         let history = node_state.get_active_wallet().unwrap().get_history();
         println!("POR MOSTRAR {} transacciones", history.len());
-        tx_list_box.foreach(|child| {
-            tx_list_box.remove(child);
-        });
+        remove_transactions(&tx_list_box);
         for movement in history {
             let tx_row = gtk::ListBoxRow::new();
             tx_row.add(&gtk::Label::new(Some(movement.value.to_string().as_str())));
@@ -103,4 +102,10 @@ impl GUIBalance {
         drop(node_state);
         Ok(())
     }
+}
+
+fn remove_transactions(list_box: &ListBox) {
+    list_box.foreach(|child| {
+        list_box.remove(child);
+    });
 }
