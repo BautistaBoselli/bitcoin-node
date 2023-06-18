@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{error::CustomError, parser::BufferParser, messages::transaction::{OutPoint, TransactionOutput}};
+use crate::{
+    error::CustomError,
+    messages::transaction::{OutPoint, TransactionOutput},
+    parser::BufferParser,
+};
 
 #[derive(Clone, Debug)]
 pub struct Movement {
@@ -62,7 +66,12 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn new(name: String, pubkey: String, privkey: String, utxo_set: &HashMap<OutPoint, TransactionOutput>) -> Result<Self, CustomError> {
+    pub fn new(
+        name: String,
+        pubkey: String,
+        privkey: String,
+        utxo_set: &HashMap<OutPoint, TransactionOutput>,
+    ) -> Result<Self, CustomError> {
         let mut wallet = Self {
             name,
             pubkey,
@@ -108,17 +117,17 @@ impl Wallet {
 
             let privkey_len = parser.extract_u8()? as usize;
             let privkey = parser.extract_string(privkey_len)?;
+
             let history_len = parser.extract_u32()? as usize;
-            println!("history len: {}", history_len);
             let mut history = Vec::new();
             for _ in 0..history_len {
                 history.push(Movement::parse(&mut parser)?);
             }
             wallets.push(Self {
-                name, 
-                pubkey, 
+                name,
+                pubkey,
                 privkey,
-                history
+                history,
             });
         }
         Ok(wallets)

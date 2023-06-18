@@ -7,13 +7,16 @@ use gtk::{
 
 use crate::{error::CustomError, logger::Log, node_state::NodeState};
 
-use super::{balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet, window::GUIWindow};
+use super::{
+    balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet, window::GUIWindow,
+};
 
 pub enum GUIActions {
     Log(Log),
     WalletChanged,
     NewPendingTx,
     NodeStateReady,
+    NewBlock,
 }
 
 pub struct GUI {

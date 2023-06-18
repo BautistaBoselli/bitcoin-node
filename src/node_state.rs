@@ -152,6 +152,11 @@ impl NodeState {
             &mut self.wallets,
             true,
         )?;
+        if let Some(_wallet) = &self.active_wallet {
+            self.gui_sender
+                .send(GUIActions::NewBlock)
+                .map_err(|_| CustomError::CannotInitGUI)?;
+        }
         Ok(())
     }
 
@@ -173,7 +178,7 @@ impl NodeState {
         pending_blocks.remove(&block_hash);
         drop(pending_blocks);
 
-        match self.is_utxo_sync() {
+        match self.utxo_sync {
             true => self.update_new_block_transactions(block)?,
             false => self.sync_up_utxo(),
         }
@@ -372,10 +377,22 @@ impl NodeState {
         Ok(balance)
     }
 
-    pub fn append_pending_transaction(&mut self, transaction: Transaction) {
+    pub fn append_pending_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> Result<(), CustomError> {
         let tx_hash = transaction.hash();
 
-        self.pending_tx_set.entry(tx_hash).or_insert(transaction);
+        if !self.pending_tx_set.contains_key(&tx_hash) {
+            if let Some(_wallet) = &self.active_wallet {
+                self.gui_sender
+                    .send(GUIActions::NewPendingTx)
+                    .map_err(|_| CustomError::CannotInitGUI)?;
+            }
+            self.pending_tx_set.insert(tx_hash, transaction);
+        }
+        //self.pending_tx_set.entry(tx_hash).or_insert(transaction);
+        Ok(())
     }
 
     pub fn get_pending_tx_from_wallet(
