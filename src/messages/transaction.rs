@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bitcoin_hashes::{sha256, Hash};
 
-use crate::{parser::{BufferParser, VarIntSerialize}, error::CustomError, message::Message, wallet::{Movement}};
+use crate::{parser::{BufferParser, VarIntSerialize}, error::CustomError, message::Message, wallet::{Movement, Wallet, get_script_pubkey}};
 
 #[derive(Debug)]
 pub struct Transaction {
@@ -81,6 +81,40 @@ impl Transaction {
         } else {
             None
         }
+    }
+
+    pub fn create(sender_wallet: &Wallet, inputs_outpoints: Vec<OutPoint>, outputs: HashMap<String, u64>) -> Result<(), CustomError> {
+        //println!("Wallet: {:?}", sender_wallet);
+        println!("Inputs: {:?}", inputs_outpoints);
+        println!("Outputs: {:?}", outputs);
+        let mut transaction = Transaction {
+            version: 1,
+            inputs: vec![],
+            outputs: vec![],
+            lock_time: 0,
+        };
+        let script_pubkey = sender_wallet.get_script_pubkey()?;
+        println!("script pubkey: {:?}", script_pubkey);
+        for outpoint in inputs_outpoints {
+            let input = TransactionInput {
+                previous_output: outpoint,
+                script_sig: script_pubkey.clone(),
+                sequence: 0xffffffff,
+            };
+            transaction.inputs.push(input);
+        }
+        for (pubkey, value) in outputs {
+            let script_pubkey = get_script_pubkey(pubkey)?;
+            let output = TransactionOutput {
+                value,
+                script_pubkey,
+            };
+            transaction.outputs.push(output);
+        }
+        println!("Transaction: {:?}", transaction);
+        
+        
+        Ok(())
     }
 }
 

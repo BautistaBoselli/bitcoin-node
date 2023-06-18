@@ -149,6 +149,7 @@ impl NodeActionLoop {
 
     fn handle_pending_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        println!("Transaction pendiente: {:?}", transaction);
         node_state.append_pending_transaction(transaction)?;
         drop(node_state);
         Ok(())

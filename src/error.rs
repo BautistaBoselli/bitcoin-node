@@ -44,6 +44,7 @@ pub enum CustomError {
     CannotReadStream,
     CannotSendToStream,
     MissingGUIElement,
+    InsufficientFunds,
 }
 
 impl CustomError {
@@ -82,6 +83,7 @@ impl CustomError {
             Self::CannotReadStream => "cannot read stream",
             Self::CannotSendToStream => "cannot send message to stream",
             Self::MissingGUIElement => "missing GUI element",
+            Self::InsufficientFunds => "insufficient funds",
         }
     }
 }

@@ -52,7 +52,7 @@ fn main() {
 
     let logger_sender_clone = logger_sender.clone();
     let node_state_ref_clone = node_state_ref.clone();
-    thread::spawn(move || {
+    //thread::spawn(move || {
         let addresses = match get_addresses(config.seed.clone(), config.port) {
             Ok(addresses) => addresses,
             Err(error) => {
@@ -74,7 +74,7 @@ fn main() {
                 return;
             }
         };
-    });
+    //});
 
     let logger_sender_clone = logger_sender.clone();
 

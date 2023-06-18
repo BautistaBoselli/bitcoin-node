@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, collections::HashMap};
 
-use gtk::traits::ButtonExt;
+use gtk::{traits::ButtonExt};
 
 use crate::{error::CustomError, node_state::NodeState};
 
@@ -19,10 +19,16 @@ impl GUIDebug {
 
         debug_button.connect_clicked(move |_| {
             let node_state = node_state_ref.lock().unwrap();
-            println!(
-                "active_wallet: {:?}",
-                node_state.get_pending_tx_from_wallet()
+            let mut outputs = HashMap::new();
+            outputs.insert(
+                String::from("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"),
+                1000000,
             );
+            outputs.insert(
+                String::from("1A1zP1eP5QGefi2DMPTfTL5SLmDonROuch"),
+                1000000,
+            );
+            node_state.make_transaction(outputs, 500000);
             drop(node_state);
         });
 

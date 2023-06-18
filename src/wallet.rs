@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     error::CustomError,
-    messages::transaction::{OutPoint, TransactionOutput},
+    messages::transaction::{OutPoint, TransactionOutput, Transaction},
     parser::BufferParser,
 };
 
@@ -134,16 +134,11 @@ impl Wallet {
     }
 
     pub fn get_pubkey_hash(&self) -> Result<Vec<u8>, CustomError> {
-        let decoded_pubkey = bs58::decode(self.pubkey.clone()).into_vec().map_err(|_| {
-            CustomError::Validation(String::from("User PubKey incorrectly formatted"))
-        })?;
+        get_pubkey_hash(self.pubkey.clone())
+    }
 
-        match decoded_pubkey.get(1..21) {
-            Some(pubkey_hash) => Ok(pubkey_hash.to_vec()),
-            None => Err(CustomError::Validation(String::from(
-                "User PubKey incorrectly formatted",
-            ))),
-        }
+    pub fn get_script_pubkey(&self) -> Result<Vec<u8>, CustomError> {
+        get_script_pubkey(self.pubkey.clone())
     }
 
     pub fn update_history(&mut self, movement: Movement) {
@@ -153,4 +148,28 @@ impl Wallet {
     pub fn get_history(&self) -> Vec<Movement> {
         self.history.clone()
     }
+}
+
+pub fn get_pubkey_hash(pubkey: String) -> Result<Vec<u8>, CustomError> {
+    let decoded_pubkey = bs58::decode(pubkey).into_vec().map_err(|_| {
+        CustomError::Validation(String::from("User PubKey incorrectly formatted"))
+    })?;
+
+    match decoded_pubkey.get(1..21) {
+        Some(pubkey_hash) => Ok(pubkey_hash.to_vec()),
+        None => Err(CustomError::Validation(String::from(
+            "User PubKey incorrectly formatted",
+        ))),
+    }
+}
+
+pub fn get_script_pubkey(pubkey: String) -> Result<Vec<u8>, CustomError> {
+    let mut script_pubkey = Vec::new();
+    script_pubkey.push(0x76);
+    script_pubkey.push(0xa9);
+    script_pubkey.push(0x14);
+    script_pubkey.extend(get_pubkey_hash(pubkey)?);
+    script_pubkey.push(0x88);
+    script_pubkey.push(0xac);
+    Ok(script_pubkey)
 }
