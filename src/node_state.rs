@@ -18,6 +18,7 @@ use crate::{
         headers::{hash_as_string, BlockHeader, Headers},
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
+    utxo::{parse_utxo, serialize_utxo},
     wallet::Wallet,
 };
 
@@ -27,6 +28,7 @@ pub struct NodeState {
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIActions>,
     headers_file: File,
+    utxo_file: File,
     headers: Vec<BlockHeader>,
     wallets: Vec<Wallet>,
     active_wallet: Option<String>,
@@ -53,7 +55,13 @@ impl NodeState {
             Err(_) => vec![],
         };
 
-        let wallets= restore_wallets()?;
+        let mut utxo_file = open_new_file(String::from("store/utxo.bin"), true)?;
+        let mut saved_utxo_buffer = vec![];
+        utxo_file.read_to_end(&mut saved_utxo_buffer)?;
+        let utxo_set = parse_utxo(saved_utxo_buffer)?;
+        let utxo_sync = if utxo_set.len() > 0 { true } else { false };
+
+        let wallets = restore_wallets()?;
 
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
 
@@ -61,15 +69,16 @@ impl NodeState {
             logger_sender,
             gui_sender,
             headers_file,
+            utxo_file,
             headers,
             wallets,
             active_wallet: None,
             pending_blocks_ref,
-            utxo_set: HashMap::new(),
+            utxo_set,
             pending_tx_set: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
-            utxo_sync: false,
+            utxo_sync,
         }));
 
         Ok(node_state_ref)
@@ -134,6 +143,27 @@ impl NodeState {
         Ok(to_remove)
     }
 
+    fn update_new_block_transactions(&mut self, block: Block) -> Result<(), CustomError> {
+        update_transaction_sets(
+            &mut self.utxo_set,
+            &mut self.utxo_file,
+            &mut self.pending_tx_set,
+            block,
+            &mut self.wallets,
+            true,
+        )?;
+        Ok(())
+    }
+
+    fn sync_up_utxo(&mut self) {
+        self.verify_blocks_sync().unwrap_or_else(|_| {
+            send_log(
+                &self.logger_sender,
+                Log::Message("Error verifying blocks synchronization".to_string()),
+            );
+        });
+    }
+
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let filename = hash_as_string(block_hash.clone());
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename), true)?;
@@ -143,14 +173,9 @@ impl NodeState {
         pending_blocks.remove(&block_hash);
         drop(pending_blocks);
 
-        match self.utxo_sync {
-            true => update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?,
-            false => self.verify_blocks_sync().unwrap_or_else(|_| {
-                send_log(
-                    &self.logger_sender,
-                    Log::Message("Error verifying blocks synchronization".to_string()),
-                );
-            }),
+        match self.is_utxo_sync() {
+            true => self.update_new_block_transactions(block)?,
+            false => self.sync_up_utxo(),
         }
 
         Ok(())
@@ -187,8 +212,12 @@ impl NodeState {
                 &self.logger_sender,
                 Log::Message("blocks sync completed".to_string()),
             );
-
-            self.generate_utxo()?;
+            if !self.is_utxo_sync() {
+                self.generate_utxo()?;
+            }
+            self.gui_sender
+                .send(GUIActions::NodeStateReady)
+                .map_err(|_| CustomError::CannotInitGUI)?;
         }
         Ok(())
     }
@@ -226,7 +255,15 @@ impl NodeState {
             let mut block_buffer = Vec::new();
             block_file.read_to_end(&mut block_buffer)?;
             let block = Block::parse(block_buffer)?;
-            update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?;
+            update_transaction_sets(
+                &mut self.utxo_set,
+                &mut self.utxo_file,
+                &mut self.pending_tx_set,
+                block,
+                &mut self.wallets,
+                false,
+            )
+            .unwrap();
             i += 1;
         }
         self.utxo_sync = true;
@@ -238,9 +275,6 @@ impl NodeState {
             &self.logger_sender,
             Log::Message("Utxo generation is finished".to_string()),
         );
-        self.gui_sender
-            .send(GUIActions::NodeStateReady)
-            .map_err(|_| CustomError::CannotInitGUI)?;
         //no se si ese custom va, o hacemos uno especifico?
         Ok(())
     }
@@ -357,17 +391,16 @@ impl NodeState {
         for (tx_hash, tx) in self.pending_tx_set.iter() {
             for (index, tx_out) in tx.outputs.iter().enumerate() {
                 if tx_out.is_sent_to_key(&pubkey_hash) {
-                let out_point = OutPoint {
-                    hash: tx_hash.clone(),
-                    index: index as u32,
-                };
-                pending_transactions.insert(out_point, tx_out.clone());
+                    let out_point = OutPoint {
+                        hash: tx_hash.clone(),
+                        index: index as u32,
+                    };
+                    pending_transactions.insert(out_point, tx_out.clone());
                 }
             }
         }
         Ok(pending_transactions)
     }
-
 }
 
 fn save_wallets(wallets: &mut Vec<Wallet>) -> Result<(), CustomError> {
@@ -401,31 +434,55 @@ pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File
     Ok(file)
 }
 
+fn update_wallet_movements(
+    wallets: &mut Vec<Wallet>,
+    utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    tx: &Transaction,
+    block: &Block,
+    wallets_updated: &mut bool,
+) -> Result<(), CustomError> {
+    for wallet in wallets.into_iter() {
+        let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo_set);
+        if let Some(mut movement) = movement {
+            movement.block_hash = Some(block.header.hash());
+            wallet.update_history(movement);
+            *wallets_updated = true;
+        }
+    }
+    Ok(())
+}
+fn update_utxo_set(
+    tx: &Transaction,
+    utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    utxo_file: &mut File,
+) -> Result<(), CustomError> {
+    for tx_in in tx.inputs.iter() {
+        utxo_set.remove(&tx_in.previous_output);
+    }
+    for (index, tx_out) in tx.outputs.iter().enumerate() {
+        let out_point = OutPoint {
+            hash: tx.hash().clone(),
+            index: index as u32,
+        };
+        utxo_set.insert(out_point.clone(), tx_out.clone());
+        utxo_file.write_all(&serialize_utxo(&out_point, &tx_out).to_vec())?;
+    }
+    Ok(())
+}
+
 fn update_transaction_sets(
     utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    utxo_file: &mut File,
     pending_tx_set: &mut HashMap<Vec<u8>, Transaction>,
     block: Block,
     wallets: &mut Vec<Wallet>,
+    is_utxo_generated: bool,
 ) -> Result<(), CustomError> {
     let mut wallets_updated = false;
     for tx in block.transactions.iter() {
-        for tx_in in tx.inputs.iter() {
-            utxo_set.remove(&tx_in.previous_output);
-        }
-        for (index, tx_out) in tx.outputs.iter().enumerate() {
-            let out_point = OutPoint {
-                hash: tx.hash().clone(),
-                index: index as u32,
-            };
-            utxo_set.insert(out_point, tx_out.clone());
-        }
-        for wallet in wallets.into_iter() {
-            let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo_set);
-            if let Some(mut movement) = movement {
-                movement.block_hash = Some(block.header.hash());
-                wallet.update_history(movement);
-                wallets_updated = true;
-            }
+        update_utxo_set(tx, utxo_set, utxo_file)?;
+        if is_utxo_generated {
+            update_wallet_movements(wallets, utxo_set, tx, &block, &mut wallets_updated)?;
         }
         if pending_tx_set.contains_key(&tx.hash()) {
             pending_tx_set.remove(&tx.hash());
