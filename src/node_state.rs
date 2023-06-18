@@ -53,7 +53,7 @@ impl NodeState {
             Err(_) => vec![],
         };
 
-        let wallets= restore_wallets()?;
+        let wallets = restore_wallets()?;
 
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
 
@@ -134,6 +134,31 @@ impl NodeState {
         Ok(to_remove)
     }
 
+    fn update_new_block_transactions(&mut self, block: Block) -> Result<(), CustomError> {
+        update_transaction_sets(
+            &mut self.utxo_set,
+            &mut self.pending_tx_set,
+            block,
+            &mut self.wallets,
+            true,
+        )?;
+        if let Some(_wallet) = &self.active_wallet {
+            self.gui_sender
+                .send(GUIActions::NewBlock)
+                .map_err(|_| CustomError::CannotInitGUI)?;
+        }
+        Ok(())
+    }
+
+    fn sync_up_utxo(&mut self) {
+        self.verify_blocks_sync().unwrap_or_else(|_| {
+            send_log(
+                &self.logger_sender,
+                Log::Message("Error verifying blocks synchronization".to_string()),
+            );
+        });
+    }
+
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let filename = hash_as_string(block_hash.clone());
         let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename), true)?;
@@ -144,13 +169,8 @@ impl NodeState {
         drop(pending_blocks);
 
         match self.utxo_sync {
-            true => update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?,
-            false => self.verify_blocks_sync().unwrap_or_else(|_| {
-                send_log(
-                    &self.logger_sender,
-                    Log::Message("Error verifying blocks synchronization".to_string()),
-                );
-            }),
+            true => self.update_new_block_transactions(block)?,
+            false => self.sync_up_utxo(),
         }
 
         Ok(())
@@ -226,7 +246,14 @@ impl NodeState {
             let mut block_buffer = Vec::new();
             block_file.read_to_end(&mut block_buffer)?;
             let block = Block::parse(block_buffer)?;
-            update_transaction_sets(&mut self.utxo_set, &mut self.pending_tx_set, block, &mut self.wallets)?;
+            update_transaction_sets(
+                &mut self.utxo_set,
+                &mut self.pending_tx_set,
+                block,
+                &mut self.wallets,
+                false,
+            )
+            .unwrap();
             i += 1;
         }
         self.utxo_sync = true;
@@ -338,10 +365,22 @@ impl NodeState {
         Ok(balance)
     }
 
-    pub fn append_pending_transaction(&mut self, transaction: Transaction) {
+    pub fn append_pending_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> Result<(), CustomError> {
         let tx_hash = transaction.hash();
 
-        self.pending_tx_set.entry(tx_hash).or_insert(transaction);
+        if !self.pending_tx_set.contains_key(&tx_hash) {
+            if let Some(_wallet) = &self.active_wallet {
+                self.gui_sender
+                    .send(GUIActions::NewPendingTx)
+                    .map_err(|_| CustomError::CannotInitGUI)?;
+            }
+            self.pending_tx_set.insert(tx_hash, transaction);
+        }
+        //self.pending_tx_set.entry(tx_hash).or_insert(transaction);
+        Ok(())
     }
 
     pub fn get_pending_tx_from_wallet(
@@ -357,17 +396,16 @@ impl NodeState {
         for (tx_hash, tx) in self.pending_tx_set.iter() {
             for (index, tx_out) in tx.outputs.iter().enumerate() {
                 if tx_out.is_sent_to_key(&pubkey_hash) {
-                let out_point = OutPoint {
-                    hash: tx_hash.clone(),
-                    index: index as u32,
-                };
-                pending_transactions.insert(out_point, tx_out.clone());
+                    let out_point = OutPoint {
+                        hash: tx_hash.clone(),
+                        index: index as u32,
+                    };
+                    pending_transactions.insert(out_point, tx_out.clone());
                 }
             }
         }
         Ok(pending_transactions)
     }
-
 }
 
 fn save_wallets(wallets: &mut Vec<Wallet>) -> Result<(), CustomError> {
@@ -401,31 +439,48 @@ pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File
     Ok(file)
 }
 
+fn update_wallet_movements(
+    wallets: &mut Vec<Wallet>,
+    utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    tx: &Transaction,
+    block: &Block,
+    wallets_updated: &mut bool,
+) -> Result<(), CustomError> {
+    for wallet in wallets.into_iter() {
+        let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo_set);
+        if let Some(mut movement) = movement {
+            movement.block_hash = Some(block.header.hash());
+            wallet.update_history(movement);
+            *wallets_updated = true;
+        }
+    }
+    Ok(())
+}
+fn update_utxo_set(tx: &Transaction, utxo_set: &mut HashMap<OutPoint, TransactionOutput>) {
+    for tx_in in tx.inputs.iter() {
+        utxo_set.remove(&tx_in.previous_output);
+    }
+    for (index, tx_out) in tx.outputs.iter().enumerate() {
+        let out_point = OutPoint {
+            hash: tx.hash().clone(),
+            index: index as u32,
+        };
+        utxo_set.insert(out_point, tx_out.clone());
+    }
+}
+
 fn update_transaction_sets(
     utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
     pending_tx_set: &mut HashMap<Vec<u8>, Transaction>,
     block: Block,
     wallets: &mut Vec<Wallet>,
+    is_utxo_generated: bool,
 ) -> Result<(), CustomError> {
     let mut wallets_updated = false;
     for tx in block.transactions.iter() {
-        for tx_in in tx.inputs.iter() {
-            utxo_set.remove(&tx_in.previous_output);
-        }
-        for (index, tx_out) in tx.outputs.iter().enumerate() {
-            let out_point = OutPoint {
-                hash: tx.hash().clone(),
-                index: index as u32,
-            };
-            utxo_set.insert(out_point, tx_out.clone());
-        }
-        for wallet in wallets.into_iter() {
-            let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo_set);
-            if let Some(mut movement) = movement {
-                movement.block_hash = Some(block.header.hash());
-                wallet.update_history(movement);
-                wallets_updated = true;
-            }
+        update_utxo_set(tx, utxo_set);
+        if is_utxo_generated {
+            update_wallet_movements(wallets, utxo_set, tx, &block, &mut wallets_updated)?;
         }
         if pending_tx_set.contains_key(&tx.hash()) {
             pending_tx_set.remove(&tx.hash());
