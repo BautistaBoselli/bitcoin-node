@@ -18,6 +18,7 @@ use crate::{
         headers::{hash_as_string, BlockHeader, Headers},
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
+    utxo::{parse_utxo, serialize_utxo},
     wallet::Wallet,
 };
 
@@ -27,6 +28,7 @@ pub struct NodeState {
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIActions>,
     headers_file: File,
+    utxo_file: File,
     headers: Vec<BlockHeader>,
     wallets: Vec<Wallet>,
     active_wallet: Option<String>,
@@ -53,6 +55,12 @@ impl NodeState {
             Err(_) => vec![],
         };
 
+        let mut utxo_file = open_new_file(String::from("store/utxo.bin"), true)?;
+        let mut saved_utxo_buffer = vec![];
+        utxo_file.read_to_end(&mut saved_utxo_buffer)?;
+        let utxo_set = parse_utxo(saved_utxo_buffer)?;
+        let utxo_sync = if utxo_set.len() > 0 { true } else { false };
+
         let wallets = restore_wallets()?;
 
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
@@ -61,15 +69,16 @@ impl NodeState {
             logger_sender,
             gui_sender,
             headers_file,
+            utxo_file,
             headers,
             wallets,
             active_wallet: None,
             pending_blocks_ref,
-            utxo_set: HashMap::new(),
+            utxo_set,
             pending_tx_set: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
-            utxo_sync: false,
+            utxo_sync,
         }));
 
         Ok(node_state_ref)
@@ -137,6 +146,7 @@ impl NodeState {
     fn update_new_block_transactions(&mut self, block: Block) -> Result<(), CustomError> {
         update_transaction_sets(
             &mut self.utxo_set,
+            &mut self.utxo_file,
             &mut self.pending_tx_set,
             block,
             &mut self.wallets,
@@ -207,8 +217,12 @@ impl NodeState {
                 &self.logger_sender,
                 Log::Message("blocks sync completed".to_string()),
             );
-
-            self.generate_utxo()?;
+            if !self.is_utxo_sync() {
+                self.generate_utxo()?;
+            }
+            self.gui_sender
+                .send(GUIActions::NodeStateReady)
+                .map_err(|_| CustomError::CannotInitGUI)?;
         }
         Ok(())
     }
@@ -248,6 +262,7 @@ impl NodeState {
             let block = Block::parse(block_buffer)?;
             update_transaction_sets(
                 &mut self.utxo_set,
+                &mut self.utxo_file,
                 &mut self.pending_tx_set,
                 block,
                 &mut self.wallets,
@@ -265,9 +280,6 @@ impl NodeState {
             &self.logger_sender,
             Log::Message("Utxo generation is finished".to_string()),
         );
-        self.gui_sender
-            .send(GUIActions::NodeStateReady)
-            .map_err(|_| CustomError::CannotInitGUI)?;
         //no se si ese custom va, o hacemos uno especifico?
         Ok(())
     }
@@ -456,7 +468,11 @@ fn update_wallet_movements(
     }
     Ok(())
 }
-fn update_utxo_set(tx: &Transaction, utxo_set: &mut HashMap<OutPoint, TransactionOutput>) {
+fn update_utxo_set(
+    tx: &Transaction,
+    utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    utxo_file: &mut File,
+) -> Result<(), CustomError> {
     for tx_in in tx.inputs.iter() {
         utxo_set.remove(&tx_in.previous_output);
     }
@@ -465,12 +481,15 @@ fn update_utxo_set(tx: &Transaction, utxo_set: &mut HashMap<OutPoint, Transactio
             hash: tx.hash().clone(),
             index: index as u32,
         };
-        utxo_set.insert(out_point, tx_out.clone());
+        utxo_set.insert(out_point.clone(), tx_out.clone());
+        utxo_file.write_all(&serialize_utxo(&out_point, &tx_out).to_vec())?;
     }
+    Ok(())
 }
 
 fn update_transaction_sets(
     utxo_set: &mut HashMap<OutPoint, TransactionOutput>,
+    utxo_file: &mut File,
     pending_tx_set: &mut HashMap<Vec<u8>, Transaction>,
     block: Block,
     wallets: &mut Vec<Wallet>,
@@ -478,7 +497,7 @@ fn update_transaction_sets(
 ) -> Result<(), CustomError> {
     let mut wallets_updated = false;
     for tx in block.transactions.iter() {
-        update_utxo_set(tx, utxo_set);
+        update_utxo_set(tx, utxo_set, utxo_file)?;
         if is_utxo_generated {
             update_wallet_movements(wallets, utxo_set, tx, &block, &mut wallets_updated)?;
         }
