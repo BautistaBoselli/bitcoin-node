@@ -100,6 +100,7 @@ impl Node {
                 self.peer_action_receiver.clone(),
                 self.logger_sender.clone(),
                 self.node_action_sender.clone(),
+                self.node_state_ref.clone(),
             ) {
                 Ok(peer) => {
                     self.peers.push(peer);

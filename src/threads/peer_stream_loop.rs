@@ -1,7 +1,7 @@
 use std::{
     io::Read,
     net::TcpStream,
-    sync::mpsc,
+    sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
 
@@ -13,9 +13,11 @@ use crate::{
         block::Block,
         get_data::GetData,
         headers::Headers,
-        inv::{Inventory, InventoryType, Inv},
-        ping_pong::{Ping, Pong}, transaction::Transaction,
+        inv::{Inv, Inventory, InventoryType},
+        ping_pong::{Ping, Pong},
+        transaction::Transaction,
     },
+    node_state::NodeState,
     peer::{request_headers, NodeAction},
 };
 
@@ -24,6 +26,7 @@ pub struct PeerStreamLoop {
     pub node_action_sender: mpsc::Sender<NodeAction>,
     pub version: i32,
     pub logger_sender: mpsc::Sender<Log>,
+    pub node_state_ref: Arc<Mutex<NodeState>>,
 }
 
 impl PeerStreamLoop {
@@ -32,6 +35,7 @@ impl PeerStreamLoop {
         stream: TcpStream,
         logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
+        node_state_ref: Arc<Mutex<NodeState>>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut peer_action_thread = Self {
@@ -39,6 +43,7 @@ impl PeerStreamLoop {
                 stream,
                 logger_sender,
                 node_action_sender,
+                node_state_ref,
             };
             peer_action_thread.event_loop()
         })
@@ -55,6 +60,7 @@ impl PeerStreamLoop {
                 "inv" => self.handle_inv(&response_header),
                 "tx" => self.handle_tx(&response_header),
                 "notfound" => self.handle_notfound(&response_header),
+                "getdata" => self.handle_transaction_request(&response_header),
                 _ => self.ignore_message(&response_header),
             };
 
@@ -65,6 +71,21 @@ impl PeerStreamLoop {
                 );
             }
         }
+    }
+
+    fn handle_transaction_request(
+        &mut self,
+        response_header: &MessageHeader,
+    ) -> Result<(), CustomError> {
+        let get_data = GetData::read(&mut self.stream, response_header.payload_size)?;
+        let mut node_state_ref = self.node_state_ref.lock()?;
+        let transaction =
+            node_state_ref.get_transaction_to_send(get_data.get_inventories().clone());
+        if let Some(tx) = transaction {
+            tx.send(&mut self.stream)?;
+            println!("enviamos la transaccion");
+        }
+        Ok(())
     }
 
     fn handle_headers(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
@@ -136,7 +157,8 @@ impl PeerStreamLoop {
 
     fn handle_tx(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let tx = Transaction::read(&mut self.stream, response_header.payload_size)?;
-        self.node_action_sender.send(NodeAction::PendingTransaction(tx))?;
+        self.node_action_sender
+            .send(NodeAction::PendingTransaction(tx))?;
         Ok(())
     }
 

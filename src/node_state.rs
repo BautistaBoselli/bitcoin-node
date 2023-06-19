@@ -16,6 +16,7 @@ use crate::{
     messages::{
         block::Block,
         headers::{hash_as_string, BlockHeader, Headers},
+        inv::Inventory,
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
     utxo::{parse_utxo, serialize_utxo},
@@ -35,6 +36,7 @@ pub struct NodeState {
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo_set: HashMap<OutPoint, TransactionOutput>,
     pending_tx_set: HashMap<Vec<u8>, Transaction>,
+    to_send_transactions: HashMap<Vec<u8>, Transaction>,
     headers_sync: bool,
     blocks_sync: bool,
     utxo_sync: bool,
@@ -76,6 +78,7 @@ impl NodeState {
             pending_blocks_ref,
             utxo_set,
             pending_tx_set: HashMap::new(),
+            to_send_transactions: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
             utxo_sync,
@@ -419,11 +422,21 @@ impl NodeState {
         Ok(pending_transactions)
     }
 
+    pub fn get_transaction_to_send(&mut self, inventories: Vec<Inventory>) -> Option<&Transaction> {
+        let mut transaction: Option<&Transaction> = None;
+        for inventory in inventories {
+            if self.to_send_transactions.contains_key(&inventory.hash) {
+                transaction = self.to_send_transactions.get(&inventory.hash);
+            }
+        }
+        transaction
+    }
+
     pub fn make_transaction(
-        &self,
+        &mut self,
         mut outputs: HashMap<String, u64>,
         fee: u64,
-    ) -> Result<(), CustomError> {
+    ) -> Result<Transaction, CustomError> {
         let active_wallet = match self.get_active_wallet() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
@@ -460,7 +473,10 @@ impl NodeState {
         if change > 0 {
             outputs.insert(active_wallet.pubkey.clone(), change);
         }
-        Transaction::create(active_wallet, inputs, outputs)
+        let transaction = Transaction::create(active_wallet, inputs, outputs)?;
+        self.to_send_transactions
+            .insert(transaction.hash().clone(), transaction.clone());
+        Ok(transaction)
     }
 
     fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {

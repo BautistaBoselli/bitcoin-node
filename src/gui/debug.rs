@@ -25,8 +25,8 @@ impl GUIDebug {
         let clone = node_action_sender.clone();
         debug_button.connect_clicked(move |_| {
             let mut outputs = HashMap::new();
-            outputs.insert(String::from("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"), 1000000);
-            outputs.insert(String::from("1A1zP1eP5QGefi2DMPTfTL5SLmDonROuch"), 1000000);
+            outputs.insert(String::from("mniwvWuHto1y9vmMEqQX5mvrXMVYDizbu2"), 1000000);
+            //outputs.insert(String::from("1A1zP1eP5QGefi2DMPTfTL5SLmDonROuch"), 700000);
 
             let fee = 500000;
 

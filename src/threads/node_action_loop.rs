@@ -76,9 +76,13 @@ impl NodeActionLoop {
         outputs: HashMap<String, u64>,
         fee: u64,
     ) -> Result<(), CustomError> {
-        let node_state = self.node_state_ref.lock().unwrap();
+        let mut node_state = self.node_state_ref.lock().unwrap();
 
-        let transaction = node_state.make_transaction(outputs, fee);
+        let transaction = node_state.make_transaction(outputs, fee)?;
+
+        self.peer_action_sender
+            .send(PeerAction::SendTransaction(transaction))?;
+
         drop(node_state);
 
         // self.peer_action_sender

@@ -2,9 +2,14 @@ use std::collections::HashMap;
 
 use bitcoin_hashes::{sha256, Hash};
 
-use crate::{parser::{BufferParser, VarIntSerialize}, error::CustomError, message::Message, wallet::{Movement, Wallet, get_script_pubkey}};
+use crate::{
+    error::CustomError,
+    message::Message,
+    parser::{BufferParser, VarIntSerialize},
+    wallet::{get_script_pubkey, Movement, Wallet},
+};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     pub version: u32,
     pub inputs: Vec<TransactionInput>,
@@ -30,6 +35,7 @@ impl Transaction {
             buffer.extend(output.serialize());
         }
         buffer.extend(self.lock_time.to_le_bytes());
+        //buffer.extend(1_u32.to_le_bytes());
         buffer
     }
 
@@ -56,10 +62,13 @@ impl Transaction {
         })
     }
 
-    pub fn get_movement(&self, public_key_hash: &Vec<u8>, utxo_set: &HashMap<OutPoint, TransactionOutput>,
+    pub fn get_movement(
+        &self,
+        public_key_hash: &Vec<u8>,
+        utxo_set: &HashMap<OutPoint, TransactionOutput>,
     ) -> Option<Movement> {
         let mut value = 0;
-        
+
         for output in &self.outputs {
             if output.is_sent_to_key(public_key_hash) {
                 value += output.value;
@@ -83,7 +92,11 @@ impl Transaction {
         }
     }
 
-    pub fn create(sender_wallet: &Wallet, inputs_outpoints: Vec<OutPoint>, outputs: HashMap<String, u64>) -> Result<(), CustomError> {
+    pub fn create(
+        sender_wallet: &Wallet,
+        inputs_outpoints: Vec<OutPoint>,
+        outputs: HashMap<String, u64>,
+    ) -> Result<Self, CustomError> {
         //println!("Wallet: {:?}", sender_wallet);
         println!("Inputs: {:?}", inputs_outpoints);
         println!("Outputs: {:?}", outputs);
@@ -112,13 +125,12 @@ impl Transaction {
             transaction.outputs.push(output);
         }
         println!("Transaction: {:?}", transaction);
-        
-        
-        Ok(())
+
+        Ok(transaction)
     }
 }
 
-impl Message for Transaction{
+impl Message for Transaction {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(self.version.to_le_bytes());
@@ -164,7 +176,7 @@ impl Message for Transaction{
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TransactionInput {
     pub previous_output: OutPoint,
     pub script_sig: Vec<u8>,
