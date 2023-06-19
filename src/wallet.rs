@@ -1,10 +1,6 @@
-use std::collections::HashMap;
+use std::io::{Read, Write};
 
-use crate::{
-    error::CustomError,
-    messages::transaction::{OutPoint, TransactionOutput},
-    parser::BufferParser,
-};
+use crate::{error::CustomError, node_state::open_new_file, parser::BufferParser, utxo::UTXO};
 
 #[derive(Clone, Debug)]
 pub struct Movement {
@@ -70,7 +66,7 @@ impl Wallet {
         name: String,
         pubkey: String,
         privkey: String,
-        utxo_set: &HashMap<OutPoint, TransactionOutput>,
+        utxo_set: &UTXO,
     ) -> Result<Self, CustomError> {
         let mut wallet = Self {
             name,
@@ -78,7 +74,7 @@ impl Wallet {
             privkey,
             history: vec![],
         };
-        for (outpoint, output) in utxo_set {
+        for (outpoint, output) in &utxo_set.tx_set {
             if output.is_sent_to_key(&wallet.get_pubkey_hash()?) {
                 wallet.history.push(Movement {
                     tx_hash: outpoint.hash.clone(),
@@ -148,6 +144,27 @@ impl Wallet {
 
     pub fn get_history(&self) -> Vec<Movement> {
         self.history.clone()
+    }
+
+    pub fn save_wallets(wallets: &mut Vec<Self>) -> Result<(), CustomError> {
+        let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
+        let mut wallets_buffer = vec![];
+        for wallet in wallets.iter() {
+            wallets_buffer.append(&mut wallet.serialize());
+        }
+        wallets_file.write_all(&wallets_buffer)?;
+        Ok(())
+    }
+
+    pub fn restore_wallets() -> Result<Vec<Self>, CustomError> {
+        let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
+        let mut saved_wallets_buffer = vec![];
+        wallets_file.read_to_end(&mut saved_wallets_buffer)?;
+        let wallets = match Self::parse_wallets(saved_wallets_buffer) {
+            Ok(wallets) => wallets,
+            Err(_) => vec![],
+        };
+        Ok(wallets)
     }
 }
 

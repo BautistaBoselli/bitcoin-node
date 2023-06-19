@@ -6,6 +6,7 @@ use crate::{
     error::CustomError,
     message::Message,
     parser::{BufferParser, VarIntSerialize},
+    utxo::UTXO,
     wallet::{get_script_pubkey, Movement, Wallet},
 };
 
@@ -62,11 +63,7 @@ impl Transaction {
         })
     }
 
-    pub fn get_movement(
-        &self,
-        public_key_hash: &Vec<u8>,
-        utxo_set: &HashMap<OutPoint, TransactionOutput>,
-    ) -> Option<Movement> {
+    pub fn get_movement(&self, public_key_hash: &Vec<u8>, utxo: &UTXO) -> Option<Movement> {
         let mut value = 0;
 
         for output in &self.outputs {
@@ -75,7 +72,7 @@ impl Transaction {
             }
         }
         for input in &self.inputs {
-            if let Some(output) = utxo_set.get(&input.previous_output) {
+            if let Some(output) = utxo.tx_set.get(&input.previous_output) {
                 if output.is_sent_to_key(public_key_hash) {
                     value -= output.value;
                 }

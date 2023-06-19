@@ -27,6 +27,7 @@ pub struct Node {
     node_action_receiver: Option<mpsc::Receiver<NodeAction>>,
     node_state_ref: Arc<Mutex<NodeState>>,
     peers: Vec<Peer>,
+    npeers: u8,
     // pub event_loop_thread: Option<thread::JoinHandle<()>>,
 }
 
@@ -51,6 +52,7 @@ impl Node {
             node_action_sender,
             node_action_receiver: Some(node_action_receiver),
             peers: vec![],
+            npeers: config.npeers,
             // event_loop_thread: None,
             node_state_ref,
         };
@@ -65,7 +67,7 @@ impl Node {
 
     pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIActions>) {
         thread::spawn(move || -> Result<(), CustomError> {
-            self.connect(addresses, 10);
+            self.connect(addresses, self.npeers);
             self.initialize_pending_blocks_loop();
             if let Err(error) = self.initialize_ibd() {
                 send_log(&self.logger_sender, Log::Error(error));

@@ -1,12 +1,19 @@
-use std::vec;
+use std::{
+    io::{Read, Write},
+    vec,
+};
 
 use bitcoin_hashes::{sha256, Hash};
 
-use super::{headers::BlockHeader, transaction::Transaction};
+use super::{
+    headers::{hash_as_string, BlockHeader},
+    transaction::Transaction,
+};
 
 use crate::{
     error::CustomError,
     message::Message,
+    node_state::open_new_file,
     parser::{BufferParser, VarIntSerialize},
 };
 
@@ -22,6 +29,20 @@ impl Block {
             header,
             transactions,
         }
+    }
+
+    pub fn restore(header_hash: String) -> Result<Self, CustomError> {
+        let mut block_file = open_new_file(format!("store/blocks/{}.bin", header_hash), true)?;
+        let mut block_buffer = Vec::new();
+        block_file.read_to_end(&mut block_buffer)?;
+        Self::parse(block_buffer)
+    }
+
+    pub fn save(&self) -> Result<(), CustomError> {
+        let filename = hash_as_string(self.header.hash());
+        let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename), true)?;
+        block_file.write_all(&self.serialize())?;
+        Ok(())
     }
 
     fn create_merkle_tree(&self) -> Vec<Vec<Vec<u8>>> {
