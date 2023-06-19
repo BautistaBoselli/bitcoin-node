@@ -146,7 +146,7 @@ impl Wallet {
         self.history.clone()
     }
 
-    pub fn save_wallets(wallets: &mut Vec<Self>) -> Result<(), CustomError> {
+    pub fn save_wallets(wallets: &mut [Self]) -> Result<(), CustomError> {
         let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
         let mut wallets_buffer = vec![];
         for wallet in wallets.iter() {

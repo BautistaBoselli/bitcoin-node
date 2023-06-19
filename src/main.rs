@@ -65,12 +65,12 @@ fn main() {
     let addresses = match addresses {
         Ok(addresses) => addresses,
         Err(error) => {
-            send_log(&logger_sender.clone(), Log::Error(error));
+            send_log(&logger_sender, Log::Error(error));
             return;
         }
     };
 
-    node.spawn(addresses, gui_sender.clone());
+    node.spawn(addresses, gui_sender);
 
     let gui = GUI::start(
         gui_receiver,

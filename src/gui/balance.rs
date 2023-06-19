@@ -53,7 +53,7 @@ impl GUIBalance {
         let label_balance: gtk::Label = get_gui_element(&self.builder, "label-balance")?;
         let node_state = self.node_state_ref.lock()?;
 
-        match node_state.get_balance() {
+        match node_state.get_active_wallet_balance() {
             Ok(balance) => {
                 let balance_btc = (balance as f64) / 100000000.0;
                 label_balance.set_text(format!("Balance:    {} BTC", balance_btc).as_str());
@@ -71,7 +71,7 @@ impl GUIBalance {
             get_gui_element(&self.builder, "pending-transactions-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
         let node_state = node_state_ref_clone.lock().unwrap();
-        let pending_transactions = node_state.get_pending_tx_from_wallet().unwrap();
+        let pending_transactions = node_state.get_active_wallet_pending_txs().unwrap();
         remove_transactions(&pending_tx_list_box);
         for (_, tx_output) in pending_transactions {
             println!("tx: {:?}", tx_output);

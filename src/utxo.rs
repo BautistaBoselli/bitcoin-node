@@ -8,10 +8,11 @@ use crate::{
     },
     node_state::open_new_file,
     parser::BufferParser,
+    wallet::Wallet,
 };
 use std::{
     collections::HashMap,
-    fs::{remove_file, File},
+    fs::remove_file,
     io::{Read, Write},
     sync::mpsc::Sender,
     vec,
@@ -21,18 +22,42 @@ const START_DATE_IBD: u32 = 1681095630;
 
 pub struct UTXO {
     pub tx_set: HashMap<OutPoint, TransactionOutput>,
-    file: File,
     sync: bool,
 }
 
 impl UTXO {
     pub fn new() -> Result<Self, CustomError> {
-        let file = open_new_file(String::from("store/utxo.bin"), false)?;
         Ok(Self {
             tx_set: HashMap::new(),
-            file,
             sync: false,
         })
+    }
+
+    pub fn wallet_balance(&self, wallet: &Wallet) -> Result<u64, CustomError> {
+        let mut balance = 0;
+        let pubkey_hash = wallet.get_pubkey_hash()?;
+        for (_, tx_out) in self.tx_set.iter() {
+            if tx_out.is_sent_to_key(&pubkey_hash) {
+                balance += tx_out.value;
+            }
+        }
+        Ok(balance)
+    }
+
+    pub fn wallet_utxo(
+        &self,
+        wallet: &Wallet,
+    ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
+        let pubkey_hash = wallet.get_pubkey_hash()?;
+
+        let mut active_wallet_utxo = vec![];
+        for (out_point, tx_out) in self.tx_set.iter() {
+            if tx_out.is_sent_to_key(&pubkey_hash) {
+                active_wallet_utxo.push((out_point.clone(), tx_out.clone()));
+            }
+        }
+
+        Ok(active_wallet_utxo)
     }
 
     pub fn is_synced(&self) -> bool {
@@ -71,13 +96,14 @@ impl UTXO {
     }
 
     fn restore_utxo(&mut self) -> Result<u32, CustomError> {
+        let mut file = open_new_file(String::from("store/utxo.bin"), false)?;
+
         let mut saved_utxo_buffer = vec![];
-        self.file.read_to_end(&mut saved_utxo_buffer)?;
+        file.read_to_end(&mut saved_utxo_buffer)?;
         let (last_timestamp, tx_set) = match Self::parse(saved_utxo_buffer) {
             Ok((last_timestamp, tx_set)) => (last_timestamp, tx_set),
             Err(_) => (START_DATE_IBD, HashMap::new()),
         };
-        println!("last_timestamp3: {}", last_timestamp);
 
         self.tx_set = tx_set;
         Ok(last_timestamp)
@@ -92,22 +118,22 @@ impl UTXO {
     ) -> Result<(), CustomError> {
         let mut i = 0;
         let mut percentage = 0;
-        Ok(
-            for (_index, header) in headers.iter().enumerate().skip(starting_index) {
-                if i > (headers.len() - starting_index) / 10 {
-                    percentage += 10;
-                    send_log(
-                        logger_sender,
-                        Log::Message(format!("Utxo generation is ({}%) completed...", percentage)),
-                    );
-                    i = 0;
-                }
-                let block = Block::restore(header.hash_as_string())?;
-                self.update_from_block(&block, false)?;
-                *last_timestamp = header.timestamp;
-                i += 1;
-            },
-        )
+
+        for (_index, header) in headers.iter().enumerate().skip(starting_index) {
+            if i > (headers.len() - starting_index) / 10 {
+                percentage += 10;
+                send_log(
+                    logger_sender,
+                    Log::Message(format!("Utxo generation is ({}%) completed...", percentage)),
+                );
+                i = 0;
+            }
+            let block = Block::restore(header.hash_as_string())?;
+            self.update_from_block(&block, false)?;
+            *last_timestamp = header.timestamp;
+            i += 1;
+        }
+        Ok(())
     }
 
     pub fn parse(
@@ -160,13 +186,9 @@ impl UTXO {
         }
 
         remove_file("store/utxo.bin")?;
-        self.file = open_new_file(String::from("store/utxo.bin"), false)?;
+        let mut file = open_new_file(String::from("store/utxo.bin"), false)?;
 
-        if let Err(_) = self.file.write_all(&buffer) {
-            remove_file("store/utxo.bin")?;
-            self.file = open_new_file(String::from("store/utxo.bin"), false)?;
-            return Err(CustomError::CannotOpenFile);
-        };
+        file.write_all(&buffer)?;
         Ok(())
     }
 }
@@ -177,10 +199,8 @@ fn calculate_starting_index(headers: &Vec<BlockHeader>, last_timestamp: u32) -> 
         .rev()
         .position(|header| header.timestamp <= last_timestamp);
 
-    let starting_index = match new_headers_len {
+    match new_headers_len {
         Some(new_headers_len) => headers.len() - new_headers_len,
         None => 0,
-    };
-
-    starting_index
+    }
 }

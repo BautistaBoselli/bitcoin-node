@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map, HashMap},
     fs::{File, OpenOptions},
     io::Write,
     sync::{mpsc, Arc, Mutex},
@@ -14,7 +14,7 @@ use crate::{
     logger::{send_log, Log},
     messages::{
         block::Block,
-        headers::{hash_as_string, BlockHeader, Headers},
+        headers::{BlockHeader, Headers},
         inv::Inventory,
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
@@ -303,41 +303,25 @@ impl NodeState {
         }
     }
 
-    pub fn get_balance(&self) -> Result<u64, CustomError> {
-        let mut balance = 0;
-
+    pub fn get_active_wallet_balance(&self) -> Result<u64, CustomError> {
         let active_wallet = match self.get_active_wallet() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
         };
-        let pubkey_hash = active_wallet.get_pubkey_hash()?;
 
-        for (_, tx_out) in self.utxo.tx_set.iter() {
-            if tx_out.is_sent_to_key(&pubkey_hash) {
-                balance += tx_out.value;
-            }
-        }
-        Ok(balance)
+        self.utxo.wallet_balance(active_wallet)
     }
 
-    pub fn append_pending_transaction(
-        &mut self,
-        transaction: Transaction,
-    ) -> Result<(), CustomError> {
-        let tx_hash = transaction.hash();
+    fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
+        let active_wallet = match self.get_active_wallet() {
+            Some(active_wallet) => active_wallet,
+            None => return Err(CustomError::WalletNotFound),
+        };
 
-        if !self.pending_tx_set.contains_key(&tx_hash) {
-            if let Some(_wallet) = &self.active_wallet {
-                self.gui_sender
-                    .send(GUIActions::NewPendingTx)
-                    .map_err(|_| CustomError::CannotInitGUI)?;
-            }
-            self.pending_tx_set.insert(tx_hash, transaction);
-        }
-        Ok(())
+        self.utxo.wallet_utxo(active_wallet)
     }
 
-    pub fn get_pending_tx_from_wallet(
+    pub fn get_active_wallet_pending_txs(
         &self,
     ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
         let mut pending_transactions = HashMap::new();
@@ -359,6 +343,21 @@ impl NodeState {
             }
         }
         Ok(pending_transactions)
+    }
+
+    pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<(), CustomError> {
+        let tx_hash = transaction.hash();
+
+        if let hash_map::Entry::Vacant(e) = self.pending_tx_set.entry(tx_hash) {
+            if let Some(_wallet) = &self.active_wallet {
+                self.gui_sender
+                    .send(GUIActions::NewPendingTx)
+                    .map_err(|_| CustomError::CannotInitGUI)?;
+            }
+            e.insert(transaction);
+        }
+
+        Ok(())
     }
 
     pub fn get_transaction_to_send(&mut self, inventories: Vec<Inventory>) -> Option<&Transaction> {
@@ -384,7 +383,7 @@ impl NodeState {
         for output in outputs.values() {
             total_value += output;
         }
-        let wallet_balance = self.get_balance()?;
+        let wallet_balance = self.get_active_wallet_balance()?;
         if total_value > wallet_balance {
             send_log(
                 &self.logger_sender,
@@ -414,24 +413,8 @@ impl NodeState {
         }
         let transaction = Transaction::create(active_wallet, inputs, outputs)?;
         self.to_send_transactions
-            .insert(transaction.hash().clone(), transaction.clone());
+            .insert(transaction.hash(), transaction.clone());
         Ok(transaction)
-    }
-
-    fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
-        let active_wallet = match self.get_active_wallet() {
-            Some(active_wallet) => active_wallet,
-            None => return Err(CustomError::WalletNotFound),
-        };
-        let pubkey_hash = active_wallet.get_pubkey_hash()?;
-
-        let mut active_wallet_utxo = vec![];
-        for (out_point, tx_out) in self.utxo.tx_set.iter() {
-            if tx_out.is_sent_to_key(&pubkey_hash) {
-                active_wallet_utxo.push((out_point.clone(), tx_out.clone()));
-            }
-        }
-        Ok(active_wallet_utxo)
     }
 }
 

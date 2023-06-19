@@ -65,8 +65,8 @@ impl GUI {
         };
 
         let window = GUIWindow {
-            builder: builder.clone(),
-            logger_sender: logger_sender.clone(),
+            builder,
+            logger_sender,
         };
 
         let gui = Self {
