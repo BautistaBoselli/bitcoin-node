@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     net::{SocketAddr, SocketAddrV6, TcpStream},
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -10,7 +11,7 @@ use crate::{
     message::{Message, MessageHeader},
     messages::{
         block::Block, get_headers::GetHeaders, headers::Headers, inv::Inventory,
-        send_headers::SendHeaders, ver_ack::VerAck, version::Version, transaction::Transaction,
+        send_headers::SendHeaders, transaction::Transaction, ver_ack::VerAck, version::Version,
     },
     network::{get_address_v6, open_stream},
     threads::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
@@ -33,6 +34,7 @@ pub enum NodeAction {
     Block((Vec<u8>, Block)),
     GetDataError(Vec<Inventory>),
     PendingTransaction(Transaction),
+    MakeTransaction((HashMap<String, u64>, u64)),
 }
 
 pub struct Peer {

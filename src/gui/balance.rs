@@ -72,7 +72,6 @@ impl GUIBalance {
         let node_state_ref_clone = self.node_state_ref.clone();
         let node_state = node_state_ref_clone.lock().unwrap();
         let pending_transactions = node_state.get_pending_tx_from_wallet().unwrap();
-        println!("POR MOSTRAR {} transacciones", pending_transactions.len());
         remove_transactions(&pending_tx_list_box);
         for (_, tx_output) in pending_transactions {
             println!("tx: {:?}", tx_output);
@@ -91,7 +90,6 @@ impl GUIBalance {
         let node_state_ref_clone = self.node_state_ref.clone();
         let node_state = node_state_ref_clone.lock().unwrap();
         let history = node_state.get_active_wallet().unwrap().get_history();
-        println!("POR MOSTRAR {} transacciones", history.len());
         remove_transactions(&tx_list_box);
         for movement in history {
             let tx_row = gtk::ListBoxRow::new();

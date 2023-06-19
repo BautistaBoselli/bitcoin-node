@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     error::CustomError,
-    messages::transaction::{OutPoint, TransactionOutput, Transaction},
+    messages::transaction::{OutPoint, TransactionOutput},
     parser::BufferParser,
 };
 
@@ -151,9 +151,9 @@ impl Wallet {
 }
 
 pub fn get_pubkey_hash(pubkey: String) -> Result<Vec<u8>, CustomError> {
-    let decoded_pubkey = bs58::decode(pubkey).into_vec().map_err(|_| {
-        CustomError::Validation(String::from("User PubKey incorrectly formatted"))
-    })?;
+    let decoded_pubkey = bs58::decode(pubkey)
+        .into_vec()
+        .map_err(|_| CustomError::Validation(String::from("User PubKey incorrectly formatted")))?;
 
     match decoded_pubkey.get(1..21) {
         Some(pubkey_hash) => Ok(pubkey_hash.to_vec()),

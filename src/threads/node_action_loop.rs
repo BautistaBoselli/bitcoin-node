@@ -1,6 +1,6 @@
 use std::{
+    collections::HashMap,
     sync::{mpsc, Arc, Mutex},
-    thread::{self, JoinHandle},
 };
 
 use gtk::glib;
@@ -30,23 +30,21 @@ pub struct NodeActionLoop {
 }
 
 impl NodeActionLoop {
-    pub fn spawn(
+    pub fn start(
         node_action_receiver: mpsc::Receiver<NodeAction>,
         peer_action_sender: mpsc::Sender<PeerAction>,
         logger_sender: mpsc::Sender<Log>,
         gui_sender: glib::Sender<GUIActions>,
         node_state_ref: Arc<Mutex<NodeState>>,
-    ) -> JoinHandle<()> {
-        thread::spawn(move || {
-            let mut node_thread = Self {
-                node_action_receiver,
-                peer_action_sender,
-                logger_sender,
-                gui_sender,
-                node_state_ref,
-            };
-            node_thread.event_loop()
-        })
+    ) {
+        let mut node_thread = Self {
+            node_action_receiver,
+            peer_action_sender,
+            logger_sender,
+            gui_sender,
+            node_state_ref,
+        };
+        node_thread.event_loop()
     }
 
     pub fn event_loop(&mut self) {
@@ -56,6 +54,9 @@ impl NodeActionLoop {
                 NodeAction::NewHeaders(new_headers) => self.handle_new_headers(new_headers),
                 NodeAction::GetHeadersError => self.handle_get_headers_error(),
                 NodeAction::GetDataError(inventory) => self.handle_get_data_error(inventory),
+                NodeAction::MakeTransaction((outputs, fee)) => {
+                    self.handle_make_transaction(outputs, fee)
+                }
                 NodeAction::PendingTransaction(transaction) => {
                     self.handle_pending_transaction(transaction)
                 }
@@ -68,6 +69,22 @@ impl NodeActionLoop {
                 );
             }
         }
+    }
+
+    fn handle_make_transaction(
+        &mut self,
+        outputs: HashMap<String, u64>,
+        fee: u64,
+    ) -> Result<(), CustomError> {
+        let node_state = self.node_state_ref.lock().unwrap();
+
+        let transaction = node_state.make_transaction(outputs, fee);
+        drop(node_state);
+
+        // self.peer_action_sender
+        //     .send(PeerAction::PendingTransaction(transaction))?;
+
+        Ok(())
     }
 
     fn handle_get_data_error(&mut self, inventory: Vec<Inventory>) -> Result<(), CustomError> {
@@ -149,7 +166,6 @@ impl NodeActionLoop {
 
     fn handle_pending_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
-        println!("Transaction pendiente: {:?}", transaction);
         node_state.append_pending_transaction(transaction)?;
         drop(node_state);
         Ok(())

@@ -5,7 +5,7 @@ use gtk::{
     prelude::{BuilderExtManual, IsA},
 };
 
-use crate::{error::CustomError, logger::Log, node_state::NodeState};
+use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
 
 use super::{
     balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet, window::GUIWindow,
@@ -20,7 +20,7 @@ pub enum GUIActions {
 }
 
 pub struct GUI {
-    builder: gtk::Builder,
+    node_action_sender: mpsc::Sender<NodeAction>,
     wallet: GUIWallet,
     balance: GUIBalance,
     logs: GUILogs,
@@ -33,6 +33,7 @@ impl GUI {
         gui_receiver: Receiver<GUIActions>,
         node_state_ref: Arc<Mutex<NodeState>>,
         logger_sender: mpsc::Sender<Log>,
+        node_action_sender: mpsc::Sender<NodeAction>,
     ) -> Result<(), CustomError> {
         if gtk::init().is_err() {
             return Err(CustomError::CannotInitGUI);
@@ -69,7 +70,7 @@ impl GUI {
         };
 
         let gui = Self {
-            builder,
+            node_action_sender,
             wallet,
             balance,
             logs,
@@ -92,7 +93,7 @@ impl GUI {
 
         // interactivity
         self.wallet.handle_interactivity()?;
-        self.debug.handle_interactivity()?;
+        self.debug.handle_interactivity(&self.node_action_sender)?;
 
         Ok(())
     }

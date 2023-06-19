@@ -45,6 +45,7 @@ pub enum CustomError {
     CannotSendToStream,
     MissingGUIElement,
     InsufficientFunds,
+    CannotStartEventLoop,
 }
 
 impl CustomError {
@@ -84,6 +85,7 @@ impl CustomError {
             Self::CannotSendToStream => "cannot send message to stream",
             Self::MissingGUIElement => "missing GUI element",
             Self::InsufficientFunds => "insufficient funds",
+            Self::CannotStartEventLoop => "cannot start event loop",
         }
     }
 }

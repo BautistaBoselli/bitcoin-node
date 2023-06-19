@@ -16,7 +16,7 @@ use crate::{
     messages::{
         block::Block,
         headers::{hash_as_string, BlockHeader, Headers},
-        transaction::{OutPoint, Transaction, TransactionOutput, TransactionInput},
+        transaction::{OutPoint, Transaction, TransactionOutput},
     },
     utxo::{parse_utxo, serialize_utxo},
     wallet::Wallet,
@@ -419,7 +419,11 @@ impl NodeState {
         Ok(pending_transactions)
     }
 
-    pub fn make_transaction(&self, mut outputs: HashMap<String, u64>, fee: u64) -> Result<(), CustomError> {
+    pub fn make_transaction(
+        &self,
+        mut outputs: HashMap<String, u64>,
+        fee: u64,
+    ) -> Result<(), CustomError> {
         let active_wallet = match self.get_active_wallet() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
@@ -430,16 +434,23 @@ impl NodeState {
         }
         let wallet_balance = self.get_balance()?;
         if total_value > wallet_balance {
-            send_log(&self.logger_sender, Log::Error(CustomError::Validation("Insufficient funds to make transaction".to_string())));
+            send_log(
+                &self.logger_sender,
+                Log::Error(CustomError::Validation(
+                    "Insufficient funds to make transaction".to_string(),
+                )),
+            );
             return Err(CustomError::InsufficientFunds);
         }
+
+        println!("CHECK 1");
         let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
 
         active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
         let mut inputs = vec![];
         let mut total_input_value = 0;
         for (out_point, tx_out) in active_wallet_utxo.iter() {
-            inputs.push( out_point.clone());
+            inputs.push(out_point.clone());
             total_input_value += tx_out.value;
             if total_input_value >= total_value {
                 break;
@@ -448,9 +459,8 @@ impl NodeState {
         let change = total_input_value - total_value;
         if change > 0 {
             outputs.insert(active_wallet.pubkey.clone(), change);
-        }      
-        Transaction::create(active_wallet, inputs, outputs)?;
-        Ok(())
+        }
+        Transaction::create(active_wallet, inputs, outputs)
     }
 
     fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
