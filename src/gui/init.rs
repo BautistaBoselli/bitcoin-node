@@ -8,7 +8,8 @@ use gtk::{
 use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
 
 use super::{
-    balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet, window::GUIWindow,
+    balance::GUIBalance, debug::GUIDebug, logs::GUILogs, transactions::GUITransactions,
+    wallet::GUIWallet, window::GUIWindow,
 };
 
 pub enum GUIActions {
@@ -25,6 +26,7 @@ pub struct GUI {
     balance: GUIBalance,
     logs: GUILogs,
     debug: GUIDebug,
+    transactions: GUITransactions,
     window: GUIWindow,
 }
 
@@ -52,6 +54,8 @@ impl GUI {
             builder: builder.clone(),
             node_state_ref: node_state_ref.clone(),
             logger_sender: logger_sender.clone(),
+            available_balance: 0.0,
+            pending_balance: 0.0,
         };
 
         let logs = GUILogs {
@@ -61,6 +65,12 @@ impl GUI {
 
         let debug = GUIDebug {
             builder: builder.clone(),
+            node_state_ref: node_state_ref.clone(),
+        };
+
+        let transactions = GUITransactions {
+            builder: builder.clone(),
+            logger_sender: logger_sender.clone(),
             node_state_ref,
         };
 
@@ -75,6 +85,7 @@ impl GUI {
             balance,
             logs,
             debug,
+            transactions,
             window,
         };
 
@@ -99,13 +110,15 @@ impl GUI {
     }
 
     fn gui_actions_loop(&self, gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
-        let balance = self.balance.clone();
+        let mut balance = self.balance.clone();
         let logs = self.logs.clone();
+        let mut transactions = self.transactions.clone();
         let window = self.window.clone();
 
         gui_receiver.attach(None, move |message| {
             balance.handle_events(&message);
             logs.handle_events(&message);
+            transactions.handle_events(&message);
             window.handle_events(&message);
 
             glib::Continue(true)

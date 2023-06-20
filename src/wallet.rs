@@ -74,12 +74,12 @@ impl Wallet {
             privkey,
             history: vec![],
         };
-        for (outpoint, output) in &utxo_set.tx_set {
-            if output.is_sent_to_key(&wallet.get_pubkey_hash()?) {
+        for (outpoint, value) in &utxo_set.tx_set {
+            if value.tx_out.is_sent_to_key(&wallet.get_pubkey_hash()?) {
                 wallet.history.push(Movement {
                     tx_hash: outpoint.hash.clone(),
-                    value: output.value,
-                    block_hash: None,
+                    value: value.tx_out.value,
+                    block_hash: Some(value.block_hash.clone()),
                 });
             }
         }
@@ -110,7 +110,6 @@ impl Wallet {
 
             let pubkey_len = parser.extract_u8()? as usize;
             let pubkey = parser.extract_string(pubkey_len)?;
-            println!("pubkey: {:?}", pubkey);
 
             let privkey_len = parser.extract_u8()? as usize;
             let privkey = parser.extract_string(privkey_len)?;

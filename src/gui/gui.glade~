@@ -391,7 +391,7 @@
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
                         <property name="margin-top">4</property>
-                        <property name="label" translatable="yes">Total:	        ------------------</property>
+                        <property name="label" translatable="yes">Total:	------------------</property>
                         <attributes>
                           <attribute name="weight" value="semibold"/>
                           <attribute name="scale" value="1"/>

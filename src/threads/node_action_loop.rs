@@ -85,9 +85,6 @@ impl NodeActionLoop {
 
         drop(node_state);
 
-        // self.peer_action_sender
-        //     .send(PeerAction::PendingTransaction(transaction))?;
-
         Ok(())
     }
 

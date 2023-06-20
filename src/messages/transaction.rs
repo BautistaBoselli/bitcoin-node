@@ -72,9 +72,9 @@ impl Transaction {
             }
         }
         for input in &self.inputs {
-            if let Some(output) = utxo.tx_set.get(&input.previous_output) {
-                if output.is_sent_to_key(public_key_hash) {
-                    value -= output.value;
+            if let Some(utxo_value) = utxo.tx_set.get(&input.previous_output) {
+                if utxo_value.tx_out.is_sent_to_key(public_key_hash) {
+                    value -= utxo_value.tx_out.value;
                 }
             }
         }

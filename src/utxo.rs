@@ -20,8 +20,13 @@ use std::{
 
 const START_DATE_IBD: u32 = 1681095630;
 
+pub struct UTXOValue {
+    pub tx_out: TransactionOutput,
+    pub block_hash: Vec<u8>,
+}
+
 pub struct UTXO {
-    pub tx_set: HashMap<OutPoint, TransactionOutput>,
+    pub tx_set: HashMap<OutPoint, UTXOValue>,
     sync: bool,
 }
 
@@ -36,9 +41,9 @@ impl UTXO {
     pub fn wallet_balance(&self, wallet: &Wallet) -> Result<u64, CustomError> {
         let mut balance = 0;
         let pubkey_hash = wallet.get_pubkey_hash()?;
-        for (_, tx_out) in self.tx_set.iter() {
-            if tx_out.is_sent_to_key(&pubkey_hash) {
-                balance += tx_out.value;
+        for (_, value) in self.tx_set.iter() {
+            if value.tx_out.is_sent_to_key(&pubkey_hash) {
+                balance += value.tx_out.value
             }
         }
         Ok(balance)
@@ -51,9 +56,9 @@ impl UTXO {
         let pubkey_hash = wallet.get_pubkey_hash()?;
 
         let mut active_wallet_utxo = vec![];
-        for (out_point, tx_out) in self.tx_set.iter() {
-            if tx_out.is_sent_to_key(&pubkey_hash) {
-                active_wallet_utxo.push((out_point.clone(), tx_out.clone()));
+        for (out_point, value) in self.tx_set.iter() {
+            if value.tx_out.is_sent_to_key(&pubkey_hash) {
+                active_wallet_utxo.push((out_point.clone(), value.tx_out.clone()));
             }
         }
 
@@ -89,7 +94,7 @@ impl UTXO {
         );
         send_log(
             logger_sender,
-            Log::Message("Utxo generation is finished...".to_string()),
+            Log::Message("Utxo generation is finished".to_string()),
         );
 
         Ok(())
@@ -136,19 +141,21 @@ impl UTXO {
         Ok(())
     }
 
-    pub fn parse(
-        buffer: Vec<u8>,
-    ) -> Result<(u32, HashMap<OutPoint, TransactionOutput>), CustomError> {
+    pub fn parse(buffer: Vec<u8>) -> Result<(u32, HashMap<OutPoint, UTXOValue>), CustomError> {
         let mut parser = BufferParser::new(buffer);
 
         let last_timestamp = parser.extract_u32()?;
         let tx_set_len = parser.extract_u64()? as usize;
-        let mut tx_set: HashMap<OutPoint, TransactionOutput> = HashMap::new();
+        let mut tx_set: HashMap<OutPoint, UTXOValue> = HashMap::new();
 
         for _i in 0..tx_set_len {
             let out_point = OutPoint::parse(parser.extract_buffer(36)?.to_vec())?;
-            let tx = TransactionOutput::parse(&mut parser)?;
-            tx_set.insert(out_point, tx);
+
+            let value = UTXOValue {
+                tx_out: TransactionOutput::parse(&mut parser)?,
+                block_hash: parser.extract_buffer(32)?.to_vec(),
+            };
+            tx_set.insert(out_point, value);
         }
 
         Ok((last_timestamp, tx_set))
@@ -164,7 +171,11 @@ impl UTXO {
                     hash: tx.hash().clone(),
                     index: index as u32,
                 };
-                self.tx_set.insert(out_point.clone(), tx_out.clone());
+                let value = UTXOValue {
+                    tx_out: tx_out.clone(),
+                    block_hash: block.header.hash(),
+                };
+                self.tx_set.insert(out_point.clone(), value);
             }
         }
 
@@ -180,9 +191,10 @@ impl UTXO {
         buffer.extend(last_timestamp.to_le_bytes());
         buffer.extend((self.tx_set.len() as u64).to_le_bytes());
 
-        for (out_point, tx_out) in self.tx_set.iter() {
+        for (out_point, value) in self.tx_set.iter() {
             buffer.extend(out_point.serialize());
-            buffer.extend(tx_out.serialize());
+            buffer.extend(value.tx_out.serialize());
+            buffer.extend(value.block_hash.clone());
         }
 
         remove_file("store/utxo.bin")?;
