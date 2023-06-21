@@ -208,6 +208,8 @@ pub struct OutPoint {
     pub index: u32,
 }
 
+
+
 impl OutPoint {
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];

@@ -24,8 +24,8 @@ pub struct GUITransactions {
 impl GUITransactions {
     pub fn handle_events(&mut self, message: &GUIActions) {
         let result = match message {
-            GUIActions::WalletChanged => self.update_txs(),
-            GUIActions::NewBlock => self.update_txs(),
+            GUIActions::WalletChanged => self.update(),
+            GUIActions::NewBlock => self.update(),
             _ => Ok(()),
         };
 
@@ -34,8 +34,14 @@ impl GUITransactions {
         }
     }
 
+    fn update(&self) -> Result<(), CustomError> {
+        self.update_txs()?;
+        self.update_utxo()?;
+        Ok(())
+    }
+
     fn update_txs(&self) -> Result<(), CustomError> {
-        let tx_list_box: gtk::ListBox = get_gui_element(&self.builder, "transactions-list")?;
+        let tx_list_box: gtk::ListBox = get_gui_element(&self.builder, "movements-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
         let node_state = node_state_ref_clone.lock().unwrap();
         let history = node_state.get_active_wallet().unwrap().get_history();
@@ -78,6 +84,26 @@ impl GUITransactions {
             tx_list_box.add(&tx_row);
         }
         drop(node_state);
+        Ok(())
+    }
+
+    fn update_utxo(&self) -> Result<(), CustomError> {
+        let utxo_list_box: gtk::ListBox = get_gui_element(&self.builder, "utxo-list")?;
+        let node_state_ref_clone = self.node_state_ref.clone();
+        let node_state = node_state_ref_clone.lock().unwrap();
+        let wallet_utxo = node_state.get_active_wallet_utxo().unwrap();
+        remove_transactions(&utxo_list_box);
+        for (out_point, tx_out) in wallet_utxo.iter() {
+            let utxo_row = gtk::ListBoxRow::new();
+            let utxo_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let label = gtk::Label::new(Some(tx_out.value.to_string().as_str()));
+
+            utxo_box.add(&label);
+
+            utxo_row.add(&utxo_box);
+            utxo_row.show_all();
+            utxo_list_box.add(&utxo_row);
+        }
         Ok(())
     }
 }
