@@ -23,18 +23,18 @@ pub struct Node {
     logger_sender: mpsc::Sender<Log>,
     peer_action_sender: mpsc::Sender<PeerAction>,
     peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
-    node_action_sender: mpsc::Sender<NodeAction>,
+    pub node_action_sender: mpsc::Sender<NodeAction>,
+    node_action_receiver: Option<mpsc::Receiver<NodeAction>>,
     node_state_ref: Arc<Mutex<NodeState>>,
     peers: Vec<Peer>,
-    pub event_loop_thread: Option<thread::JoinHandle<()>>,
+    npeers: u8,
+    // pub event_loop_thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Node {
     pub fn new(
         config: &Config,
         logger: &Logger,
-        addresses: IntoIter<SocketAddr>,
-        gui_sender: glib::Sender<GUIActions>,
         node_state_ref: Arc<Mutex<NodeState>>,
     ) -> Result<Self, CustomError> {
         let logger_sender = logger.get_sender();
@@ -42,7 +42,7 @@ impl Node {
         let peer_action_receiver = Arc::new(Mutex::new(receiver));
         let (node_action_sender, node_action_receiver) = mpsc::channel();
 
-        let mut node = Self {
+        let node = Self {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
             services: 0x00,
             version: config.protocol_version,
@@ -50,17 +50,33 @@ impl Node {
             peer_action_sender,
             peer_action_receiver,
             node_action_sender,
+            node_action_receiver: Some(node_action_receiver),
             peers: vec![],
-            event_loop_thread: None,
+            npeers: config.npeers,
+            // event_loop_thread: None,
             node_state_ref,
         };
 
-        node.connect(addresses, config.npeers);
-        node.initialize_pending_blocks_loop();
-        node.initialize_ibd()?;
-        node.initialize_event_loop(node_action_receiver, gui_sender);
+        // node.connect(addresses, config.npeers);
+        // node.initialize_pending_blocks_loop();
+        // node.initialize_ibd()?;
+        // node.initialize_event_loop(node_action_receiver, gui_sender);
 
         Ok(node)
+    }
+
+    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIActions>) {
+        thread::spawn(move || -> Result<(), CustomError> {
+            self.connect(addresses, self.npeers);
+            self.initialize_pending_blocks_loop();
+            if let Err(error) = self.initialize_ibd() {
+                send_log(&self.logger_sender, Log::Error(error));
+            }
+            if let Err(error) = self.initialize_event_loop(gui_sender.clone()) {
+                send_log(&self.logger_sender, Log::Error(error));
+            }
+            Ok(())
+        });
     }
 
     pub fn connect(&mut self, addresses: IntoIter<SocketAddr>, mut number_of_peers: u8) {
@@ -86,6 +102,7 @@ impl Node {
                 self.peer_action_receiver.clone(),
                 self.logger_sender.clone(),
                 self.node_action_sender.clone(),
+                self.node_state_ref.clone(),
             ) {
                 Ok(peer) => {
                     self.peers.push(peer);
@@ -120,16 +137,20 @@ impl Node {
 
     fn initialize_event_loop(
         &mut self,
-        node_action_receiver: mpsc::Receiver<NodeAction>,
+        // node_action_receiver: mpsc::Receiver<NodeAction>,
         gui_sender: glib::Sender<GUIActions>,
-    ) {
-        self.event_loop_thread = Some(NodeActionLoop::spawn(
-            node_action_receiver,
-            self.peer_action_sender.clone(),
-            self.logger_sender.clone(),
-            gui_sender,
-            self.node_state_ref.clone(),
-        ));
+    ) -> Result<(), CustomError> {
+        if let Some(receiver) = self.node_action_receiver.take() {
+            NodeActionLoop::start(
+                receiver,
+                self.peer_action_sender.clone(),
+                self.logger_sender.clone(),
+                gui_sender,
+                self.node_state_ref.clone(),
+            );
+            return Ok(());
+        }
+        Err(CustomError::CannotStartEventLoop)
     }
 
     pub fn execute(&self, peer_message: PeerAction) -> Result<(), CustomError> {
@@ -150,12 +171,6 @@ impl Drop for Node {
                 if let Err(error) = thread.join() {
                     println!("Error joining thread: {:?}", error);
                 }
-            }
-        }
-
-        if let Some(thread) = self.event_loop_thread.take() {
-            if let Err(error) = thread.join() {
-                println!("Error joining event loop thread: {:?}", error);
             }
         }
     }

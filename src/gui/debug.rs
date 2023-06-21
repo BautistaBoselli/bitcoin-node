@@ -1,8 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{mpsc::Sender, Arc, Mutex},
+};
 
 use gtk::traits::ButtonExt;
 
-use crate::{error::CustomError, node_state::NodeState};
+use crate::{error::CustomError, node_state::NodeState, peer::NodeAction};
 
 use super::init::get_gui_element;
 
@@ -13,17 +16,23 @@ pub struct GUIDebug {
 }
 
 impl GUIDebug {
-    pub fn handle_interactivity(&self) -> Result<(), CustomError> {
+    pub fn handle_interactivity(
+        &self,
+        node_action_sender: &Sender<NodeAction>,
+    ) -> Result<(), CustomError> {
         let debug_button: gtk::Button = get_gui_element(&self.builder, "debug")?;
-        let node_state_ref = self.node_state_ref.clone();
 
+        let clone = node_action_sender.clone();
         debug_button.connect_clicked(move |_| {
-            let node_state = node_state_ref.lock().unwrap();
-            println!(
-                "active_wallet: {:?}",
-                node_state.get_pending_tx_from_wallet()
-            );
-            drop(node_state);
+            let mut outputs = HashMap::new();
+            outputs.insert(String::from("mniwvWuHto1y9vmMEqQX5mvrXMVYDizbu2"), 1000000);
+            //outputs.insert(String::from("1A1zP1eP5QGefi2DMPTfTL5SLmDonROuch"), 700000);
+
+            let fee = 500000;
+
+            clone
+                .send(NodeAction::MakeTransaction((outputs, fee)))
+                .unwrap();
         });
 
         Ok(())

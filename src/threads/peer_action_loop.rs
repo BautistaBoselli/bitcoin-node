@@ -8,7 +8,11 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     message::Message,
-    messages::{get_data::GetData, inv::Inventory},
+    messages::{
+        get_data::GetData,
+        inv::{Inv, Inventory, InventoryType},
+        transaction::Transaction,
+    },
     peer::{request_headers, NodeAction, PeerAction},
 };
 
@@ -50,6 +54,9 @@ impl PeerActionLoop {
             let response = match peer_message {
                 PeerAction::GetHeaders(last_header) => self.handle_getheaders(last_header),
                 PeerAction::GetData(inventories) => self.handle_getdata(inventories),
+                PeerAction::SendTransaction(transaction) => {
+                    self.handle_send_transaction(transaction)
+                }
                 PeerAction::Terminate => {
                     break;
                 }
@@ -65,6 +72,16 @@ impl PeerActionLoop {
         Ok(())
     }
 
+    fn handle_send_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
+        let inventory = Inventory {
+            hash: transaction.hash(),
+            inventory_type: InventoryType::Tx,
+        };
+        let inv = Inv {
+            inventories: vec![inventory],
+        };
+        inv.send(&mut self.stream)
+    }
     fn handle_getdata(&mut self, inventories: Vec<Inventory>) -> Result<(), CustomError> {
         let inventories_clone = inventories.clone();
         let request = GetData::new(inventories).send(&mut self.stream);

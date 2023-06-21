@@ -5,10 +5,11 @@ use gtk::{
     prelude::{BuilderExtManual, IsA},
 };
 
-use crate::{error::CustomError, logger::Log, node_state::NodeState};
+use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
 
 use super::{
-    balance::GUIBalance, debug::GUIDebug, logs::GUILogs, wallet::GUIWallet, window::GUIWindow,
+    balance::GUIBalance, debug::GUIDebug, logs::GUILogs, transactions::GUITransactions,
+    wallet::GUIWallet, window::GUIWindow,
 };
 
 pub enum GUIActions {
@@ -20,11 +21,12 @@ pub enum GUIActions {
 }
 
 pub struct GUI {
-    builder: gtk::Builder,
+    node_action_sender: mpsc::Sender<NodeAction>,
     wallet: GUIWallet,
     balance: GUIBalance,
     logs: GUILogs,
     debug: GUIDebug,
+    transactions: GUITransactions,
     window: GUIWindow,
 }
 
@@ -33,6 +35,7 @@ impl GUI {
         gui_receiver: Receiver<GUIActions>,
         node_state_ref: Arc<Mutex<NodeState>>,
         logger_sender: mpsc::Sender<Log>,
+        node_action_sender: mpsc::Sender<NodeAction>,
     ) -> Result<(), CustomError> {
         if gtk::init().is_err() {
             return Err(CustomError::CannotInitGUI);
@@ -51,6 +54,8 @@ impl GUI {
             builder: builder.clone(),
             node_state_ref: node_state_ref.clone(),
             logger_sender: logger_sender.clone(),
+            available_balance: 0.0,
+            pending_balance: 0.0,
         };
 
         let logs = GUILogs {
@@ -60,20 +65,27 @@ impl GUI {
 
         let debug = GUIDebug {
             builder: builder.clone(),
+            node_state_ref: node_state_ref.clone(),
+        };
+
+        let transactions = GUITransactions {
+            builder: builder.clone(),
+            logger_sender: logger_sender.clone(),
             node_state_ref,
         };
 
         let window = GUIWindow {
-            builder: builder.clone(),
-            logger_sender: logger_sender.clone(),
+            builder,
+            logger_sender,
         };
 
         let gui = Self {
-            builder,
+            node_action_sender,
             wallet,
             balance,
             logs,
             debug,
+            transactions,
             window,
         };
 
@@ -92,19 +104,21 @@ impl GUI {
 
         // interactivity
         self.wallet.handle_interactivity()?;
-        self.debug.handle_interactivity()?;
+        self.debug.handle_interactivity(&self.node_action_sender)?;
 
         Ok(())
     }
 
     fn gui_actions_loop(&self, gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
-        let balance = self.balance.clone();
+        let mut balance = self.balance.clone();
         let logs = self.logs.clone();
+        let mut transactions = self.transactions.clone();
         let window = self.window.clone();
 
         gui_receiver.attach(None, move |message| {
             balance.handle_events(&message);
             logs.handle_events(&message);
+            transactions.handle_events(&message);
             window.handle_events(&message);
 
             glib::Continue(true)

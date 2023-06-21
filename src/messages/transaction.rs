@@ -2,9 +2,15 @@ use std::collections::HashMap;
 
 use bitcoin_hashes::{sha256, Hash};
 
-use crate::{parser::{BufferParser, VarIntSerialize}, error::CustomError, message::Message, wallet::{Movement}};
+use crate::{
+    error::CustomError,
+    message::Message,
+    parser::{BufferParser, VarIntSerialize},
+    utxo::UTXO,
+    wallet::{get_script_pubkey, Movement, Wallet},
+};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     pub version: u32,
     pub inputs: Vec<TransactionInput>,
@@ -30,6 +36,7 @@ impl Transaction {
             buffer.extend(output.serialize());
         }
         buffer.extend(self.lock_time.to_le_bytes());
+        //buffer.extend(1_u32.to_le_bytes());
         buffer
     }
 
@@ -56,19 +63,18 @@ impl Transaction {
         })
     }
 
-    pub fn get_movement(&self, public_key_hash: &Vec<u8>, utxo_set: &HashMap<OutPoint, TransactionOutput>,
-    ) -> Option<Movement> {
+    pub fn get_movement(&self, public_key_hash: &Vec<u8>, utxo: &UTXO) -> Option<Movement> {
         let mut value = 0;
-        
+
         for output in &self.outputs {
             if output.is_sent_to_key(public_key_hash) {
                 value += output.value;
             }
         }
         for input in &self.inputs {
-            if let Some(output) = utxo_set.get(&input.previous_output) {
-                if output.is_sent_to_key(public_key_hash) {
-                    value -= output.value;
+            if let Some(utxo_value) = utxo.tx_set.get(&input.previous_output) {
+                if utxo_value.tx_out.is_sent_to_key(public_key_hash) {
+                    value -= utxo_value.tx_out.value;
                 }
             }
         }
@@ -82,9 +88,46 @@ impl Transaction {
             None
         }
     }
+
+    pub fn create(
+        sender_wallet: &Wallet,
+        inputs_outpoints: Vec<OutPoint>,
+        outputs: HashMap<String, u64>,
+    ) -> Result<Self, CustomError> {
+        //println!("Wallet: {:?}", sender_wallet);
+        println!("Inputs: {:?}", inputs_outpoints);
+        println!("Outputs: {:?}", outputs);
+        let mut transaction = Transaction {
+            version: 1,
+            inputs: vec![],
+            outputs: vec![],
+            lock_time: 0,
+        };
+        let script_pubkey = sender_wallet.get_script_pubkey()?;
+        println!("script pubkey: {:?}", script_pubkey);
+        for outpoint in inputs_outpoints {
+            let input = TransactionInput {
+                previous_output: outpoint,
+                script_sig: script_pubkey.clone(),
+                sequence: 0xffffffff,
+            };
+            transaction.inputs.push(input);
+        }
+        for (pubkey, value) in outputs {
+            let script_pubkey = get_script_pubkey(pubkey)?;
+            let output = TransactionOutput {
+                value,
+                script_pubkey,
+            };
+            transaction.outputs.push(output);
+        }
+        println!("Transaction: {:?}", transaction);
+
+        Ok(transaction)
+    }
 }
 
-impl Message for Transaction{
+impl Message for Transaction {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(self.version.to_le_bytes());
@@ -130,7 +173,7 @@ impl Message for Transaction{
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TransactionInput {
     pub previous_output: OutPoint,
     pub script_sig: Vec<u8>,
