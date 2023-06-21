@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.40.0 -->
+<!-- Generated with glade 3.38.2 -->
 <interface>
   <requires lib="gtk+" version="3.24"/>
   <object class="GtkDialog" id="add-wallet-dialog">
@@ -343,6 +343,24 @@
           <packing>
             <property name="expand">False</property>
             <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="logs">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="halign">start</property>
+            <property name="margin-top">6</property>
+            <property name="margin-bottom">6</property>
+            <property name="xpad">8</property>
+            <property name="label" translatable="yes">Initializing...</property>
+            <property name="ellipsize">end</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="pack-type">end</property>
             <property name="position">2</property>
           </packing>
         </child>
@@ -453,12 +471,12 @@
               </packing>
             </child>
             <child>
-              <object class="GtkBox" id="transactions">
+              <object class="GtkBox" id="utxo">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="orientation">vertical</property>
                 <child>
-                  <object class="GtkListBox" id="transactions-list">
+                  <object class="GtkListBox" id="utxo-list">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                   </object>
@@ -470,9 +488,32 @@
                 </child>
               </object>
               <packing>
-                <property name="name">transactions</property>
-                <property name="title" translatable="yes">Transactions</property>
+                <property name="name">utxo</property>
+                <property name="title" translatable="yes">UTXO</property>
                 <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkBox" id="history">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkListBox" id="movements-list">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="name">history</property>
+                <property name="title" translatable="yes">History</property>
+                <property name="position">2</property>
               </packing>
             </child>
             <child>
@@ -480,6 +521,8 @@
               <object class="GtkGrid" id="transfer">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
+                <property name="margin-left">8</property>
+                <property name="margin-right">8</property>
                 <property name="margin-start">8</property>
                 <property name="margin-end">8</property>
                 <property name="margin-top">8</property>
@@ -492,6 +535,7 @@
                     <property name="can-focus">False</property>
                     <property name="halign">end</property>
                     <property name="valign">end</property>
+                    <property name="margin-right">4</property>
                     <property name="margin-end">4</property>
                     <property name="margin-bottom">10</property>
                     <property name="vexpand">True</property>
@@ -503,7 +547,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="tx-fee">
+                  <object class="GtkEntry" id="tx-fee1">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="valign">end</property>
@@ -530,7 +574,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-1-pubkey">
+                  <object class="GtkEntry" id="output-1-pubkey1">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="hexpand">True</property>
@@ -543,7 +587,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-1-value">
+                  <object class="GtkEntry" id="output-1-value1">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="placeholder-text" translatable="yes">Value (BTC)</property>
@@ -556,7 +600,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkCheckButton" id="output-1-check">
+                  <object class="GtkCheckButton" id="output-1-check1">
                     <property name="label" translatable="yes">Receiver 1</property>
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
@@ -574,6 +618,7 @@
                     <property name="can-focus">False</property>
                     <property name="halign">start</property>
                     <property name="valign">end</property>
+                    <property name="margin-left">4</property>
                     <property name="margin-start">4</property>
                     <property name="margin-top">2</property>
                     <property name="margin-bottom">10</property>
@@ -662,9 +707,9 @@
                 </child>
               </object>
               <packing>
-                <property name="name">make-transaction</property>
+                <property name="name">transfer</property>
                 <property name="title" translatable="yes">Transfer</property>
-                <property name="position">2</property>
+                <property name="position">3</property>
               </packing>
             </child>
           </object>
@@ -672,24 +717,6 @@
             <property name="expand">True</property>
             <property name="fill">True</property>
             <property name="position">3</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkLabel" id="logs">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <property name="halign">start</property>
-            <property name="margin-top">6</property>
-            <property name="margin-bottom">6</property>
-            <property name="xpad">8</property>
-            <property name="label" translatable="yes">Initializing...</property>
-            <property name="ellipsize">end</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="pack-type">end</property>
-            <property name="position">4</property>
           </packing>
         </child>
       </object>
