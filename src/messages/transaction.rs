@@ -1,14 +1,21 @@
 use std::collections::HashMap;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{hash160, sha256, sha256d, Hash};
+use secp256k1::{
+    ecdsa::{SerializedSignature, Signature},
+    Secp256k1,
+};
 
 use crate::{
     error::CustomError,
     message::Message,
+    messages::headers::hash_as_string,
     parser::{BufferParser, VarIntSerialize},
     utxo::UTXO,
     wallet::{get_script_pubkey, Movement, Wallet},
 };
+
+const SIGHASH_ALL: u32 = 1;
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
@@ -36,7 +43,7 @@ impl Transaction {
             buffer.extend(output.serialize());
         }
         buffer.extend(self.lock_time.to_le_bytes());
-        //buffer.extend(1_u32.to_le_bytes());
+
         buffer
     }
 
@@ -121,9 +128,31 @@ impl Transaction {
             };
             transaction.outputs.push(output);
         }
-        println!("Transaction: {:?}", transaction);
+
+        transaction.sign(sender_wallet)?;
+
+        println!(
+            "Transaction: {:?}",
+            hash_as_string(transaction.serialize()).to_ascii_lowercase()
+        );
 
         Ok(transaction)
+    }
+
+    fn sign(&mut self, wallet: &Wallet) -> Result<(), CustomError> {
+        let privkey_hash = wallet.get_privkey_hash()?;
+
+        println!("privkey hash ({}): {:?}", privkey_hash.len(), privkey_hash);
+
+        let serialized_unsigned_tx = self.serialize();
+
+        let script_sig = sign(serialized_unsigned_tx, &privkey_hash)?;
+
+        for input in &mut self.inputs {
+            input.script_sig = script_sig.clone();
+        }
+
+        Ok(())
     }
 }
 
@@ -208,8 +237,6 @@ pub struct OutPoint {
     pub index: u32,
 }
 
-
-
 impl OutPoint {
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
@@ -271,4 +298,55 @@ fn compare_p2pkh(parser: &mut BufferParser, public_key_hash: &Vec<u8>) -> bool {
     let hash = parser.extract_buffer(20).unwrap().to_vec();
 
     hash == *public_key_hash
+}
+
+fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> {
+    buffer.extend(SIGHASH_ALL.to_le_bytes());
+
+    println!("buffer: {:?}", hash_as_string(buffer.clone()));
+
+    let z = sha256d::Hash::hash(&buffer);
+
+    let secp = Secp256k1::new();
+    let msg = secp256k1::Message::from_slice(&z.to_byte_array())
+        .map_err(|_| CustomError::CannotSignTx)?;
+
+    let key = secp256k1::SecretKey::from_slice(&privkey).map_err(|_| CustomError::CannotSignTx)?;
+    let publickey = secp256k1::PublicKey::from_secret_key(&secp, &key).serialize();
+
+    let signature = secp.sign_ecdsa(&msg, &key).serialize_der();
+
+    let mut script_sig = vec![];
+
+    script_sig.extend((signature.len() + 1).to_varint_bytes());
+    script_sig.extend(signature.to_vec());
+    script_sig.extend((0x1 as u8).to_le_bytes());
+    script_sig.extend(publickey.len().to_varint_bytes());
+    script_sig.extend(publickey.clone());
+
+    Ok(script_sig)
+}
+
+mod tests {
+    // use crate::wallet::Wallet;
+
+    // use super::{Transaction, OutPoint};
+
+    // #[test]
+    // fn test_sign() {
+    //     let wallet = Wallet {
+    //         name: "".to_string(),
+    //         pubkey: "mwjQy4mHvLC4iv6VKJWR9LrQgTW3MqPhrH".to_string(),
+    //         privkey: "1234".to_string(),
+    //         history: vec![],
+    //     };
+    //     let transaction = Transaction::create(
+    //         &wallet,
+    //         vec![OutPoint {
+    //             hash: "53576a80ea79a6ed8f83abdb89589d98847f6be0c919660cf2d805a6b1058ec0".to_string(),
+    //             index: 1,
+    //         }],
+    //         vec![("tb1ql6g96n50lqgmhrryxryzfau2zp2ucvzt4s29wc".to_string(), 100)],
+    //     )
+    // }
 }

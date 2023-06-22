@@ -312,7 +312,9 @@ impl NodeState {
         self.utxo.wallet_balance(active_wallet)
     }
 
-    pub fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
+    pub fn get_active_wallet_utxo(
+        &self,
+    ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
         let active_wallet = match self.get_active_wallet() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
@@ -394,7 +396,7 @@ impl NodeState {
             return Err(CustomError::InsufficientFunds);
         }
 
-        println!("CHECK 1");
+        // println!("CHECK 1");
         let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
 
         active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
@@ -412,8 +414,9 @@ impl NodeState {
             outputs.insert(active_wallet.pubkey.clone(), change);
         }
         let transaction = Transaction::create(active_wallet, inputs, outputs)?;
-        self.to_send_transactions
-            .insert(transaction.hash(), transaction.clone());
+
+        // self.to_send_transactions
+        //     .insert(transaction.hash(), transaction.clone());
         Ok(transaction)
     }
 }

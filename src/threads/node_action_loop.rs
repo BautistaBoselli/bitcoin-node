@@ -80,8 +80,8 @@ impl NodeActionLoop {
 
         let transaction = node_state.make_transaction(outputs, fee)?;
 
-        self.peer_action_sender
-            .send(PeerAction::SendTransaction(transaction))?;
+        // self.peer_action_sender
+        //     .send(PeerAction::SendTransaction(transaction))?;
 
         drop(node_state);
 

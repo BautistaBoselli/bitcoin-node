@@ -547,7 +547,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="tx-fee">
+                  <object class="GtkEntry" id="tx-fee1">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="valign">end</property>
