@@ -24,7 +24,7 @@ pub struct GUITransfer {
 impl GUITransfer {
     pub fn handle_events(&mut self, message: &GUIActions) {
         let result = match message {
-            // GUIActions::WalletChanged => self.update_txs(),
+            GUIActions::WalletChanged => self.reset_tx_fields(),
             // GUIActions:: => self.update_txs(),
             _ => Ok(()),
         };
@@ -41,12 +41,13 @@ impl GUITransfer {
 
         let node_action_sender_clone = node_action_sender.clone();
         let builder = self.builder.clone();
+        let logger_sender = self.logger_sender.clone();
 
         send_button.connect_clicked(move |_| {
             let mut outputs = HashMap::new();
-            let receiver_1 = get_output(&builder, 1);
-            let receiver_2 = get_output(&builder, 2);
-            let receiver_3 = get_output(&builder, 3);
+            let receiver_1 = get_output(&builder, 1, logger_sender.clone());
+            let receiver_2 = get_output(&builder, 2, logger_sender.clone());
+            let receiver_3 = get_output(&builder, 3, logger_sender.clone());
 
             if let Ok(Some((pubkey, value))) = receiver_1 {
                 outputs.insert(pubkey, value);
@@ -58,25 +59,64 @@ impl GUITransfer {
                 outputs.insert(pubkey, value);
             }
 
-            let fee_entry: gtk::Entry = get_gui_element(&builder, "tx-fee").unwrap();
-            let fee = fee_entry.text().to_string().parse::<u64>().unwrap();
+            let fee_entry: gtk::Entry = match get_gui_element(&builder, "tx-fee"){
+                Ok(fee_entry) => fee_entry,
+                Err(error) => {
+                    send_log(&logger_sender, Log::Error(error));
+                    return;
+                }
+            };
 
-            node_action_sender_clone
+            match fee_entry.text().to_string().parse::<u64>().map_err(|_| CustomError::InvalidFee){
+                Ok(fee) => {
+                    if fee <= 0 {
+                        send_log(&logger_sender, Log::Error(CustomError::InvalidFee));
+                        return;
+                    }
+                    node_action_sender_clone
                 .send(NodeAction::MakeTransaction((outputs, fee)))
                 .unwrap();
+                    
+                },
+                Err(error) => {
+                    send_log(&logger_sender, Log::Error(error));
+                    return;
+                }
+            };
+            
+
+            // node_action_sender_clone
+            //     .send(NodeAction::MakeTransaction((outputs, fee)))
+            //     .unwrap();
         });
+
+        Ok(())
+    }
+
+    fn reset_tx_fields(&self) -> Result<(), CustomError> {
+        let fee_entry: gtk::Entry = get_gui_element(&self.builder, "tx-fee")?;
+        fee_entry.set_text("0");
+
+        for i in 1..4 {
+            let receiver_pubkey: gtk::Entry = get_gui_element(&self.builder, &format!("output-{}-pubkey", i))?;
+            receiver_pubkey.set_text("");
+            let receiver_value: gtk::Entry = get_gui_element(&self.builder, &format!("output-{}-value", i))?;
+            receiver_value.set_text("");
+        }
 
         Ok(())
     }
 }
 
-fn get_output(builder: &gtk::Builder, i: u8) -> Result<Option<(String, u64)>, CustomError> {
+fn get_output(builder: &gtk::Builder, i: u8, logger_sender: Sender<Log>) -> Result<Option<(String, u64)>, CustomError> {
     // let check: gtk::ToggleButton = get_gui_element(&builder, &format!("output-{}-check", i))?;
 
     let pubkey: gtk::Entry = get_gui_element(&builder, &format!("output-{}-pubkey", i))?;
     let value: gtk::Entry = get_gui_element(&builder, &format!("output-{}-value", i))?;
 
-    if pubkey.text().to_string().is_empty() || value.text().to_string().is_empty() {
+    if pubkey.text().to_string().len() != 34 || value.text().to_string().is_empty() {
+        let message = Log::Error(CustomError::InvalidTransferFields);
+        send_log(&logger_sender, message);
         return Ok(None);
     }
 

@@ -373,6 +373,8 @@ impl NodeState {
             total_value += output;
         }
         let wallet_balance = self.get_active_wallet_balance()?;
+        println!("total_value: {}", total_value);
+        println!("wallet_balance: {}", wallet_balance);
         if total_value > wallet_balance {
             send_log(
                 &self.logger_sender,
@@ -383,7 +385,7 @@ impl NodeState {
             return Err(CustomError::InsufficientFunds);
         }
 
-        // println!("CHECK 1");
+        println!("CHECK 1");
         let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
 
         active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));

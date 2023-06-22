@@ -48,6 +48,8 @@ pub enum CustomError {
     CannotStartEventLoop,
     InvalidValue,
     CannotSignTx,
+    InvalidFee,
+    InvalidTransferFields,
 }
 
 impl CustomError {
@@ -90,6 +92,8 @@ impl CustomError {
             Self::CannotStartEventLoop => "cannot start event loop",
             Self::InvalidValue => "invalid value",
             Self::CannotSignTx => "cannot sign transaction",
+            Self::InvalidFee => "invalid fee",
+            Self::InvalidTransferFields => "invalid transfer fields",
         }
     }
 }

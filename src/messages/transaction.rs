@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use bitcoin_hashes::{hash160, sha256, sha256d, Hash};
+use bitcoin_hashes::{sha256, sha256d, Hash};
 use secp256k1::{
-    ecdsa::{SerializedSignature, Signature},
     Secp256k1,
 };
 
@@ -31,21 +30,21 @@ impl Transaction {
             .as_byte_array()
             .to_vec()
     }
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = vec![];
-        buffer.extend(self.version.to_le_bytes());
-        buffer.extend(self.inputs.len().to_varint_bytes());
-        for input in &self.inputs {
-            buffer.extend(input.serialize());
-        }
-        buffer.extend(self.outputs.len().to_varint_bytes());
-        for output in &self.outputs {
-            buffer.extend(output.serialize());
-        }
-        buffer.extend(self.lock_time.to_le_bytes());
+    // pub fn serialize(&self) -> Vec<u8> {
+    //     let mut buffer: Vec<u8> = vec![];
+    //     buffer.extend(self.version.to_le_bytes());
+    //     buffer.extend(self.inputs.len().to_varint_bytes());
+    //     for input in &self.inputs {
+    //         buffer.extend(input.serialize());
+    //     }
+    //     buffer.extend(self.outputs.len().to_varint_bytes());
+    //     for output in &self.outputs {
+    //         buffer.extend(output.serialize());
+    //     }
+    //     buffer.extend(self.lock_time.to_le_bytes());
 
-        buffer
-    }
+    //     buffer
+    // }
 
     pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let version = parser.extract_u32()?;
@@ -169,6 +168,7 @@ impl Message for Transaction {
             buffer.extend(output.serialize());
         }
         buffer.extend(self.lock_time.to_le_bytes());
+
         buffer
     }
 

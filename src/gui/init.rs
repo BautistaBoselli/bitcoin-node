@@ -9,7 +9,7 @@ use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAc
 
 use super::{
     balance::GUIBalance, debug::GUIDebug, logs::GUILogs, transactions::GUITransactions,
-    transfer::GUITransfer, wallet::GUIWallet, window::GUIWindow,
+    transfer::{GUITransfer, self}, wallet::GUIWallet, window::GUIWindow,
 };
 
 pub enum GUIActions {
@@ -124,12 +124,14 @@ impl GUI {
         let logs = self.logs.clone();
         let mut transactions = self.transactions.clone();
         let window = self.window.clone();
+        let mut transfer = self.transfer.clone();
 
         gui_receiver.attach(None, move |message| {
             balance.handle_events(&message);
             logs.handle_events(&message);
             transactions.handle_events(&message);
             window.handle_events(&message);
+            transfer.handle_events(&message);
 
             glib::Continue(true)
         });
