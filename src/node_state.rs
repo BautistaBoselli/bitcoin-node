@@ -15,7 +15,6 @@ use crate::{
     messages::{
         block::Block,
         headers::{BlockHeader, Headers},
-        inv::Inventory,
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
     utxo::UTXO,
@@ -32,7 +31,6 @@ pub struct NodeState {
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo: UTXO,
     pending_tx_set: HashMap<Vec<u8>, Transaction>,
-    to_send_transactions: HashMap<Vec<u8>, Transaction>,
     headers_sync: bool,
     blocks_sync: bool,
 }
@@ -59,7 +57,6 @@ impl NodeState {
             pending_blocks_ref,
             utxo: UTXO::new()?,
             pending_tx_set: HashMap::new(),
-            to_send_transactions: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
         }));
@@ -360,16 +357,6 @@ impl NodeState {
         }
 
         Ok(())
-    }
-
-    pub fn get_transaction_to_send(&mut self, inventories: Vec<Inventory>) -> Option<&Transaction> {
-        let mut transaction: Option<&Transaction> = None;
-        for inventory in inventories {
-            if self.to_send_transactions.contains_key(&inventory.hash) {
-                transaction = self.to_send_transactions.get(&inventory.hash);
-            }
-        }
-        transaction
     }
 
     pub fn make_transaction(

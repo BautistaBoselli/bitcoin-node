@@ -14,7 +14,6 @@ use crate::{
         send_headers::SendHeaders, transaction::Transaction, ver_ack::VerAck, version::Version,
     },
     network::{get_address_v6, open_stream},
-    node_state::NodeState,
     threads::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
 };
 
@@ -57,7 +56,6 @@ impl Peer {
         peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         mut logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
-        node_state_ref: Arc<Mutex<NodeState>>,
     ) -> Result<Self, CustomError> {
         let stream = open_stream(address)?;
         let mut peer = Self {
@@ -70,12 +68,7 @@ impl Peer {
         };
 
         peer.handshake(sender_address, &mut logger_sender)?;
-        peer.spawn_threads(
-            peer_action_receiver,
-            node_action_sender,
-            logger_sender,
-            node_state_ref,
-        )?;
+        peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
     }
 
@@ -131,7 +124,6 @@ impl Peer {
         peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         node_action_sender: mpsc::Sender<NodeAction>,
         logger_sender: mpsc::Sender<Log>,
-        node_state_ref: Arc<Mutex<NodeState>>,
     ) -> Result<(), CustomError> {
         //thread que escucha al nodo
         self.peer_action_thread = Some(PeerActionLoop::spawn(
@@ -148,7 +140,6 @@ impl Peer {
             self.stream.try_clone()?,
             logger_sender,
             node_action_sender,
-            node_state_ref,
         ));
         Ok(())
     }

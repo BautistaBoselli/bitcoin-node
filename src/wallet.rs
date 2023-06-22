@@ -111,6 +111,7 @@ impl Wallet {
             let pubkey_len = parser.extract_u8()? as usize;
             let pubkey = parser.extract_string(pubkey_len)?;
 
+            println!("pubkey: {}", pubkey);
             let privkey_len = parser.extract_u8()? as usize;
             let privkey = parser.extract_string(privkey_len)?;
 

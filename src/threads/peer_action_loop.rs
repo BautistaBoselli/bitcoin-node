@@ -8,11 +8,7 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     message::Message,
-    messages::{
-        get_data::GetData,
-        inv::{Inv, Inventory, InventoryType},
-        transaction::Transaction,
-    },
+    messages::{get_data::GetData, inv::Inventory, transaction::Transaction},
     peer::{request_headers, NodeAction, PeerAction},
 };
 
@@ -73,14 +69,8 @@ impl PeerActionLoop {
     }
 
     fn handle_send_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
-        let inventory = Inventory {
-            hash: transaction.hash(),
-            inventory_type: InventoryType::Tx,
-        };
-        let inv = Inv {
-            inventories: vec![inventory],
-        };
-        inv.send(&mut self.stream)
+        println!("tx enviada");
+        transaction.send(&mut self.stream)
     }
     fn handle_getdata(&mut self, inventories: Vec<Inventory>) -> Result<(), CustomError> {
         let inventories_clone = inventories.clone();
