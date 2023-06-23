@@ -1,5 +1,6 @@
 use crate::{error::CustomError, message::Message, parser::BufferParser, parser::VarIntSerialize};
 
+#[derive(Debug, PartialEq)]
 ///Esta es la estructura de un mensaje inv, la cual contiene un vector de inventories
 pub struct Inv {
     pub inventories: Vec<Inventory>,
@@ -62,7 +63,7 @@ pub enum InventoryType {
     FilteredWitnessBlock,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 ///Esta es la estructura de un inventario, la cual contiene un tipo de inventario y un hash del inventario en si.
 pub struct Inventory {
     pub inventory_type: InventoryType,
@@ -108,12 +109,53 @@ impl Inventory {
             0x40000003 => InventoryType::FilteredWitnessBlock,
             _ => {
                 println!("inventory type: {}", parser.extract_u32()?);
-                return Err(CustomError::SerializedBufferIsInvalid)
+                return Err(CustomError::SerializedBufferIsInvalid);
             }
         };
         Ok(Self {
             inventory_type,
             hash: parser.extract_buffer(32)?.to_vec(),
         })
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn inv_serialize_and_parse() {
+        let inventory = Inventory {
+            inventory_type: InventoryType::Block,
+            hash: [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 248, 125, 43, 136, 39, 116, 186, 43,
+                114, 204, 35, 144, 47, 194, 229, 44, 97, 83, 110, 112, 229, 230,
+            ]
+            .to_vec(),
+        };
+        let inv = Inv {
+            inventories: vec![inventory],
+        };
+
+        let buffer = inv.serialize();
+        let parsed_inv = Inv::parse(buffer).unwrap();
+
+        assert_eq!(inv, parsed_inv);
+    }
+
+    #[test]
+    fn inv_invalid_buffer() {
+        let buffer = vec![
+            1, 0, 0, 0, 5, 159, 141, 74, 195, 4, 19, 253, 127, 1, 148, 149, 222, 143, 237, 24, 27,
+            124, 186, 34, 123, 241, 216, 166, 203, 239, 86, 108, 0, 0, 0, 0, 233, 233, 109, 115,
+            249, 241, 6, 200, 176, 73, 10, 24, 28, 209, 102, 159, 255, 179, 239, 72, 185, 225, 10,
+            14, 219,
+        ];
+
+        let inv = Inv::parse(buffer);
+
+        assert!(inv.is_err());
     }
 }
