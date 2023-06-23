@@ -317,7 +317,7 @@ impl NodeState {
             None => return Err(CustomError::WalletNotFound),
         };
 
-        self.utxo.wallet_utxo(active_wallet)
+        self.utxo.generate_wallet_utxo(active_wallet)
     }
 
     pub fn get_active_wallet_pending_txs(

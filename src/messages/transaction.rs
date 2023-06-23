@@ -250,7 +250,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionOutput {
     pub value: u64,
     pub script_pubkey: Vec<u8>,
