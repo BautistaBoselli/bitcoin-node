@@ -86,11 +86,9 @@ mod tests {
     #[test]
     fn log_file_gets_written() {
         let (tx, _rx) = glib::MainContext::channel(Priority::default());
-        println!("Testing");
 
         let logger = Logger::new(&String::from("test1.txt"), tx).unwrap();
         let sender = logger.get_sender();
-        println!("Sender: {:?}", sender);
         sender
             .send(Log::Message(String::from("Sender test 1")))
             .unwrap();
