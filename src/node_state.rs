@@ -15,7 +15,6 @@ use crate::{
     messages::{
         block::Block,
         headers::{BlockHeader, Headers},
-        inv::Inventory,
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
     utxo::UTXO,
@@ -32,7 +31,6 @@ pub struct NodeState {
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo: UTXO,
     pending_tx_set: HashMap<Vec<u8>, Transaction>,
-    to_send_transactions: HashMap<Vec<u8>, Transaction>,
     headers_sync: bool,
     blocks_sync: bool,
 }
@@ -59,7 +57,6 @@ impl NodeState {
             pending_blocks_ref,
             utxo: UTXO::new()?,
             pending_tx_set: HashMap::new(),
-            to_send_transactions: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
         }));
@@ -312,7 +309,9 @@ impl NodeState {
         self.utxo.wallet_balance(active_wallet)
     }
 
-    pub fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
+    pub fn get_active_wallet_utxo(
+        &self,
+    ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
         let active_wallet = match self.get_active_wallet() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
@@ -360,16 +359,6 @@ impl NodeState {
         Ok(())
     }
 
-    pub fn get_transaction_to_send(&mut self, inventories: Vec<Inventory>) -> Option<&Transaction> {
-        let mut transaction: Option<&Transaction> = None;
-        for inventory in inventories {
-            if self.to_send_transactions.contains_key(&inventory.hash) {
-                transaction = self.to_send_transactions.get(&inventory.hash);
-            }
-        }
-        transaction
-    }
-
     pub fn make_transaction(
         &mut self,
         mut outputs: HashMap<String, u64>,
@@ -384,6 +373,7 @@ impl NodeState {
             total_value += output;
         }
         let wallet_balance = self.get_active_wallet_balance()?;
+
         if total_value > wallet_balance {
             send_log(
                 &self.logger_sender,
@@ -394,7 +384,6 @@ impl NodeState {
             return Err(CustomError::InsufficientFunds);
         }
 
-        println!("CHECK 1");
         let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
 
         active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
@@ -412,8 +401,7 @@ impl NodeState {
             outputs.insert(active_wallet.pubkey.clone(), change);
         }
         let transaction = Transaction::create(active_wallet, inputs, outputs)?;
-        self.to_send_transactions
-            .insert(transaction.hash(), transaction.clone());
+
         Ok(transaction)
     }
 }

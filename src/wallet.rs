@@ -111,6 +111,7 @@ impl Wallet {
             let pubkey_len = parser.extract_u8()? as usize;
             let pubkey = parser.extract_string(pubkey_len)?;
 
+            println!("pubkey: {}", pubkey);
             let privkey_len = parser.extract_u8()? as usize;
             let privkey = parser.extract_string(privkey_len)?;
 
@@ -131,6 +132,10 @@ impl Wallet {
 
     pub fn get_pubkey_hash(&self) -> Result<Vec<u8>, CustomError> {
         get_pubkey_hash(self.pubkey.clone())
+    }
+
+    pub fn get_privkey_hash(&self) -> Result<Vec<u8>, CustomError> {
+        get_privkey_hash(self.privkey.clone())
     }
 
     pub fn get_script_pubkey(&self) -> Result<Vec<u8>, CustomError> {
@@ -173,6 +178,21 @@ pub fn get_pubkey_hash(pubkey: String) -> Result<Vec<u8>, CustomError> {
         .map_err(|_| CustomError::Validation(String::from("User PubKey incorrectly formatted")))?;
 
     match decoded_pubkey.get(1..21) {
+        Some(pubkey_hash) => Ok(pubkey_hash.to_vec()),
+        None => Err(CustomError::Validation(String::from(
+            "User PubKey incorrectly formatted",
+        ))),
+    }
+}
+
+pub fn get_privkey_hash(privkey: String) -> Result<Vec<u8>, CustomError> {
+    let decoded_privkey = bs58::decode(privkey)
+        .into_vec()
+        .map_err(|_| CustomError::Validation(String::from("User PrivKey incorrectly formatted")))?;
+
+    println!("{:?}", decoded_privkey);
+
+    match decoded_privkey.get(1..33) {
         Some(pubkey_hash) => Ok(pubkey_hash.to_vec()),
         None => Err(CustomError::Validation(String::from(
             "User PubKey incorrectly formatted",

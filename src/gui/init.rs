@@ -9,7 +9,7 @@ use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAc
 
 use super::{
     balance::GUIBalance, debug::GUIDebug, logs::GUILogs, transactions::GUITransactions,
-    wallet::GUIWallet, window::GUIWindow,
+    transfer::GUITransfer, wallet::GUIWallet, window::GUIWindow,
 };
 
 pub enum GUIActions {
@@ -27,6 +27,7 @@ pub struct GUI {
     logs: GUILogs,
     debug: GUIDebug,
     transactions: GUITransactions,
+    transfer: GUITransfer,
     window: GUIWindow,
 }
 
@@ -71,6 +72,12 @@ impl GUI {
         let transactions = GUITransactions {
             builder: builder.clone(),
             logger_sender: logger_sender.clone(),
+            node_state_ref: node_state_ref.clone(),
+        };
+
+        let transfer = GUITransfer {
+            builder: builder.clone(),
+            logger_sender: logger_sender.clone(),
             node_state_ref,
         };
 
@@ -86,6 +93,7 @@ impl GUI {
             logs,
             debug,
             transactions,
+            transfer,
             window,
         };
 
@@ -105,6 +113,8 @@ impl GUI {
         // interactivity
         self.wallet.handle_interactivity()?;
         self.debug.handle_interactivity(&self.node_action_sender)?;
+        self.transfer
+            .handle_interactivity(&self.node_action_sender)?;
 
         Ok(())
     }
@@ -114,12 +124,14 @@ impl GUI {
         let logs = self.logs.clone();
         let mut transactions = self.transactions.clone();
         let window = self.window.clone();
+        let mut transfer = self.transfer.clone();
 
         gui_receiver.attach(None, move |message| {
             balance.handle_events(&message);
             logs.handle_events(&message);
             transactions.handle_events(&message);
             window.handle_events(&message);
+            transfer.handle_events(&message);
 
             glib::Continue(true)
         });

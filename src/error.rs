@@ -46,6 +46,10 @@ pub enum CustomError {
     MissingGUIElement,
     InsufficientFunds,
     CannotStartEventLoop,
+    InvalidValue,
+    CannotSignTx,
+    InvalidFee,
+    InvalidTransferFields,
 }
 
 impl CustomError {
@@ -86,6 +90,10 @@ impl CustomError {
             Self::MissingGUIElement => "missing GUI element",
             Self::InsufficientFunds => "insufficient funds",
             Self::CannotStartEventLoop => "cannot start event loop",
+            Self::InvalidValue => "invalid value",
+            Self::CannotSignTx => "cannot sign transaction",
+            Self::InvalidFee => "invalid fee",
+            Self::InvalidTransferFields => "invalid transfer fields",
         }
     }
 }

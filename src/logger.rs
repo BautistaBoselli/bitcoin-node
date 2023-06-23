@@ -45,12 +45,16 @@ impl Logger {
                     Log::Message(ref string) => {
                         println!("logger: {}", string);
                         writeln!(file, "{}", string)?;
-                        gui_sender.send(GUIActions::Log(message)).unwrap();
+                        if let Err(error) = gui_sender.send(GUIActions::Log(message)){
+                            println!("Error sending log message to gui: {}", error);
+                        }
                     }
                     Log::Error(ref error) => {
                         println!("logger: [ERROR] {}", error);
                         writeln!(file, "[ERROR] {}", error)?;
-                        gui_sender.send(GUIActions::Log(message)).unwrap();
+                        if let Err(error) = gui_sender.send(GUIActions::Log(message)){
+                            println!("Error sending log error to gui: {}", error);
+                        }
                     }
                 }
             }
