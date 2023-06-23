@@ -70,7 +70,7 @@ impl PeerActionLoop {
 
     fn handle_send_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
         println!("tx enviada");
-        println!("serialized: {:?}", transaction.serialize());
+        //println!("serialized: {:?}", transaction.serialize());
         transaction.send(&mut self.stream)
     }
     fn handle_getdata(&mut self, inventories: Vec<Inventory>) -> Result<(), CustomError> {

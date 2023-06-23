@@ -14,6 +14,8 @@ use crate::{
 
 use super::init::{get_gui_element, GUIActions};
 
+const TRANSFER_OUTPUTS: u8 = 3;
+
 #[derive(Clone)]
 pub struct GUITransfer {
     pub logger_sender: Sender<Log>,
@@ -45,21 +47,32 @@ impl GUITransfer {
 
         send_button.connect_clicked(move |_| {
             let mut outputs = HashMap::new();
-            let receiver_1 = get_output(&builder, 1, logger_sender.clone());
-            let receiver_2 = get_output(&builder, 2, logger_sender.clone());
-            let receiver_3 = get_output(&builder, 3, logger_sender.clone());
-
-            if let Ok(Some((pubkey, value))) = receiver_1 {
-                outputs.insert(pubkey, value);
-            }
-            if let Ok(Some((pubkey, value))) = receiver_2 {
-                outputs.insert(pubkey, value);
-            }
-            if let Ok(Some((pubkey, value))) = receiver_3 {
-                outputs.insert(pubkey, value);
+            for i in 0..TRANSFER_OUTPUTS {
+                match get_output(&builder, i, logger_sender.clone()) {
+                    Ok(Some((pubkey, value))) => outputs.insert(pubkey, value),
+                    Ok(None) => continue,
+                    Err(error) => {
+                        send_log(&logger_sender, Log::Error(error));
+                        return;
+                    }
+                };
             }
 
-            let fee_entry: gtk::Entry = match get_gui_element(&builder, "tx-fee"){
+            // let receiver_1 = get_output(&builder, 1, logger_sender.clone());
+            // let receiver_2 = get_output(&builder, 2, logger_sender.clone());
+            // let receiver_3 = get_output(&builder, 3, logger_sender.clone());
+
+            // if let Ok(Some((pubkey, value))) = receiver_1 {
+            //     outputs.insert(pubkey, value);
+            // }
+            // if let Ok(Some((pubkey, value))) = receiver_2 {
+            //     outputs.insert(pubkey, value);
+            // }
+            // if let Ok(Some((pubkey, value))) = receiver_3 {
+            //     outputs.insert(pubkey, value);
+            // }
+
+            let fee_entry: gtk::Entry = match get_gui_element(&builder, "tx-fee") {
                 Ok(fee_entry) => fee_entry,
                 Err(error) => {
                     send_log(&logger_sender, Log::Error(error));
@@ -67,29 +80,27 @@ impl GUITransfer {
                 }
             };
 
-            match fee_entry.text().to_string().parse::<u64>().map_err(|_| CustomError::InvalidFee){
+            match fee_entry
+                .text()
+                .to_string()
+                .parse::<u64>()
+                .map_err(|_| CustomError::InvalidFee)
+            {
                 Ok(fee) => {
                     if fee <= 0 {
                         send_log(&logger_sender, Log::Error(CustomError::InvalidFee));
                         return;
                     }
                     node_action_sender_clone
-                .send(NodeAction::MakeTransaction((outputs, fee)))
-                .unwrap();
-                    
-                },
+                        .send(NodeAction::MakeTransaction((outputs, fee)))
+                        .unwrap();
+                }
                 Err(error) => {
                     send_log(&logger_sender, Log::Error(error));
                     return;
                 }
             };
-            
-
-            // node_action_sender_clone
-            //     .send(NodeAction::MakeTransaction((outputs, fee)))
-            //     .unwrap();
         });
-
         Ok(())
     }
 
@@ -97,10 +108,12 @@ impl GUITransfer {
         let fee_entry: gtk::Entry = get_gui_element(&self.builder, "tx-fee")?;
         fee_entry.set_text("0");
 
-        for i in 1..4 {
-            let receiver_pubkey: gtk::Entry = get_gui_element(&self.builder, &format!("output-{}-pubkey", i))?;
+        for i in 0..TRANSFER_OUTPUTS {
+            let receiver_pubkey: gtk::Entry =
+                get_gui_element(&self.builder, &format!("output-{}-pubkey", i))?;
             receiver_pubkey.set_text("");
-            let receiver_value: gtk::Entry = get_gui_element(&self.builder, &format!("output-{}-value", i))?;
+            let receiver_value: gtk::Entry =
+                get_gui_element(&self.builder, &format!("output-{}-value", i))?;
             receiver_value.set_text("");
         }
 
@@ -108,12 +121,19 @@ impl GUITransfer {
     }
 }
 
-fn get_output(builder: &gtk::Builder, i: u8, logger_sender: Sender<Log>) -> Result<Option<(String, u64)>, CustomError> {
-    // let check: gtk::ToggleButton = get_gui_element(&builder, &format!("output-{}-check", i))?;
+fn get_output(
+    builder: &gtk::Builder,
+    i: u8,
+    logger_sender: Sender<Log>,
+) -> Result<Option<(String, u64)>, CustomError> {
+    //let check: gtk::ToggleButton = get_gui_element(&builder, &format!("output-{}-check", i))?;
 
     let pubkey: gtk::Entry = get_gui_element(&builder, &format!("output-{}-pubkey", i))?;
     let value: gtk::Entry = get_gui_element(&builder, &format!("output-{}-value", i))?;
 
+    if pubkey.text().to_string().is_empty() && value.text().to_string().is_empty() {
+        return Ok(None);
+    }
     if pubkey.text().to_string().len() != 34 || value.text().to_string().is_empty() {
         let message = Log::Error(CustomError::InvalidTransferFields);
         send_log(&logger_sender, message);

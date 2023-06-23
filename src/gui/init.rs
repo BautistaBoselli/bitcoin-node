@@ -9,7 +9,7 @@ use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAc
 
 use super::{
     balance::GUIBalance, debug::GUIDebug, logs::GUILogs, transactions::GUITransactions,
-    transfer::{GUITransfer, self}, wallet::GUIWallet, window::GUIWindow,
+    transfer::GUITransfer, wallet::GUIWallet, window::GUIWindow,
 };
 
 pub enum GUIActions {

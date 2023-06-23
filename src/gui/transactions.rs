@@ -93,7 +93,7 @@ impl GUITransactions {
         let node_state = node_state_ref_clone.lock().unwrap();
         let wallet_utxo = node_state.get_active_wallet_utxo().unwrap();
         remove_transactions(&utxo_list_box);
-        for (out_point, tx_out) in wallet_utxo.iter() {
+        for (_out_point, tx_out) in wallet_utxo.iter() {
             let utxo_row = gtk::ListBoxRow::new();
             let utxo_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
             let label = gtk::Label::new(Some(tx_out.value.to_string().as_str()));

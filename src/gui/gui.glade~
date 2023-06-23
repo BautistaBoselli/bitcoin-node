@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.40.0 -->
+<!-- Generated with glade 3.38.2 -->
 <interface>
   <requires lib="gtk+" version="3.24"/>
   <object class="GtkDialog" id="add-wallet-dialog">
@@ -547,7 +547,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="tx-fee1">
+                  <object class="GtkEntry" id="tx-fee">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="valign">end</property>
@@ -574,7 +574,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-1-pubkey">
+                  <object class="GtkEntry" id="output-0-pubkey">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="hexpand">True</property>
@@ -587,7 +587,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-1-value">
+                  <object class="GtkEntry" id="output-0-value">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="placeholder-text" translatable="yes">Value (BTC)</property>
@@ -645,7 +645,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-2-pubkey">
+                  <object class="GtkEntry" id="output-1-pubkey">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="placeholder-text" translatable="yes">PubKey</property>
@@ -657,7 +657,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-2-value">
+                  <object class="GtkEntry" id="output-1-value">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="placeholder-text" translatable="yes">Value (BTC)</property>
@@ -682,7 +682,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-3-pubkey">
+                  <object class="GtkEntry" id="output-2-pubkey">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="placeholder-text" translatable="yes">PubKey</property>
@@ -694,7 +694,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="output-3-value">
+                  <object class="GtkEntry" id="output-2-value">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="placeholder-text" translatable="yes">Value (BTC)</property>

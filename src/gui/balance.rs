@@ -77,7 +77,7 @@ impl GUIBalance {
         remove_transactions(&pending_tx_list_box);
 
         self.pending_balance = 0.0;
-        for (_, tx_output) in pending_transactions {
+        for tx_output in pending_transactions.values() {
             let pending_tx_row = gtk::ListBoxRow::new();
             pending_tx_row.add(&gtk::Label::new(Some(tx_output.value.to_string().as_str())));
             self.pending_balance = (tx_output.value as f64) / 100000000.0;

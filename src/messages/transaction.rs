@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use bitcoin_hashes::{sha256, sha256d, Hash};
-use secp256k1::{
-    Secp256k1,
-};
+use secp256k1::Secp256k1;
 
 use crate::{
     error::CustomError,
@@ -100,9 +98,9 @@ impl Transaction {
         inputs_outpoints: Vec<OutPoint>,
         outputs: HashMap<String, u64>,
     ) -> Result<Self, CustomError> {
-        //println!("Wallet: {:?}", sender_wallet);
-        println!("Inputs: {:?}", inputs_outpoints);
-        println!("Outputs: {:?}", outputs);
+        // println!("Wallet: {:?}", sender_wallet);
+        // println!("Inputs: {:?}", inputs_outpoints);
+        // println!("Outputs: {:?}", outputs);
         let mut transaction = Transaction {
             version: 1,
             inputs: vec![],
@@ -110,7 +108,7 @@ impl Transaction {
             lock_time: 0,
         };
         let script_pubkey = sender_wallet.get_script_pubkey()?;
-        println!("script pubkey: {:?}", script_pubkey);
+        //println!("script pubkey: {:?}", script_pubkey);
         for outpoint in inputs_outpoints {
             let input = TransactionInput {
                 previous_output: outpoint,
@@ -130,10 +128,10 @@ impl Transaction {
 
         transaction.sign(sender_wallet)?;
 
-        println!(
-            "Transaction: {:?}",
-            hash_as_string(transaction.serialize()).to_ascii_lowercase()
-        );
+        // println!(
+        //     "Transaction: {:?}",
+        //     hash_as_string(transaction.serialize()).to_ascii_lowercase()
+        // );
 
         Ok(transaction)
     }
@@ -141,7 +139,7 @@ impl Transaction {
     fn sign(&mut self, wallet: &Wallet) -> Result<(), CustomError> {
         let privkey_hash = wallet.get_privkey_hash()?;
 
-        println!("privkey hash ({}): {:?}", privkey_hash.len(), privkey_hash);
+        //println!("privkey hash ({}): {:?}", privkey_hash.len(), privkey_hash);
 
         let serialized_unsigned_tx = self.serialize();
 

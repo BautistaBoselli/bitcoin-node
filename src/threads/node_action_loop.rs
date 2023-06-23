@@ -167,6 +167,10 @@ impl NodeActionLoop {
 
     fn handle_pending_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        send_log(
+            &self.logger_sender,
+            Log::Message("New pending transaction received".to_string()),
+        );
         node_state.append_pending_tx(transaction)?;
         drop(node_state);
         Ok(())
