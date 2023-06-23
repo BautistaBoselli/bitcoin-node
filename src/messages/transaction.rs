@@ -51,29 +51,33 @@ impl Transaction {
         })
     }
 
-    pub fn get_movement(&self, public_key_hash: &Vec<u8>, utxo: &UTXO) -> Option<Movement> {
+    pub fn get_movement(
+        &self,
+        public_key_hash: &Vec<u8>,
+        utxo: &UTXO,
+    ) -> Result<Option<Movement>, CustomError> {
         let mut value = 0;
 
         for output in &self.outputs {
-            if output.is_sent_to_key(public_key_hash) {
+            if output.is_sent_to_key(public_key_hash)? {
                 value += output.value;
             }
         }
         for input in &self.inputs {
             if let Some(utxo_value) = utxo.tx_set.get(&input.previous_output) {
-                if utxo_value.tx_out.is_sent_to_key(public_key_hash) {
+                if utxo_value.tx_out.is_sent_to_key(public_key_hash)? {
                     value -= utxo_value.tx_out.value;
                 }
             }
         }
         if value != 0 {
-            Some(Movement {
+            Ok(Some(Movement {
                 tx_hash: self.hash(),
                 value,
                 block_hash: None,
-            })
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -241,27 +245,30 @@ impl TransactionOutput {
         })
     }
 
-    pub fn is_sent_to_key(&self, public_key_hash: &Vec<u8>) -> bool {
+    pub fn is_sent_to_key(&self, public_key_hash: &Vec<u8>) -> Result<bool, CustomError> {
         let parser = &mut BufferParser::new(self.script_pubkey.clone());
         match parser.extract_u8() {
             Ok(0x76) => compare_p2pkh(parser, public_key_hash),
-            _ => false,
+            _ => Ok(false),
         }
     }
 }
 
-fn compare_p2pkh(parser: &mut BufferParser, public_key_hash: &Vec<u8>) -> bool {
+fn compare_p2pkh(
+    parser: &mut BufferParser,
+    public_key_hash: &Vec<u8>,
+) -> Result<bool, CustomError> {
     match parser.extract_u8() {
         Ok(0xa9) => (),
-        _ => return false,
+        _ => return Ok(false),
     }
     match parser.extract_u8() {
         Ok(0x14) => (),
-        _ => return false,
+        _ => return Ok(false),
     }
-    let hash = parser.extract_buffer(20).unwrap().to_vec();
+    let hash = parser.extract_buffer(20)?.to_vec();
 
-    hash == *public_key_hash
+    Ok(hash == *public_key_hash)
 }
 
 fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> {

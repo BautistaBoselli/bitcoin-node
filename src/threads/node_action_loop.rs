@@ -76,7 +76,10 @@ impl NodeActionLoop {
         outputs: HashMap<String, u64>,
         fee: u64,
     ) -> Result<(), CustomError> {
-        let mut node_state = self.node_state_ref.lock().unwrap();
+        let mut node_state = self
+            .node_state_ref
+            .lock()
+            .map_err(|_| CustomError::CannotLockGuard)?;
 
         let transaction = node_state.make_transaction(outputs, fee)?;
 

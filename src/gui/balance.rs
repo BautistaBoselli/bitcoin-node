@@ -72,8 +72,8 @@ impl GUIBalance {
         let pending_tx_list_box: gtk::ListBox =
             get_gui_element(&self.builder, "pending-transactions-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
-        let node_state = node_state_ref_clone.lock().unwrap();
-        let pending_transactions = node_state.get_active_wallet_pending_txs().unwrap();
+        let node_state = node_state_ref_clone.lock()?;
+        let pending_transactions = node_state.get_active_wallet_pending_txs()?;
         remove_transactions(&pending_tx_list_box);
 
         self.pending_balance = 0.0;

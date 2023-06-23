@@ -91,9 +91,13 @@ impl GUITransfer {
                         send_log(&logger_sender, Log::Error(CustomError::InvalidFee));
                         return;
                     }
-                    node_action_sender_clone
+                    if let Err(error) = node_action_sender_clone
                         .send(NodeAction::MakeTransaction((outputs, fee)))
-                        .unwrap();
+                        .map_err(|_| CustomError::CannotSendMessageToChannel)
+                    {
+                        send_log(&logger_sender, Log::Error(error));
+                        return;
+                    };
                 }
                 Err(error) => {
                     send_log(&logger_sender, Log::Error(error));

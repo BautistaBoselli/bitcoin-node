@@ -76,7 +76,7 @@ impl Wallet {
             history: vec![],
         };
         for (outpoint, value) in &utxo_set.tx_set {
-            if value.tx_out.is_sent_to_key(&wallet.get_pubkey_hash()?) {
+            if value.tx_out.is_sent_to_key(&wallet.get_pubkey_hash()?)? {
                 wallet.history.push(Movement {
                     tx_hash: outpoint.hash.clone(),
                     value: value.tx_out.value,
@@ -227,8 +227,6 @@ pub fn get_script_pubkey(pubkey: String) -> Result<Vec<u8>, CustomError> {
 #[cfg(test)]
 
 mod tests {
-
-    use crate::gui::wallet;
 
     use super::*;
 

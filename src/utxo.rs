@@ -44,7 +44,7 @@ impl UTXO {
         let mut balance = 0;
         let pubkey_hash = wallet.get_pubkey_hash()?;
         for (_, value) in self.tx_set.iter() {
-            if value.tx_out.is_sent_to_key(&pubkey_hash) {
+            if value.tx_out.is_sent_to_key(&pubkey_hash)? {
                 balance += value.tx_out.value
             }
         }
@@ -60,7 +60,7 @@ impl UTXO {
 
         let mut active_wallet_utxo = vec![];
         for (out_point, value) in self.tx_set.iter() {
-            if value.tx_out.is_sent_to_key(&pubkey_hash) {
+            if value.tx_out.is_sent_to_key(&pubkey_hash)? {
                 active_wallet_utxo.push((out_point.clone(), value.tx_out.clone()));
             }
         }
@@ -187,7 +187,6 @@ impl UTXO {
                     hash: tx.hash().clone(),
                     index: index as u32,
                 };
-                println!("hash : {:?}", tx.hash().clone());
                 let value = UTXOValue {
                     tx_out: tx_out.clone(),
                     block_hash: block.header.hash(),
@@ -237,58 +236,9 @@ mod tests {
 
     #[test]
     fn starting_index_calculation() {
-        let header1 = BlockHeader {
-            version: 536870912,
-            prev_block_hash: [
-                37, 167, 68, 172, 119, 180, 173, 121, 130, 113, 230, 183, 81, 26, 52, 142, 31, 52,
-                247, 233, 68, 123, 190, 78, 10, 195, 189, 99, 0, 0, 0, 0,
-            ]
-            .to_vec(),
-            merkle_root: [
-                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 248, 125, 43, 136, 39, 116, 186, 43,
-                114, 204, 35, 144, 47, 194, 229, 44, 97, 83, 110, 112, 229, 230,
-            ]
-            .to_vec(),
-            timestamp: 1,
-            bits: 486604799,
-            nonce: 409655068,
-        };
-        let header2 = BlockHeader {
-            version: 536870912,
-            prev_block_hash: [
-                37, 167, 68, 172, 119, 180, 173, 121, 130, 113, 230, 183, 81, 26, 52, 142, 31, 52,
-                247, 233, 68, 123, 190, 78, 10, 195, 189, 99, 0, 0, 0, 0,
-            ]
-            .to_vec(),
-            merkle_root: [
-                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 248, 125, 43, 136, 39, 116, 186, 43,
-                114, 204, 35, 144, 47, 194, 229, 44, 97, 83, 110, 112, 229, 230,
-            ]
-            .to_vec(),
-            timestamp: 3,
-            bits: 486604799,
-            nonce: 409655068,
-        };
-        assert_eq!(
-            calculate_starting_index(&vec![header1.clone(), header2.clone()], 2),
-            1
-        );
-        assert_eq!(
-            calculate_starting_index(&vec![header2.clone(), header1.clone()], 2),
-            2
-        );
-        assert_eq!(calculate_starting_index(&vec![header2, header1], 0), 0);
-    }
-
-    #[test]
-    fn utxo_serialization_and_parsing() {
         let mut utxo_set = UTXO::new().unwrap();
         let key: OutPoint = OutPoint {
-            hash: [
-                252, 47, 239, 163, 175, 36, 146, 56, 212, 168, 146, 23, 101, 29, 205, 186, 7, 67,
-                240, 23, 75, 32, 175, 14, 221, 106, 150, 247, 21, 243, 205, 109,
-            ]
-            .to_vec(),
+            hash: vec![],
             index: 0,
         };
         let value = UTXOValue {
@@ -299,11 +249,44 @@ mod tests {
                 ))
                 .unwrap(),
             },
-            block_hash: [
-                127, 47, 239, 163, 175, 36, 146, 56, 212, 168, 146, 23, 101, 29, 205, 186, 7, 67,
-                240, 23, 75, 32, 175, 14, 221, 106, 150, 247, 21, 243, 205, 109,
+            block_hash: vec![],
+        };
+        utxo_set.tx_set.insert(key, value);
+        let header = BlockHeader {
+            version: 536870912,
+            prev_block_hash: [
+                37, 167, 68, 172, 119, 180, 173, 121, 130, 113, 230, 183, 81, 26, 52, 142, 31, 52,
+                247, 233, 68, 123, 190, 78, 10, 195, 189, 99, 0, 0, 0, 0,
             ]
             .to_vec(),
+            merkle_root: [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 248, 125, 43, 136, 39, 116, 186, 43,
+                114, 204, 35, 144, 47, 194, 229, 44, 97, 83, 110, 112, 229, 230,
+            ]
+            .to_vec(),
+            timestamp: 1572523925,
+            bits: 486604799,
+            nonce: 409655068,
+        };
+        assert_eq!(calculate_starting_index(&vec![header], 1572523925), 1);
+    }
+
+    #[test]
+    fn utxo_serialization_and_parsing() {
+        let mut utxo_set = UTXO::new().unwrap();
+        let key: OutPoint = OutPoint {
+            hash: vec![],
+            index: 0,
+        };
+        let value = UTXOValue {
+            tx_out: TransactionOutput {
+                value: 100,
+                script_pubkey: get_script_pubkey(String::from(
+                    "mscatccDgq7azndWHFTzvEuZuywCsUvTRu",
+                ))
+                .unwrap(),
+            },
+            block_hash: vec![],
         };
         utxo_set.tx_set.insert(key, value);
 

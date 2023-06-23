@@ -154,7 +154,7 @@ impl NodeState {
         let mut wallets_updated = false;
         for tx in block.transactions.iter() {
             for wallet in &mut self.wallets {
-                let movement = tx.get_movement(&wallet.get_pubkey_hash()?, &self.utxo);
+                let movement = tx.get_movement(&wallet.get_pubkey_hash()?, &self.utxo)?;
                 if let Some(mut movement) = movement {
                     movement.block_hash = Some(block.header.hash());
                     wallet.update_history(movement);
@@ -281,13 +281,14 @@ impl NodeState {
         Ok(())
     }
 
-    pub fn change_wallet(&mut self, public_key: String) {
+    pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
         self.active_wallet = self
             .wallets
             .iter()
             .find(|wallet| wallet.pubkey == public_key)
             .map(|wallet| wallet.pubkey.clone());
-        self.gui_sender.send(GUIActions::WalletChanged).unwrap();
+        self.gui_sender.send(GUIActions::WalletChanged)?;
+        Ok(())
     }
 
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
@@ -332,7 +333,7 @@ impl NodeState {
 
         for (tx_hash, tx) in self.pending_tx_set.iter() {
             for (index, tx_out) in tx.outputs.iter().enumerate() {
-                if tx_out.is_sent_to_key(&pubkey_hash) {
+                if tx_out.is_sent_to_key(&pubkey_hash)? {
                     let out_point = OutPoint {
                         hash: tx_hash.clone(),
                         index: index as u32,
