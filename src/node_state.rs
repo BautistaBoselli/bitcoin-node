@@ -55,7 +55,7 @@ impl NodeState {
             wallets,
             active_wallet: None,
             pending_blocks_ref,
-            utxo: UTXO::new()?,
+            utxo: UTXO::new(String::from("store/utxo.bin"))?,
             pending_tx_set: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,

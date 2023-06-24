@@ -360,7 +360,7 @@ mod tests {
             String::from("test"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
             String::from("cNpwEsaVLhju18SJowLtdCNaJtvMvqL4jtFLm2FXw7vZjg4sRWvH"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let buffer = vec![
@@ -397,7 +397,7 @@ mod tests {
             String::from("test"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
             String::from("cNpwEsaVLhju18SJowLtdCNaJtvMvqL4jtFLm2FXw7vZjg4sRWvH"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let buffer = vec![

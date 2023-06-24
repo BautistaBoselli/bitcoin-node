@@ -235,7 +235,7 @@ mod tests {
             String::from("test"),
             String::from("pubkey"),
             String::from("privkey"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let serialized_wallet = wallet.serialize();
@@ -251,7 +251,7 @@ mod tests {
             String::from("test"),
             String::from("pubkey"),
             String::from(""),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let serialized_wallet = wallet.serialize();
@@ -298,7 +298,7 @@ mod tests {
             String::from("test"),
             String::from("pubkey"),
             String::from("privkey"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         wallet.update_history(Movement {
@@ -329,7 +329,7 @@ mod tests {
             String::from("test"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
             String::from("privkey"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let pubkey_hash = wallet.get_pubkey_hash().unwrap();
@@ -348,7 +348,7 @@ mod tests {
             String::from("test"),
             String::from("test"),
             String::from("privkey"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let pubkey_hash = wallet.get_pubkey_hash();
@@ -361,7 +361,7 @@ mod tests {
             String::from("test"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
             String::from("privkey"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let script_pubkey = wallet.get_script_pubkey().unwrap();
@@ -380,7 +380,7 @@ mod tests {
             String::from("test"),
             String::from("pubkey"),
             String::from("cNpwEsaVLhju18SJowLtdCNaJtvMvqL4jtFLm2FXw7vZjg4sRWvH"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let privkey_hash = wallet.get_privkey_hash().unwrap();
@@ -399,7 +399,7 @@ mod tests {
             String::from("test"),
             String::from("pubkey"),
             String::from("test"),
-            &UTXO::new().unwrap(),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let privkey_hash = wallet.get_privkey_hash();

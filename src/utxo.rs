@@ -30,13 +30,15 @@ pub struct UTXOValue {
 pub struct UTXO {
     pub tx_set: HashMap<OutPoint, UTXOValue>,
     sync: bool,
+    path: String,
 }
 
 impl UTXO {
-    pub fn new() -> Result<Self, CustomError> {
+    pub fn new(path: String) -> Result<Self, CustomError> {
         Ok(Self {
             tx_set: HashMap::new(),
             sync: false,
+            path,
         })
     }
 
@@ -104,10 +106,18 @@ impl UTXO {
     }
 
     fn restore_utxo(&mut self) -> Result<u32, CustomError> {
-        let mut file = open_new_file(String::from("store/utxo.bin"), false)?;
+        let mut file = open_new_file(self.path.clone(), false)?;
 
         let mut saved_utxo_buffer = vec![];
         file.read_to_end(&mut saved_utxo_buffer)?;
+
+        match Self::parse(saved_utxo_buffer.clone()) {
+            Ok((last_timestamp, tx_set)) => {
+                println!("Utxo set is restored from the file");
+            }
+            Err(e) => println!("Error: {}", e),
+        }
+
         let (last_timestamp, tx_set) = match Self::parse(saved_utxo_buffer) {
             Ok((last_timestamp, tx_set)) => (last_timestamp, tx_set),
             Err(_) => (START_DATE_IBD, HashMap::new()),
@@ -205,8 +215,8 @@ impl UTXO {
     fn save(&mut self, last_timestamp: u32) -> Result<(), CustomError> {
         let buffer = self.serialize(last_timestamp);
 
-        remove_file("store/utxo.bin")?;
-        let mut file = open_new_file(String::from("store/utxo.bin"), false)?;
+        remove_file(self.path.clone())?;
+        let mut file = open_new_file(String::from(self.path.clone()), false)?;
 
         file.write_all(&buffer)?;
         Ok(())
@@ -235,6 +245,86 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_save_restore() {
+        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+
+        let key1 = OutPoint {
+            hash: vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+            index: 1,
+        };
+        let value1 = UTXOValue {
+            tx_out: TransactionOutput {
+                value: 100,
+                script_pubkey: get_script_pubkey(String::from(
+                    "mscatccDgq7azndWHFTzvEuZuywCsUvTRu",
+                ))
+                .unwrap(),
+            },
+            block_hash: vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+        };
+        let key2 = OutPoint {
+            hash: vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+            index: 2,
+        };
+        let value2 = UTXOValue {
+            tx_out: TransactionOutput {
+                value: 200,
+                script_pubkey: get_script_pubkey(String::from(
+                    "mscatccDgq7azndWHFTzvEuZuywCsUvTRu",
+                ))
+                .unwrap(),
+            },
+            block_hash: vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+        };
+        let key3 = OutPoint {
+            hash: vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+            index: 3,
+        };
+        let value3 = UTXOValue {
+            tx_out: TransactionOutput {
+                value: 300,
+                script_pubkey: get_script_pubkey(String::from(
+                    "badnpccEgq7azndWHFTzvFuFuywCsUvTRu",
+                ))
+                .unwrap(),
+            },
+            block_hash: vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+        };
+        utxo_set.tx_set.insert(key1, value1);
+        utxo_set.tx_set.insert(key2, value2);
+        utxo_set.tx_set.insert(key3, value3);
+
+        assert_eq!(utxo_set.tx_set.len(), 3);
+
+        let last_timestamp = 1687623163;
+        utxo_set.save(last_timestamp).unwrap();
+
+        let mut utxo_set2 = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        utxo_set2.restore_utxo().unwrap();
+
+        assert_eq!(utxo_set2.tx_set.len(), 3);
+        assert_eq!(utxo_set2.tx_set, utxo_set.tx_set);
+    }
+
+    #[test]
     fn starting_index_calculation() {
         let header1 = BlockHeader {
             version: 536870912,
@@ -252,6 +342,7 @@ mod tests {
             bits: 486604799,
             nonce: 409655068,
         };
+
         let header2 = BlockHeader {
             version: 536870912,
             prev_block_hash: [
@@ -268,6 +359,7 @@ mod tests {
             bits: 486604799,
             nonce: 409655068,
         };
+
         assert_eq!(
             calculate_starting_index(&vec![header1.clone(), header2.clone()], 2),
             1
@@ -281,7 +373,7 @@ mod tests {
 
     #[test]
     fn utxo_serialization_and_parsing() {
-        let mut utxo_set = UTXO::new().unwrap();
+        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
         let key: OutPoint = OutPoint {
             hash: [
                 252, 47, 239, 163, 175, 36, 146, 56, 212, 168, 146, 23, 101, 29, 205, 186, 7, 67,
@@ -325,7 +417,7 @@ mod tests {
         };
 
         let logger_sender = logger.get_sender();
-        let mut utxo_set = UTXO::new().unwrap();
+        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
         let header = BlockHeader {
             version: 536870912,
             prev_block_hash: [
@@ -360,7 +452,7 @@ mod tests {
 
     #[test]
     fn wallet_utxo_generation() {
-        let mut utxo_set = UTXO::new().unwrap();
+        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test_wallet"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
@@ -426,7 +518,7 @@ mod tests {
 
     #[test]
     fn correct_wallet_balance() {
-        let mut utxo_set = UTXO::new().unwrap();
+        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test_wallet"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
