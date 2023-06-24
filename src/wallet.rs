@@ -227,7 +227,6 @@ pub fn get_script_pubkey(pubkey: String) -> Result<Vec<u8>, CustomError> {
 #[cfg(test)]
 
 mod tests {
-
     use super::*;
 
     #[test]

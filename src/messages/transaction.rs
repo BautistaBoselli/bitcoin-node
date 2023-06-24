@@ -301,7 +301,7 @@ fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> 
 mod tests {
 
     use super::*;
-    
+
     #[test]
     fn tx_parse() {
         let buffer = vec![
@@ -426,7 +426,7 @@ mod tests {
         let tx = Transaction::parse(&mut parser).unwrap();
         let tx_outputs = tx.outputs.clone();
         for output in tx_outputs {
-            found = output.is_sent_to_key(&public_key_hash);
+            found = output.is_sent_to_key(&public_key_hash).unwrap();
         }
         assert_eq!(found, false);
     }

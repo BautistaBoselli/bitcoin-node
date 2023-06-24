@@ -205,6 +205,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parser_utils() {
+        let buffer = vec![];
+        let mut parser = BufferParser::new(buffer);
+        assert_eq!(parser.len(), 0);
+        assert_eq!(parser.is_empty(), true);
+        assert_eq!(parser.get_pos(), 0);
+    }
+
+    #[test]
     fn extract_u8() {
         let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03]);
         assert_eq!(buffer.extract_u8().unwrap(), 0x01);
@@ -304,5 +313,12 @@ mod tests {
                 0
             )
         );
+    }
+
+    #[test]
+    fn serialize_varint() {
+        let number: usize = 0x03;
+        let bytes = number.to_varint_bytes();
+        assert_eq!(bytes, vec![0x03]);
     }
 }

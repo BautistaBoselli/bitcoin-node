@@ -1,5 +1,6 @@
 use std::sync::mpsc;
 
+use chrono::Local;
 use gtk::traits::{DialogExt, LabelExt, MessageDialogExt, WidgetExt};
 
 use crate::{
@@ -34,8 +35,11 @@ impl GUILogs {
 
         match log {
             Log::Message(string) => {
-                logs.set_text(string.as_str());
-                load_screen_logs.set_text(string.as_str());
+                let current_time = Local::now();
+                let formatted_time = current_time.format("%Y-%m-%d %H:%M:%S");
+                let formatted_string = format!("[{}] {}", formatted_time, string);
+                logs.set_text(formatted_string.as_str());
+                load_screen_logs.set_text(formatted_string.as_str());
             }
             Log::Error(error) => {
                 dialog_error.set_text(Some("Error"));
