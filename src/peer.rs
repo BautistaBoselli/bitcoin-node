@@ -14,7 +14,7 @@ use crate::{
         send_headers::SendHeaders, transaction::Transaction, ver_ack::VerAck, version::Version,
     },
     network::{get_address_v6, open_stream},
-    threads::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
+    loops::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
 };
 
 pub const GENESIS: [u8; 32] = [

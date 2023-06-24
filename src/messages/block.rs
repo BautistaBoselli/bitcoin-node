@@ -161,7 +161,7 @@ impl Message for Block {
         let tx_count = parser.extract_varint()? as usize;
         let mut transactions = vec![];
         for _ in 0..tx_count {
-            let transaction = Transaction::parse(&mut parser)?;
+            let transaction = Transaction::parse_from_parser(&mut parser)?;
             transactions.push(transaction);
         }
 
@@ -240,4 +240,17 @@ mod tests {
         assert_eq!(merging, block.header.merkle_root);
     }       
         
+    #[test]
+    fn get_command_block_test() {
+        let buffer = vec![
+            1, 0, 0, 0, 5, 159, 141, 74, 195, 4, 19, 253, 127, 1, 148, 149, 222, 143, 237, 24, 27,
+            124, 186, 34, 123, 241, 216, 166, 203, 239, 86, 108, 0, 0, 0, 0, 233, 233, 109, 115,
+            249, 241, 6, 200, 176, 73, 10, 24, 28, 209, 102, 159, 255, 179, 239, 72, 185, 225, 10,
+            14, 219, 74, 174, 208, 207, 59, 18, 12, 170, 7, 195, 79, 255, 255, 0, 29, 14, 171, 58,
+            61,
+        ];
+        let block_header = BlockHeader::parse(buffer, true).unwrap();
+        let block = Block::new(block_header, vec![]);
+        assert_eq!(block.get_command(), "block");
+    }
 }

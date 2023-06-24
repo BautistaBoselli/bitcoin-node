@@ -14,7 +14,7 @@ use crate::{
     logger::{send_log, Log, Logger},
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
-    threads::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
+    loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
 };
 pub struct Node {
     pub address: SocketAddrV6,

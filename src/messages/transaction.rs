@@ -29,7 +29,7 @@ impl Transaction {
             .to_vec()
     }
 
-    pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
+    pub fn parse_from_parser(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let version = parser.extract_u32()?;
         let tx_in_count = parser.extract_varint()? as usize;
         let mut inputs = vec![];
@@ -148,25 +148,7 @@ impl Message for Transaction {
 
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         let mut parser = BufferParser::new(buffer);
-
-        let version = parser.extract_u32()?;
-        let tx_in_count = parser.extract_varint()? as usize;
-        let mut inputs = vec![];
-        for _ in 0..tx_in_count {
-            inputs.push(TransactionInput::parse(&mut parser)?);
-        }
-        let tx_out_count = parser.extract_varint()? as usize;
-        let mut outputs = vec![];
-        for _ in 0..tx_out_count {
-            outputs.push(TransactionOutput::parse(&mut parser)?);
-        }
-        let lock_time = parser.extract_u32()?;
-        Ok(Self {
-            version,
-            inputs,
-            outputs,
-            lock_time,
-        })
+        Transaction::parse_from_parser(&mut parser)
     }
 }
 
@@ -298,8 +280,8 @@ fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> 
     Ok(script_sig)
 }
 
+#[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
@@ -326,7 +308,7 @@ mod tests {
             0x88, 0xAC, 0x00, 0x00, 0x00, 0x00,
         ];
         let mut parser = BufferParser::new(buffer);
-        let tx = Transaction::parse(&mut parser).unwrap();
+        let tx = Transaction::parse_from_parser(&mut parser).unwrap();
         assert_eq!(tx.version, 1);
         assert_eq!(tx.inputs.len(), 1);
         let outpoint = tx.inputs.get(0).unwrap().previous_output.clone();
@@ -385,7 +367,7 @@ mod tests {
             0x88, 0xAC, 0x00, 0x00, 0x00, 0x00,
         ];
         let mut parser = BufferParser::new(buffer);
-        let mut tx = Transaction::parse(&mut parser).unwrap();
+        let mut tx = Transaction::parse_from_parser(&mut parser).unwrap();
         let signed_tx = tx.sign(&wallet);
         assert!(signed_tx.is_ok());
     }
@@ -423,7 +405,7 @@ mod tests {
         ];
         let public_key_hash = wallet.get_pubkey_hash().unwrap();
         let mut parser = BufferParser::new(buffer);
-        let tx = Transaction::parse(&mut parser).unwrap();
+        let tx = Transaction::parse_from_parser(&mut parser).unwrap();
         let tx_outputs = tx.outputs.clone();
         for output in tx_outputs {
             found = output.is_sent_to_key(&public_key_hash).unwrap();

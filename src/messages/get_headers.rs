@@ -112,6 +112,19 @@ mod tests {
     }
 
     #[test]
+    fn get_headers_with_extra_byte_returns_error() {
+        let serialized_getheaders = vec![
+            127, 17, 1, 0, 1, 155, 77, 153, 101, 77, 212, 76, 182, 137, 41, 103, 109, 128, 43, 106,
+            32, 200, 118, 162, 103, 247, 127, 103, 118, 167, 48, 41, 155, 158, 132, 88, 193, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 1, 5, 5, 5, 4,
+        ];
+
+        let parsed_getheaders = GetHeaders::parse(serialized_getheaders);
+        assert!(parsed_getheaders.is_err());
+    }
+
+    #[test]
     fn no_headers_get_headers_parses_correctly() {
         let serialized_getheaders = vec![
             127, 17, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -139,5 +152,11 @@ mod tests {
         ];
         let parsed_getheaders = GetHeaders::parse(invalid_getheaders);
         assert!(parsed_getheaders.is_err());
+    }
+
+    #[test]
+    fn get_command_getheaders() {
+        let getheaders = GetHeaders::new(70012, vec![], vec![]);
+        assert_eq!(getheaders.get_command(), "getheaders");
     }
 }

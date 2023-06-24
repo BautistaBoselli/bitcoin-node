@@ -369,12 +369,26 @@ impl NodeState {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
         };
+        let total_value = self.calculate_total_value(fee, &outputs)?;
+        let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
+
+        active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
+        let (inputs, total_input_value) = calculate_inputs(active_wallet_utxo, total_value);
+
+        let change = total_input_value - total_value;
+        if change > 0 {
+            outputs.insert(active_wallet.pubkey.clone(), change);
+        }
+
+        Transaction::create(active_wallet, inputs, outputs)
+    }
+
+    fn calculate_total_value(&self, fee: u64, outputs: &HashMap<String, u64>) -> Result<u64, CustomError> {
         let mut total_value = fee;
         for output in outputs.values() {
             total_value += output;
         }
         let wallet_balance = self.get_active_wallet_balance()?;
-
         if total_value > wallet_balance {
             send_log(
                 &self.logger_sender,
@@ -384,27 +398,21 @@ impl NodeState {
             );
             return Err(CustomError::InsufficientFunds);
         }
-
-        let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
-
-        active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
-        let mut inputs = vec![];
-        let mut total_input_value = 0;
-        for (out_point, tx_out) in active_wallet_utxo.iter() {
-            inputs.push(out_point.clone());
-            total_input_value += tx_out.value;
-            if total_input_value >= total_value {
-                break;
-            }
-        }
-        let change = total_input_value - total_value;
-        if change > 0 {
-            outputs.insert(active_wallet.pubkey.clone(), change);
-        }
-        let transaction = Transaction::create(active_wallet, inputs, outputs)?;
-
-        Ok(transaction)
+        Ok(total_value)
     }
+}
+
+fn calculate_inputs(active_wallet_utxo: Vec<(OutPoint, TransactionOutput)>, total_value: u64) -> (Vec<OutPoint>, u64) {
+    let mut inputs = vec![];
+    let mut total_input_value = 0;
+    for (out_point, tx_out) in active_wallet_utxo.iter() {
+        inputs.push(out_point.clone());
+        total_input_value += tx_out.value;
+        if total_input_value >= total_value {
+            break;
+        }
+    }
+    (inputs, total_input_value)
 }
 
 pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File, CustomError> {

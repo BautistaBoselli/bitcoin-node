@@ -101,7 +101,6 @@ impl UTXO {
             logger_sender,
             Log::Message("Utxo generation is finished".to_string()),
         );
-
         Ok(())
     }
 
@@ -110,13 +109,6 @@ impl UTXO {
 
         let mut saved_utxo_buffer = vec![];
         file.read_to_end(&mut saved_utxo_buffer)?;
-
-        match Self::parse(saved_utxo_buffer.clone()) {
-            Ok((last_timestamp, tx_set)) => {
-                println!("Utxo set is restored from the file");
-            }
-            Err(e) => println!("Error: {}", e),
-        }
 
         let (last_timestamp, tx_set) = match Self::parse(saved_utxo_buffer) {
             Ok((last_timestamp, tx_set)) => (last_timestamp, tx_set),
