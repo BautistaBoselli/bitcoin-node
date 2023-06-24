@@ -25,7 +25,7 @@ impl GUITransactions {
     pub fn handle_events(&mut self, message: &GUIActions) {
         let result = match message {
             GUIActions::WalletChanged => self.update(),
-            GUIActions::NewBlock => self.update(),
+            GUIActions::WalletsUpdated => self.update(),
             _ => Ok(()),
         };
 
@@ -70,7 +70,8 @@ impl GUITransactions {
 
                 match movement_clone.block_hash {
                     Some(ref block_hash) => {
-                        let block = match Block::restore(hash_as_string(block_hash.to_owned())) {
+                        let path = format!("store/blocks/{}.bin", hash_as_string(block_hash.clone()));
+                        let block = match Block::restore(path) {
                             Ok(block) => block,
                             Err(error) => {
                                 send_log(&logger_sender, Log::Error(error));

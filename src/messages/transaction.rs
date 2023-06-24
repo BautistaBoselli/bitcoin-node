@@ -8,7 +8,7 @@ use crate::{
     message::Message,
     messages::headers::hash_as_string,
     parser::{BufferParser, VarIntSerialize},
-    utxo::UTXO,
+    states::utxo_state::UTXO,
     wallet::{get_script_pubkey, Movement, Wallet},
 };
 

@@ -16,6 +16,7 @@ use std::{
     io::{Read, Write},
     sync::mpsc::Sender,
     vec,
+    path::Path
 };
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -138,7 +139,8 @@ impl UTXO {
                 );
                 i = 0;
             }
-            let block = Block::restore(header.hash_as_string())?;
+            let path = format!("store/blocks/{}.bin", header.hash_as_string());
+            let block = Block::restore(path)?;
             self.update_from_block(&block, false)?;
             *last_timestamp = header.timestamp;
             i += 1;
@@ -207,7 +209,9 @@ impl UTXO {
     fn save(&mut self, last_timestamp: u32) -> Result<(), CustomError> {
         let buffer = self.serialize(last_timestamp);
 
-        remove_file(self.path.clone())?;
+        if Path::new(&self.path).exists() {
+            remove_file(self.path.clone())?;
+        }
         let mut file = open_new_file(String::from(self.path.clone()), false)?;
 
         file.write_all(&buffer)?;
@@ -230,6 +234,9 @@ fn calculate_starting_index(headers: &Vec<BlockHeader>, last_timestamp: u32) -> 
 #[cfg(test)]
 mod tests {
 
+    use std::{fs, time::Duration, thread};
+
+    use chrono::Local;
     use gtk::glib::{self, Priority};
 
     use crate::{logger::Logger, wallet::get_script_pubkey};
@@ -238,7 +245,8 @@ mod tests {
 
     #[test]
     fn test_save_restore() {
-        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let filename = format!("tests/{}", Local::now());
+        let mut utxo_set = UTXO::new(filename.clone()).unwrap();
 
         let key1 = OutPoint {
             hash: vec![
@@ -309,11 +317,12 @@ mod tests {
         let last_timestamp = 1687623163;
         utxo_set.save(last_timestamp).unwrap();
 
-        let mut utxo_set2 = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let mut utxo_set2 = UTXO::new(filename.clone()).unwrap();
         utxo_set2.restore_utxo().unwrap();
 
         assert_eq!(utxo_set2.tx_set.len(), 3);
         assert_eq!(utxo_set2.tx_set, utxo_set.tx_set);
+        fs::remove_file(filename).unwrap();
     }
 
     #[test]
@@ -400,47 +409,24 @@ mod tests {
     fn utxo_generation() {
         let (gui_sender, _gui_receiver) = glib::MainContext::channel(Priority::default());
 
-        let logger = match Logger::new(&String::new(), gui_sender) {
-            Ok(logger) => logger,
-            Err(error) => {
-                println!("ERROR: {}", error);
-                return;
-            }
-        };
-
+        let logger = Logger::new(&String::from("tests/test_log.txt"), gui_sender).unwrap();
         let logger_sender = logger.get_sender();
+
+        let path = format!("tests/test_block.bin");
+        
+        let block = Block::restore(path).unwrap();
+        
+        println!("hash: {}", block.header.hash_as_string());
         let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
-        let header = BlockHeader {
-            version: 536870912,
-            prev_block_hash: [
-                37, 167, 68, 172, 119, 180, 173, 121, 130, 113, 230, 183, 81, 26, 52, 142, 31, 52,
-                247, 233, 68, 123, 190, 78, 10, 195, 189, 99, 0, 0, 0, 0,
-            ]
-            .to_vec(),
-            merkle_root: [
-                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 248, 125, 43, 136, 39, 116, 186, 43,
-                114, 204, 35, 144, 47, 194, 229, 44, 97, 83, 110, 112, 229, 230,
-            ]
-            .to_vec(),
-            timestamp: 1572523925,
-            bits: 486604799,
-            nonce: 409655068,
-        };
-        let headers = vec![header.clone()];
+        
+        let headers = vec![block.header.clone()];
         utxo_set
             .generate(&headers, &mut logger_sender.clone())
             .unwrap();
-        let block = Block::restore(header.hash_as_string()).unwrap();
-        let mut utxo_len = 0;
-        for tx in block.transactions {
-            for tx_out in tx.outputs {
-                if utxo_set.tx_set.values().any(|value| value.tx_out == tx_out) {
-                    utxo_len += 1;
-                }
-            }
-        }
-        assert_eq!(utxo_set.tx_set.len(), utxo_len);
+        assert_eq!(utxo_set.tx_set.len(), 42);
         assert_eq!(utxo_set.is_synced(), true);
+
+        fs::remove_file("tests/test_log.txt").unwrap();
     }
 
     #[test]

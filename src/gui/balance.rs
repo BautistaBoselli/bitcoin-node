@@ -27,7 +27,7 @@ impl GUIBalance {
         let result = match message {
             GUIActions::WalletChanged => self.handle_wallet_changed(),
             GUIActions::NewPendingTx => self.handle_new_pending_tx(),
-            GUIActions::NewBlock => self.handle_new_block(),
+            GUIActions::WalletsUpdated => self.handle_wallet_updated(),
             _ => Ok(()),
         };
 
@@ -41,7 +41,7 @@ impl GUIBalance {
         self.update_pending_txs()
     }
 
-    fn handle_new_block(&mut self) -> Result<(), CustomError> {
+    fn handle_wallet_updated(&mut self) -> Result<(), CustomError> {
         self.update_available_balance()?;
         self.update_pending_txs()
     }

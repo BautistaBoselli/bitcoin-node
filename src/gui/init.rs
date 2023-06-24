@@ -15,6 +15,7 @@ use super::{
 pub enum GUIActions {
     Log(Log),
     WalletChanged,
+    WalletsUpdated,
     NewPendingTx,
     NodeStateReady,
     NewBlock,

@@ -10,5 +10,5 @@ pub mod node_state;
 pub mod parser;
 pub mod peer;
 pub mod loops;
-pub mod utxo;
+pub mod states;
 pub mod wallet;

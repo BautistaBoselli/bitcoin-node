@@ -188,4 +188,10 @@ mod tests {
         let parsed_inv = Inv::parse(buffer);
         assert!(parsed_inv.is_err());
     }
+
+    #[test]
+    fn get_command_inv() {
+        let inv = Inv::new(vec![]);
+        assert_eq!(inv.get_command(), "inv");
+    }
 }

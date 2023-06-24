@@ -17,7 +17,7 @@ use crate::{
         headers::{BlockHeader, Headers},
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
-    utxo::UTXO,
+    states::{utxo_state::UTXO, wallets_state::Wallets},
     wallet::Wallet,
 };
 
@@ -26,8 +26,7 @@ pub struct NodeState {
     gui_sender: Sender<GUIActions>,
     headers_file: File,
     headers: Vec<BlockHeader>,
-    wallets: Vec<Wallet>,
-    active_wallet: Option<String>,
+    wallets: Wallets,
     pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
     utxo: UTXO,
     pending_tx_set: HashMap<Vec<u8>, Transaction>,
@@ -43,7 +42,7 @@ impl NodeState {
         let mut headers_file = open_new_file(String::from("store/headers.bin"), true)?;
         let headers = BlockHeader::restore_headers(&mut headers_file)?;
 
-        let wallets = Wallet::restore_wallets()?;
+        let wallets = Wallets::new(String::from("store/wallets.bin"))?;
 
         let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
 
@@ -53,7 +52,6 @@ impl NodeState {
             headers_file,
             headers,
             wallets,
-            active_wallet: None,
             pending_blocks_ref,
             utxo: UTXO::new(String::from("store/utxo.bin"))?,
             pending_tx_set: HashMap::new(),
@@ -88,7 +86,8 @@ impl NodeState {
     }
 
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
-        block.save()?;
+        let path = format!("store/blocks/{}.bin", block.header.hash_as_string());
+        block.save(path)?;
 
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
         pending_blocks.remove(&block_hash);
@@ -151,27 +150,12 @@ impl NodeState {
     }
 
     pub fn update_wallets(&mut self, block: &Block) -> Result<(), CustomError> {
-        let mut wallets_updated = false;
-        for tx in block.transactions.iter() {
-            for wallet in &mut self.wallets {
-                let movement = tx.get_movement(&wallet.get_pubkey_hash()?, &self.utxo)?;
-                if let Some(mut movement) = movement {
-                    movement.block_hash = Some(block.header.hash());
-                    wallet.update_history(movement);
-                    wallets_updated = true;
-                }
-            }
-        }
+         let wallets_updated = self.wallets.update(&block, &self.utxo)?;
         if wallets_updated {
-            Wallet::save_wallets(&mut self.wallets)?;
-
-            if self.active_wallet.is_some() {
                 self.gui_sender
-                    .send(GUIActions::NewBlock)
+                    .send(GUIActions::WalletsUpdated)
                     .map_err(|_| CustomError::CannotInitGUI)?;
-            }
         }
-
         Ok(())
     }
 
@@ -246,7 +230,7 @@ impl NodeState {
     }
 
     pub fn get_wallets(&self) -> &Vec<Wallet> {
-        &self.wallets
+        &self.wallets.get_all()
     }
 
     pub fn append_wallet(
@@ -255,54 +239,22 @@ impl NodeState {
         public_key: String,
         private_key: String,
     ) -> Result<(), CustomError> {
-        if name.is_empty() || public_key.is_empty() || private_key.is_empty() {
-            return Err(CustomError::Validation(
-                "Name, public key and private key must not be empty".to_string(),
-            ));
-        }
-        if public_key.len() != 34 {
-            return Err(CustomError::Validation(
-                "Public key must be 34 characters long".to_string(),
-            ));
-        }
-        if self
-            .wallets
-            .iter()
-            .any(|wallet| wallet.pubkey == public_key)
-        {
-            return Err(CustomError::Validation(
-                "Public key already exists".to_string(),
-            ));
-        }
-
         let new_wallet = Wallet::new(name, public_key, private_key, &self.utxo)?;
-        self.wallets.push(new_wallet);
-        Wallet::save_wallets(&mut self.wallets)?;
-        Ok(())
+        self.wallets.append(new_wallet)
     }
 
     pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
-        self.active_wallet = self
-            .wallets
-            .iter()
-            .find(|wallet| wallet.pubkey == public_key)
-            .map(|wallet| wallet.pubkey.clone());
+        self.wallets.set_active(public_key)?;
         self.gui_sender.send(GUIActions::WalletChanged)?;
         Ok(())
     }
 
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
-        match self.active_wallet {
-            Some(ref active_wallet) => self
-                .wallets
-                .iter()
-                .find(|wallet| wallet.pubkey == *active_wallet),
-            None => None,
-        }
+        self.wallets.get_active()
     }
 
     pub fn get_active_wallet_balance(&self) -> Result<u64, CustomError> {
-        let active_wallet = match self.get_active_wallet() {
+        let active_wallet = match self.wallets.get_active() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
         };
@@ -313,7 +265,7 @@ impl NodeState {
     pub fn get_active_wallet_utxo(
         &self,
     ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
-        let active_wallet = match self.get_active_wallet() {
+        let active_wallet = match self.wallets.get_active() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
         };
@@ -325,7 +277,7 @@ impl NodeState {
         &self,
     ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
         let mut pending_transactions = HashMap::new();
-        let active_wallet = match self.get_active_wallet() {
+        let active_wallet = match self.wallets.get_active() {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
         };
@@ -349,7 +301,7 @@ impl NodeState {
         let tx_hash = transaction.hash();
 
         if let hash_map::Entry::Vacant(e) = self.pending_tx_set.entry(tx_hash) {
-            if let Some(_wallet) = &self.active_wallet {
+            if let Some(_wallet) = &self.wallets.get_active() {
                 self.gui_sender
                     .send(GUIActions::NewPendingTx)
                     .map_err(|_| CustomError::CannotInitGUI)?;

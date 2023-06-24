@@ -31,16 +31,15 @@ impl Block {
         }
     }
 
-    pub fn restore(header_hash: String) -> Result<Self, CustomError> {
-        let mut block_file = open_new_file(format!("store/blocks/{}.bin", header_hash), true)?;
+    pub fn restore(path: String) -> Result<Self, CustomError> {
+        let mut block_file = open_new_file(path, true)?;
         let mut block_buffer = Vec::new();
         block_file.read_to_end(&mut block_buffer)?;
         Self::parse(block_buffer)
     }
 
-    pub fn save(&self) -> Result<(), CustomError> {
-        let filename = hash_as_string(self.header.hash());
-        let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename), true)?;
+    pub fn save(&self, path: String) -> Result<(), CustomError> {
+        let mut block_file = open_new_file(path, true)?;
         block_file.write_all(&self.serialize())?;
         Ok(())
     }

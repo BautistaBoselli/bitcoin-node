@@ -46,7 +46,7 @@ impl Logger {
                     Log::Message(ref string) => {
                         let current_time = Local::now();
                         let formatted_time = current_time.format("%Y-%m-%d %H:%M:%S");
-                        println!("logger: [{}] {}",formatted_time, string);
+                        println!("[{}] {}",formatted_time, string);
                         writeln!(file, "[{}] {}",formatted_time, string)?;
                         if let Err(error) = gui_sender.send(GUIActions::Log(message)){
                             println!("Error sending log message to gui: {}", error);
@@ -55,7 +55,7 @@ impl Logger {
                     Log::Error(ref error) => {
                         let current_time = Local::now();
                         let formatted_time = current_time.format("%Y-%m-%d %H:%M:%S");
-                        println!("logger: [{}] [ERROR] {}",formatted_time, error);
+                        println!("[{}] [ERROR] {}",formatted_time, error);
                         writeln!(file, "[{}] [ERROR] {}",formatted_time, error)?;
                         if let Err(error) = gui_sender.send(GUIActions::Log(message)){
                             println!("Error sending log error to gui: {}", error);
