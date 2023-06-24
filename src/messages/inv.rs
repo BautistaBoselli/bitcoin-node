@@ -1,5 +1,6 @@
 use crate::{error::CustomError, message::Message, parser::BufferParser, parser::VarIntSerialize};
 
+#[derive(Debug, PartialEq)]
 ///Esta es la estructura de un mensaje inv, la cual contiene un vector de inventories
 pub struct Inv {
     pub inventories: Vec<Inventory>,
@@ -62,7 +63,7 @@ pub enum InventoryType {
     FilteredWitnessBlock,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 ///Esta es la estructura de un inventario, la cual contiene un tipo de inventario y un hash del inventario en si.
 pub struct Inventory {
     pub inventory_type: InventoryType,
@@ -108,12 +109,83 @@ impl Inventory {
             0x40000003 => InventoryType::FilteredWitnessBlock,
             _ => {
                 println!("inventory type: {}", parser.extract_u32()?);
-                return Err(CustomError::SerializedBufferIsInvalid)
+                return Err(CustomError::SerializedBufferIsInvalid);
             }
         };
         Ok(Self {
             inventory_type,
             hash: parser.extract_buffer(32)?.to_vec(),
         })
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn inventory_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::Block,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+    }
+
+    #[test]
+    fn inventory_invalid_buffer() {
+        let inventory = Inventory {
+            inventory_type: InventoryType::Block,
+            hash: [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220, 100, 200, 129,
+                233, 45, 56, 82, 56, 124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 46,
+            ]
+            .to_vec(),
+        };
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer);
+        assert!(parsed_inventory.is_err());
+    }
+
+    #[test]
+    fn inv_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::Block,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let inv = Inv::new(vec![inventory]);
+        let buffer = inv.serialize();
+        let parsed_inv = Inv::parse(buffer).unwrap();
+        assert_eq!(inv, parsed_inv);
+    }
+
+    #[test]
+    fn inv_invalid_buffer() {
+        let inventory = Inventory {
+            inventory_type: InventoryType::Block,
+            hash: [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220, 100, 200, 129,
+                233, 45, 56, 82, 56, 124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 46,
+            ]
+            .to_vec(),
+        };
+        let inv = Inv::new(vec![inventory]);
+        let buffer = inv.serialize();
+        let parsed_inv = Inv::parse(buffer);
+        assert!(parsed_inv.is_err());
     }
 }
