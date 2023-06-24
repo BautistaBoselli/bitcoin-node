@@ -55,7 +55,7 @@ impl NodeState {
             wallets,
             active_wallet: None,
             pending_blocks_ref,
-            utxo: UTXO::new()?,
+            utxo: UTXO::new(String::from("store/utxo.bin"))?,
             pending_tx_set: HashMap::new(),
             headers_sync: false,
             blocks_sync: false,
@@ -154,7 +154,7 @@ impl NodeState {
         let mut wallets_updated = false;
         for tx in block.transactions.iter() {
             for wallet in &mut self.wallets {
-                let movement = tx.get_movement(&wallet.get_pubkey_hash()?, &self.utxo);
+                let movement = tx.get_movement(&wallet.get_pubkey_hash()?, &self.utxo)?;
                 if let Some(mut movement) = movement {
                     movement.block_hash = Some(block.header.hash());
                     wallet.update_history(movement);
@@ -281,13 +281,14 @@ impl NodeState {
         Ok(())
     }
 
-    pub fn change_wallet(&mut self, public_key: String) {
+    pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
         self.active_wallet = self
             .wallets
             .iter()
             .find(|wallet| wallet.pubkey == public_key)
             .map(|wallet| wallet.pubkey.clone());
-        self.gui_sender.send(GUIActions::WalletChanged).unwrap();
+        self.gui_sender.send(GUIActions::WalletChanged)?;
+        Ok(())
     }
 
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
@@ -317,7 +318,7 @@ impl NodeState {
             None => return Err(CustomError::WalletNotFound),
         };
 
-        self.utxo.wallet_utxo(active_wallet)
+        self.utxo.generate_wallet_utxo(active_wallet)
     }
 
     pub fn get_active_wallet_pending_txs(
@@ -332,7 +333,7 @@ impl NodeState {
 
         for (tx_hash, tx) in self.pending_tx_set.iter() {
             for (index, tx_out) in tx.outputs.iter().enumerate() {
-                if tx_out.is_sent_to_key(&pubkey_hash) {
+                if tx_out.is_sent_to_key(&pubkey_hash)? {
                     let out_point = OutPoint {
                         hash: tx_hash.clone(),
                         index: index as u32,
@@ -368,12 +369,26 @@ impl NodeState {
             Some(active_wallet) => active_wallet,
             None => return Err(CustomError::WalletNotFound),
         };
+        let total_value = self.calculate_total_value(fee, &outputs)?;
+        let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
+
+        active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
+        let (inputs, total_input_value) = calculate_inputs(active_wallet_utxo, total_value);
+
+        let change = total_input_value - total_value;
+        if change > 0 {
+            outputs.insert(active_wallet.pubkey.clone(), change);
+        }
+
+        Transaction::create(active_wallet, inputs, outputs)
+    }
+
+    fn calculate_total_value(&self, fee: u64, outputs: &HashMap<String, u64>) -> Result<u64, CustomError> {
         let mut total_value = fee;
         for output in outputs.values() {
             total_value += output;
         }
         let wallet_balance = self.get_active_wallet_balance()?;
-
         if total_value > wallet_balance {
             send_log(
                 &self.logger_sender,
@@ -383,27 +398,21 @@ impl NodeState {
             );
             return Err(CustomError::InsufficientFunds);
         }
-
-        let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
-
-        active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
-        let mut inputs = vec![];
-        let mut total_input_value = 0;
-        for (out_point, tx_out) in active_wallet_utxo.iter() {
-            inputs.push(out_point.clone());
-            total_input_value += tx_out.value;
-            if total_input_value >= total_value {
-                break;
-            }
-        }
-        let change = total_input_value - total_value;
-        if change > 0 {
-            outputs.insert(active_wallet.pubkey.clone(), change);
-        }
-        let transaction = Transaction::create(active_wallet, inputs, outputs)?;
-
-        Ok(transaction)
+        Ok(total_value)
     }
+}
+
+fn calculate_inputs(active_wallet_utxo: Vec<(OutPoint, TransactionOutput)>, total_value: u64) -> (Vec<OutPoint>, u64) {
+    let mut inputs = vec![];
+    let mut total_input_value = 0;
+    for (out_point, tx_out) in active_wallet_utxo.iter() {
+        inputs.push(out_point.clone());
+        total_input_value += tx_out.value;
+        if total_input_value >= total_value {
+            break;
+        }
+    }
+    (inputs, total_input_value)
 }
 
 pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File, CustomError> {

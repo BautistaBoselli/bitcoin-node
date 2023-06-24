@@ -15,7 +15,7 @@ pub struct Headers {
     pub headers: Vec<BlockHeader>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 ///Esta estructura representa el header de un bloque, el cual contiene la siguiente información:
 /// - Version: Versión del bloque
 /// - Prev_block_hash: Hash del bloque anterior

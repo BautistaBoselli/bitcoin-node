@@ -67,4 +67,10 @@ mod tests {
         let parsed_send_headers = SendHeaders::parse(buffer_too_long);
         assert_eq!(parsed_send_headers.is_err(), true);
     }
+
+    #[test]
+    fn get_command_send_headers() {
+        let send_headers = SendHeaders::new();
+        assert_eq!(send_headers.get_command(), String::from("sendheaders"));
+    }
 }

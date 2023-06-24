@@ -14,7 +14,7 @@ use crate::{
     logger::{send_log, Log, Logger},
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
-    threads::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
+    loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
 };
 pub struct Node {
     pub address: SocketAddrV6,
@@ -126,7 +126,7 @@ impl Node {
     }
 
     fn initialize_ibd(&self) -> Result<(), CustomError> {
-        let node_state = self.node_state_ref.lock().unwrap();
+        let node_state = self.node_state_ref.lock().map_err(|_| CustomError::CannotLockGuard)?;
         let last_header = node_state.get_last_header_hash();
         drop(node_state);
         self.peer_action_sender

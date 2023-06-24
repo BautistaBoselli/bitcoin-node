@@ -11,29 +11,6 @@ impl BufferParser {
     pub fn new(buffer: Vec<u8>) -> Self {
         Self { buffer, pos: 0 }
     }
-    pub fn get_pos(&mut self) -> usize {
-        self.pos
-    }
-
-    pub fn go_foward(&mut self, pos: usize) {
-        if pos + self.pos > self.buffer.len() {
-            self.pos = self.buffer.len();
-            return;
-        }
-        self.pos += pos;
-    }
-
-    pub fn go_backward(&mut self, pos: usize) {
-        if pos > self.pos {
-            self.pos = 0;
-            return;
-        }
-        self.pos -= pos;
-    }
-
-    pub fn total_len(&mut self) -> usize {
-        self.buffer.len()
-    }
 
     pub fn len(&mut self) -> usize {
         self.buffer.len() - self.pos
@@ -205,6 +182,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parser_utils() {
+        let buffer = vec![];
+        let mut parser = BufferParser::new(buffer);
+        assert_eq!(parser.len(), 0);
+        assert_eq!(parser.is_empty(), true);
+    }
+
+    #[test]
     fn extract_u8() {
         let mut buffer = BufferParser::new(vec![0x01, 0x02, 0x03]);
         assert_eq!(buffer.extract_u8().unwrap(), 0x01);
@@ -304,5 +289,12 @@ mod tests {
                 0
             )
         );
+    }
+
+    #[test]
+    fn serialize_varint() {
+        let number: usize = 0x03;
+        let bytes = number.to_varint_bytes();
+        assert_eq!(bytes, vec![0x03]);
     }
 }

@@ -59,6 +59,22 @@ mod tests {
     }
 
     #[test]
+    fn serialize_pong() {
+        let ping = Pong { nonce: 1024 };
+        let serialized_ping = ping.serialize();
+        assert_eq!(serialized_ping, vec![0, 4, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn parse_ping() {
+        let ping = Ping { nonce: 1024 };
+        let serialized_ping = ping.serialize();
+        let parsed_ping = Ping::parse(serialized_ping).unwrap();
+        assert_eq!(parsed_ping.nonce, ping.nonce);
+    }
+
+
+    #[test]
     fn parse_pong() {
         let ping = Ping { nonce: 1024 };
         let serialized_ping = ping.serialize();

@@ -43,9 +43,16 @@ impl GUITransactions {
     fn update_txs(&self) -> Result<(), CustomError> {
         let tx_list_box: gtk::ListBox = get_gui_element(&self.builder, "movements-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
-        let node_state = node_state_ref_clone.lock().unwrap();
-        let history = node_state.get_active_wallet().unwrap().get_history();
+        let node_state = node_state_ref_clone
+            .lock()
+            .map_err(|_| CustomError::CannotLockGuard)?;
+        let active_wallet = match node_state.get_active_wallet() {
+            Some(wallet) => wallet,
+            None => return Err(CustomError::WalletNotFound),
+        };
+        let history = active_wallet.get_history();
         remove_transactions(&tx_list_box);
+
         for movement in history.iter().rev() {
             let tx_row = gtk::ListBoxRow::new();
             let tx_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -54,6 +61,7 @@ impl GUITransactions {
             button.set_label("Merkle Proof");
 
             let movement_clone = movement.clone();
+            let logger_sender = self.logger_sender.clone();
             button.connect_clicked(move |_| {
                 println!(
                     "Block: {:?}, Tx: {:?}",
@@ -62,11 +70,21 @@ impl GUITransactions {
 
                 match movement_clone.block_hash {
                     Some(ref block_hash) => {
-                        let block = Block::restore(hash_as_string(block_hash.to_owned())).unwrap();
-                        let (mp_flags, mp_hashes) = block
-                            .generate_merkle_path(movement_clone.tx_hash.to_owned())
-                            .unwrap();
-
+                        let block = match Block::restore(hash_as_string(block_hash.to_owned())) {
+                            Ok(block) => block,
+                            Err(error) => {
+                                send_log(&logger_sender, Log::Error(error));
+                                return;
+                            }
+                        };
+                        let (mp_flags, mp_hashes) =
+                            match block.generate_merkle_path(movement_clone.tx_hash.to_owned()) {
+                                Ok((mp_flags, mp_hashes)) => (mp_flags, mp_hashes),
+                                Err(error) => {
+                                    send_log(&logger_sender, Log::Error(error));
+                                    return;
+                                }
+                            };
                         println!("Merkle Flags: {:?}", mp_flags);
                         println!("Merkle Hashes: {:?}", mp_hashes);
                     }
@@ -90,8 +108,10 @@ impl GUITransactions {
     fn update_utxo(&self) -> Result<(), CustomError> {
         let utxo_list_box: gtk::ListBox = get_gui_element(&self.builder, "utxo-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
-        let node_state = node_state_ref_clone.lock().unwrap();
-        let wallet_utxo = node_state.get_active_wallet_utxo().unwrap();
+        let node_state = node_state_ref_clone
+            .lock()
+            .map_err(|_| CustomError::CannotLockGuard)?;
+        let wallet_utxo = node_state.get_active_wallet_utxo()?;
         remove_transactions(&utxo_list_box);
         for (_out_point, tx_out) in wallet_utxo.iter() {
             let utxo_row = gtk::ListBoxRow::new();

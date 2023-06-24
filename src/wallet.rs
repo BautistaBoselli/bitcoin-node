@@ -45,6 +45,7 @@ impl Movement {
                 )))
             }
         };
+
         Ok(Self {
             tx_hash,
             value,
@@ -75,7 +76,7 @@ impl Wallet {
             history: vec![],
         };
         for (outpoint, value) in &utxo_set.tx_set {
-            if value.tx_out.is_sent_to_key(&wallet.get_pubkey_hash()?) {
+            if value.tx_out.is_sent_to_key(&wallet.get_pubkey_hash()?)? {
                 wallet.history.push(Movement {
                     tx_hash: outpoint.hash.clone(),
                     value: value.tx_out.value,
@@ -106,13 +107,27 @@ impl Wallet {
         let mut wallets = Vec::new();
         while !parser.is_empty() {
             let name_len = parser.extract_u8()? as usize;
+            if name_len == 0 {
+                return Err(CustomError::Validation(String::from(
+                    "Wallet name not present",
+                )));
+            }
             let name = parser.extract_string(name_len)?;
 
             let pubkey_len = parser.extract_u8()? as usize;
+            if pubkey_len == 0 {
+                return Err(CustomError::Validation(String::from(
+                    "Wallet pubkey not present",
+                )));
+            }
             let pubkey = parser.extract_string(pubkey_len)?;
 
-            println!("pubkey: {}", pubkey);
             let privkey_len = parser.extract_u8()? as usize;
+            if privkey_len == 0 {
+                return Err(CustomError::Validation(String::from(
+                    "Wallet privkey not present",
+                )));
+            }
             let privkey = parser.extract_string(privkey_len)?;
 
             let history_len = parser.extract_u32()? as usize;
@@ -190,8 +205,6 @@ pub fn get_privkey_hash(privkey: String) -> Result<Vec<u8>, CustomError> {
         .into_vec()
         .map_err(|_| CustomError::Validation(String::from("User PrivKey incorrectly formatted")))?;
 
-    println!("{:?}", decoded_privkey);
-
     match decoded_privkey.get(1..33) {
         Some(pubkey_hash) => Ok(pubkey_hash.to_vec()),
         None => Err(CustomError::Validation(String::from(
@@ -209,4 +222,187 @@ pub fn get_script_pubkey(pubkey: String) -> Result<Vec<u8>, CustomError> {
     script_pubkey.push(0x88);
     script_pubkey.push(0xac);
     Ok(script_pubkey)
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wallet_serialization() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("pubkey"),
+            String::from("privkey"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let serialized_wallet = wallet.serialize();
+        let parsed_wallet = Wallet::parse_wallets(serialized_wallet).unwrap();
+        assert_eq!(parsed_wallet[0].name, String::from("test"));
+        assert_eq!(parsed_wallet[0].pubkey, String::from("pubkey"));
+        assert_eq!(parsed_wallet[0].privkey, String::from("privkey"));
+    }
+
+    #[test]
+    fn parse_invalid_wallet() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("pubkey"),
+            String::from(""),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let serialized_wallet = wallet.serialize();
+        let parsed_wallet = Wallet::parse_wallets(serialized_wallet);
+        assert!(parsed_wallet.is_err());
+    }
+
+    #[test]
+    fn movement_serialization() {
+        let movement = Movement {
+            tx_hash: vec![
+                158, 58, 146, 241, 218, 207, 194, 196, 103, 192, 89, 27, 56, 110, 195, 138, 29,
+                177, 167, 47, 144, 191, 102, 68, 45, 70, 88, 237, 140, 224, 130, 115,
+            ],
+            value: 500,
+            block_hash: Some(vec![
+                167, 131, 118, 190, 70, 199, 31, 2, 255, 135, 123, 36, 232, 182, 60, 178, 165, 110,
+                47, 11, 50, 1, 133, 106, 59, 195, 153, 210, 59, 21, 163, 41,
+            ]),
+        };
+        let serialized_movement = movement.serialize();
+        let mut parser = BufferParser::new(serialized_movement);
+        let parsed_movement = Movement::parse(&mut parser).unwrap();
+        assert_eq!(
+            parsed_movement.tx_hash,
+            vec![
+                158, 58, 146, 241, 218, 207, 194, 196, 103, 192, 89, 27, 56, 110, 195, 138, 29,
+                177, 167, 47, 144, 191, 102, 68, 45, 70, 88, 237, 140, 224, 130, 115
+            ]
+        );
+        assert_eq!(parsed_movement.value, 500);
+        assert_eq!(
+            parsed_movement.block_hash,
+            Some(vec![
+                167, 131, 118, 190, 70, 199, 31, 2, 255, 135, 123, 36, 232, 182, 60, 178, 165, 110,
+                47, 11, 50, 1, 133, 106, 59, 195, 153, 210, 59, 21, 163, 41
+            ])
+        );
+    }
+
+    #[test]
+    fn wallet_history_serialization() {
+        let mut wallet = Wallet::new(
+            String::from("test"),
+            String::from("pubkey"),
+            String::from("privkey"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        wallet.update_history(Movement {
+            tx_hash: vec![
+                158, 58, 146, 241, 218, 207, 194, 196, 103, 192, 89, 27, 56, 110, 195, 138, 29,
+                177, 167, 47, 144, 191, 102, 68, 45, 70, 88, 237, 140, 224, 130, 115,
+            ],
+            value: 500,
+            block_hash: Some(vec![
+                167, 131, 118, 190, 70, 199, 31, 2, 255, 135, 123, 36, 232, 182, 60, 178, 98, 181,
+                242, 112, 111, 183, 22, 128, 11, 0, 0, 0, 0, 0, 0, 0,
+            ]),
+        });
+        let serialized_wallet = wallet.serialize();
+        let parsed_wallet = Wallet::parse_wallets(serialized_wallet).unwrap();
+        assert_eq!(
+            parsed_wallet[0].history[0].block_hash,
+            Some(vec![
+                167, 131, 118, 190, 70, 199, 31, 2, 255, 135, 123, 36, 232, 182, 60, 178, 98, 181,
+                242, 112, 111, 183, 22, 128, 11, 0, 0, 0, 0, 0, 0, 0
+            ])
+        );
+    }
+
+    #[test]
+    fn wallet_pubkey_hash() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
+            String::from("privkey"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let pubkey_hash = wallet.get_pubkey_hash().unwrap();
+        assert_eq!(
+            pubkey_hash,
+            vec![
+                132, 178, 35, 78, 47, 170, 110, 26, 117, 29, 126, 82, 132, 235, 16, 204, 230, 247,
+                81, 246
+            ]
+        );
+    }
+
+    #[test]
+    fn wallet_incorrect_pubkey_hash() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("test"),
+            String::from("privkey"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let pubkey_hash = wallet.get_pubkey_hash();
+        assert!(pubkey_hash.is_err());
+    }
+
+    #[test]
+    fn wallet_script_pubkey() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
+            String::from("privkey"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let script_pubkey = wallet.get_script_pubkey().unwrap();
+        assert_eq!(
+            script_pubkey,
+            vec![
+                118, 169, 20, 132, 178, 35, 78, 47, 170, 110, 26, 117, 29, 126, 82, 132, 235, 16,
+                204, 230, 247, 81, 246, 136, 172
+            ]
+        );
+    }
+
+    #[test]
+    fn wallet_privkey_hash() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("pubkey"),
+            String::from("cNpwEsaVLhju18SJowLtdCNaJtvMvqL4jtFLm2FXw7vZjg4sRWvH"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let privkey_hash = wallet.get_privkey_hash().unwrap();
+        assert_eq!(
+            privkey_hash,
+            vec![
+                37, 40, 250, 211, 140, 107, 40, 1, 172, 178, 73, 96, 107, 232, 139, 51, 193, 141,
+                214, 94, 111, 179, 212, 131, 164, 214, 178, 10, 225, 183, 223, 54
+            ]
+        );
+    }
+
+    #[test]
+    fn wallet_incorrect_privkey_hash() {
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("pubkey"),
+            String::from("test"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+        let privkey_hash = wallet.get_privkey_hash();
+        assert!(privkey_hash.is_err());
+    }
 }

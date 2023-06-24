@@ -77,7 +77,11 @@ impl GUIWallet {
         let logger_sender = self.logger_sender.clone();
 
         action.connect_clicked(move |_| {
-            let mut node_state = node_state_ref.lock().unwrap();
+            let mut node_state = match node_state_ref.lock().map_err(|_| CustomError::CannotLockGuard){
+                Ok(node_state) => node_state,
+                Err(error) => {send_log(&logger_sender, Log::Error(error));
+                 return}
+            };
             if let Err(error) = node_state.append_wallet(
                 name.text().to_string(),
                 pubkey.text().to_string(),
@@ -128,7 +132,7 @@ fn switch_active_wallet(
 
     if let Some(active_pubkey) = select_wallet_cb.active_id() {
         let mut node_state = node_state_ref.lock()?;
-        node_state.change_wallet(active_pubkey.to_string());
+        node_state.change_wallet(active_pubkey.to_string())?;
         if let Some(active_wallet) = node_state.get_active_wallet() {
             select_wallet_cb.set_active_id(Some(active_wallet.pubkey.as_str()));
         } else {
