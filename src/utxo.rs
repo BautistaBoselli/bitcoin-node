@@ -448,6 +448,7 @@ mod tests {
             }
         }
         assert_eq!(utxo_set.tx_set.len(), utxo_len);
+        assert_eq!(utxo_set.is_synced(), true);
     }
 
     #[test]
