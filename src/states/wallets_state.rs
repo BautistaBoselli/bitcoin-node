@@ -1,16 +1,16 @@
 use std::io::{Read, Write};
 
 use crate::{
-    error::CustomError, messages::block::Block, node_state::open_new_file, parser::BufferParser,
+    error::CustomError, messages::block::Block, parser::BufferParser, utils::open_new_file,
     wallet::Wallet,
 };
 
 use super::utxo_state::UTXO;
 
 pub struct Wallets {
-    pub wallets: Vec<Wallet>,
-    pub active_pubkey: Option<String>,
-    pub path: String,
+    wallets: Vec<Wallet>,
+    active_pubkey: Option<String>,
+    path: String,
 }
 
 impl Wallets {

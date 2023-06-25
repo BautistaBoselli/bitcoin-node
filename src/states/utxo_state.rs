@@ -6,8 +6,8 @@ use crate::{
         headers::BlockHeader,
         transaction::{OutPoint, TransactionOutput},
     },
-    node_state::open_new_file,
     parser::BufferParser,
+    utils::open_new_file,
     wallet::Wallet,
 };
 use std::{

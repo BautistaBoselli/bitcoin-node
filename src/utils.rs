@@ -1,6 +1,7 @@
 use std::{
+    fs::OpenOptions,
     net::{SocketAddr, SocketAddrV6, TcpStream, ToSocketAddrs},
-    time::Duration,
+    time::{Duration, SystemTime},
     vec::IntoIter,
 };
 
@@ -25,10 +26,30 @@ pub fn get_address_v6(address: SocketAddr) -> SocketAddrV6 {
     SocketAddrV6::new(ip_v6, address.port(), 0, 0)
 }
 
+pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File, CustomError> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .append(append)
+        .open(path_to_file)?;
+    Ok(file)
+}
+
+pub fn get_current_timestamp() -> Result<u64, CustomError> {
+    Ok(SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs())
+}
+
 #[cfg(test)]
 
 mod tests {
-    use std::net::Ipv6Addr;
+    use std::{
+        fs::{self, remove_file},
+        io::Write,
+        net::Ipv6Addr,
+    };
 
     use super::*;
 
@@ -69,5 +90,30 @@ mod tests {
             Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)
         );
         assert_eq!(address_v6.port(), 8333);
+    }
+
+    #[test]
+    fn test_get_current_timestamp() {
+        assert!(get_current_timestamp().is_ok());
+        assert!(get_current_timestamp().unwrap() > 1687668678);
+    }
+
+    #[test]
+    fn test_open_new_file_creates_new_if_doesnt_exist() {
+        let mut file = open_new_file("tests/does_not_exist.txt".to_string(), false).unwrap();
+
+        assert!(file.write_all(b"test").is_ok());
+
+        remove_file("tests/does_not_exist.txt").unwrap();
+    }
+
+    #[test]
+    fn test_open_new_file_existing_file() {
+        fs::copy("tests/does_exist.txt", "tests/does_exist_copy.txt").unwrap();
+        let mut file = open_new_file("tests/does_exist_copy.txt".to_string(), true).unwrap();
+
+        assert!(file.write_all(b"test").is_ok());
+
+        remove_file("tests/does_exist_copy.txt").unwrap();
     }
 }

@@ -2,9 +2,9 @@ use bitcoin::{
     config::Config,
     gui::init::GUI,
     logger::{send_log, Log, Logger},
-    network::get_addresses,
     node::Node,
     node_state::NodeState,
+    utils::get_addresses,
 };
 use gtk::glib::{self, Priority};
 use std::{env, path::Path};

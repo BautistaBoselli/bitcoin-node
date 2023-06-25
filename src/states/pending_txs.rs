@@ -13,6 +13,12 @@ pub struct PendingTxs {
     tx_set: HashMap<Vec<u8>, Transaction>,
 }
 
+impl Default for PendingTxs {
+    fn default() -> Self {
+        PendingTxs::new()
+    }
+}
+
 impl PendingTxs {
     pub fn new() -> Self {
         PendingTxs {
@@ -72,6 +78,8 @@ mod tests {
     #[test]
     fn pendings_txs_creation() {
         let pending_txs = PendingTxs::new();
+        assert_eq!(pending_txs.tx_set.len(), 0);
+        let pending_txs = PendingTxs::default();
         assert_eq!(pending_txs.tx_set.len(), 0);
     }
 

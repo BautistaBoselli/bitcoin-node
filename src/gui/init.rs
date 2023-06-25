@@ -12,7 +12,7 @@ use super::{
     transfer::GUITransfer, wallet::GUIWallet, window::GUIWindow,
 };
 
-pub enum GUIActions {
+pub enum GUIEvents {
     Log(Log),
     WalletChanged,
     WalletsUpdated,
@@ -34,7 +34,7 @@ pub struct GUI {
 
 impl GUI {
     pub fn start(
-        gui_receiver: Receiver<GUIActions>,
+        gui_receiver: Receiver<GUIEvents>,
         node_state_ref: Arc<Mutex<NodeState>>,
         logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
@@ -120,7 +120,7 @@ impl GUI {
         Ok(())
     }
 
-    fn gui_actions_loop(&self, gui_receiver: Receiver<GUIActions>) -> Result<(), CustomError> {
+    fn gui_actions_loop(&self, gui_receiver: Receiver<GUIEvents>) -> Result<(), CustomError> {
         let mut balance = self.balance.clone();
         let logs = self.logs.clone();
         let mut transactions = self.transactions.clone();

@@ -7,7 +7,7 @@ use gtk::glib;
 
 use crate::{
     error::CustomError,
-    gui::init::GUIActions,
+    gui::init::GUIEvents,
     logger::{send_log, Log},
     messages::{
         block::Block,
@@ -25,7 +25,7 @@ pub struct NodeActionLoop {
     pub node_action_receiver: mpsc::Receiver<NodeAction>,
     pub peer_action_sender: mpsc::Sender<PeerAction>,
     pub logger_sender: mpsc::Sender<Log>,
-    pub gui_sender: glib::Sender<GUIActions>,
+    pub gui_sender: glib::Sender<GUIEvents>,
     pub node_state_ref: Arc<Mutex<NodeState>>,
 }
 
@@ -34,7 +34,7 @@ impl NodeActionLoop {
         node_action_receiver: mpsc::Receiver<NodeAction>,
         peer_action_sender: mpsc::Sender<PeerAction>,
         logger_sender: mpsc::Sender<Log>,
-        gui_sender: glib::Sender<GUIActions>,
+        gui_sender: glib::Sender<GUIEvents>,
         node_state_ref: Arc<Mutex<NodeState>>,
     ) {
         let mut node_thread = Self {

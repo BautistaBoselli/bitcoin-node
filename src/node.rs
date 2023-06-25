@@ -10,7 +10,7 @@ use gtk::glib;
 use crate::{
     config::Config,
     error::CustomError,
-    gui::init::GUIActions,
+    gui::init::GUIEvents,
     logger::{send_log, Log, Logger},
     loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
     node_state::NodeState,
@@ -59,7 +59,7 @@ impl Node {
         Ok(node)
     }
 
-    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIActions>) {
+    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIEvents>) {
         self.initialize_pending_blocks_loop();
 
         thread::spawn(move || -> Result<(), CustomError> {
@@ -136,7 +136,7 @@ impl Node {
     fn initialize_event_loop(
         &mut self,
         // node_action_receiver: mpsc::Receiver<NodeAction>,
-        gui_sender: glib::Sender<GUIActions>,
+        gui_sender: glib::Sender<GUIEvents>,
     ) -> Result<(), CustomError> {
         if let Some(receiver) = self.node_action_receiver.take() {
             NodeActionLoop::start(

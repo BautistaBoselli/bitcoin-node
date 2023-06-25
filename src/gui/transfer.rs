@@ -12,7 +12,7 @@ use crate::{
     peer::NodeAction,
 };
 
-use super::init::{get_gui_element, GUIActions};
+use super::init::{get_gui_element, GUIEvents};
 
 const TRANSFER_OUTPUTS: u8 = 3;
 
@@ -24,9 +24,9 @@ pub struct GUITransfer {
 }
 
 impl GUITransfer {
-    pub fn handle_events(&mut self, message: &GUIActions) {
+    pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
-            GUIActions::WalletChanged => self.reset_tx_fields(),
+            GUIEvents::WalletChanged => self.reset_tx_fields(),
             // GUIActions:: => self.update_txs(),
             _ => Ok(()),
         };

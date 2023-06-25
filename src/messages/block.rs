@@ -10,8 +10,8 @@ use super::{headers::BlockHeader, transaction::Transaction};
 use crate::{
     error::CustomError,
     message::Message,
-    node_state::open_new_file,
     parser::{BufferParser, VarIntSerialize},
+    utils::open_new_file,
 };
 
 #[derive(Debug)]
@@ -173,7 +173,7 @@ impl Message for Block {
 mod tests {
     use std::io::Read;
 
-    use crate::node_state::open_new_file;
+    use crate::utils::open_new_file;
 
     use super::*;
 

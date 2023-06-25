@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{error::CustomError, node_state::get_current_timestamp};
+use crate::{error::CustomError, utils::get_current_timestamp};
 
 pub struct PendingBlocks {
     blocks: HashMap<Vec<u8>, u64>,

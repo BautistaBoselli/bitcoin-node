@@ -1,59 +1,50 @@
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
-    io::Write,
     sync::{mpsc, Arc, Mutex},
-    time::SystemTime,
 };
 
 use gtk::glib::Sender;
 
 use crate::{
     error::CustomError,
-    gui::init::GUIActions,
+    gui::init::GUIEvents,
     logger::{send_log, Log},
     messages::{
         block::Block,
-        headers::{BlockHeader, Headers},
+        headers::Headers,
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
     states::{
-        pending_blocks::PendingBlocks, pending_txs::PendingTxs, utxo_state::UTXO,
-        wallets_state::Wallets,
+        headers_state::HeadersState, pending_blocks::PendingBlocks, pending_txs::PendingTxs,
+        utxo_state::UTXO, wallets_state::Wallets,
     },
     wallet::Wallet,
 };
 
 pub struct NodeState {
     logger_sender: mpsc::Sender<Log>,
-    gui_sender: Sender<GUIActions>,
-    headers: Vec<BlockHeader>,
+    gui_sender: Sender<GUIEvents>,
+    headers: HeadersState,
     wallets: Wallets,
     pending_blocks_ref: Arc<Mutex<PendingBlocks>>,
     utxo: UTXO,
-    headers_file: File,
     pending_txs: PendingTxs,
-    headers_sync: bool,
     blocks_sync: bool,
 }
 
 impl NodeState {
     pub fn new(
         logger_sender: mpsc::Sender<Log>,
-        gui_sender: Sender<GUIActions>,
+        gui_sender: Sender<GUIEvents>,
     ) -> Result<Arc<Mutex<Self>>, CustomError> {
-        let mut headers_file = open_new_file(String::from("store/headers.bin"), true)?;
-
         let node_state_ref = Arc::new(Mutex::new(Self {
-            logger_sender,
+            logger_sender: logger_sender.clone(),
             gui_sender,
-            headers: BlockHeader::restore_headers(&mut headers_file)?,
+            headers: HeadersState::new(String::from("store/headers.bin"), logger_sender)?,
             wallets: Wallets::new(String::from("store/wallets.bin"))?,
             pending_blocks_ref: PendingBlocks::new(),
             utxo: UTXO::new(String::from("store/utxo.bin"))?,
             pending_txs: PendingTxs::new(),
-            headers_file,
-            headers_sync: false,
             blocks_sync: false,
         }));
 
@@ -82,32 +73,18 @@ impl NodeState {
 
     // Headers
     pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
-        self.headers.last().map(|header| header.hash())
+        self.headers.get_last_header_hash()
     }
 
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
-        self.headers_file.write_all(&headers.serialize_headers())?;
-        let headers_count = headers.headers.len();
-
-        self.headers.append(&mut headers.headers);
-
-        send_log(
-            &self.logger_sender,
-            Log::Message(format!(
-                "There are {} headers, new {}",
-                self.headers.len(),
-                headers_count
-            )),
-        );
-
-        self.verify_headers_sync(headers_count)?;
+        self.headers.append_headers(headers)?;
         self.verify_sync()
     }
 
     // Sync
 
     pub fn is_synced(&self) -> bool {
-        self.headers_sync && self.blocks_sync && self.utxo.is_synced()
+        self.headers.is_synced() && self.blocks_sync && self.utxo.is_synced()
     }
 
     pub fn is_blocks_sync(&self) -> bool {
@@ -115,35 +92,21 @@ impl NodeState {
     }
 
     pub fn verify_sync(&mut self) -> Result<(), CustomError> {
-        if self.headers_sync {
+        if self.headers.is_synced() {
             self.verify_blocks_sync()?;
         }
 
         if self.blocks_sync && !self.utxo.is_synced() {
-            self.utxo.generate(&self.headers, &mut self.logger_sender)?;
+            self.utxo
+                .generate(self.headers.get_all(), &mut self.logger_sender)?;
         }
 
         if self.is_synced() {
             self.gui_sender
-                .send(GUIActions::NodeStateReady)
+                .send(GUIEvents::NodeStateReady)
                 .map_err(|_| CustomError::CannotInitGUI)?;
         }
 
-        Ok(())
-    }
-
-    fn verify_headers_sync(&mut self, new_headers_count: usize) -> Result<(), CustomError> {
-        if self.headers_sync {
-            return Ok(());
-        }
-
-        self.headers_sync = new_headers_count < 2000;
-        if self.headers_sync {
-            send_log(
-                &self.logger_sender,
-                Log::Message("headers sync completed".to_string()),
-            );
-        }
         Ok(())
     }
 
@@ -154,7 +117,7 @@ impl NodeState {
 
         let pending_blocks_empty = self.is_pending_blocks_empty()?;
 
-        self.blocks_sync = self.headers_sync && pending_blocks_empty;
+        self.blocks_sync = self.headers.is_synced() && pending_blocks_empty;
 
         if self.blocks_sync {
             self.remove_pending_blocks()?;
@@ -188,7 +151,7 @@ impl NodeState {
 
     pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
         self.wallets.set_active(&public_key)?;
-        self.gui_sender.send(GUIActions::WalletChanged)?;
+        self.gui_sender.send(GUIEvents::WalletChanged)?;
         Ok(())
     }
 
@@ -196,7 +159,7 @@ impl NodeState {
         let wallets_updated = self.wallets.update(block, &self.utxo)?;
         if wallets_updated {
             self.gui_sender
-                .send(GUIActions::WalletsUpdated)
+                .send(GUIEvents::WalletsUpdated)
                 .map_err(|_| CustomError::CannotInitGUI)?;
         }
         Ok(())
@@ -231,11 +194,11 @@ impl NodeState {
     }
 
     pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<(), CustomError> {
-        let updated = self.pending_txs.append_pending_tx(transaction.clone());
+        let updated = self.pending_txs.append_pending_tx(transaction);
 
         if updated {
             self.gui_sender
-                .send(GUIActions::NewPendingTx)
+                .send(GUIEvents::NewPendingTx)
                 .map_err(|_| CustomError::CannotInitGUI)?;
         }
 
@@ -333,20 +296,4 @@ fn calculate_inputs(
         }
     }
     (inputs, total_input_value)
-}
-
-pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File, CustomError> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .append(append)
-        .open(path_to_file)?;
-    Ok(file)
-}
-
-pub fn get_current_timestamp() -> Result<u64, CustomError> {
-    Ok(SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs())
 }

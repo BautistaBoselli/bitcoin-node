@@ -12,7 +12,7 @@ use crate::{
     node_state::NodeState,
 };
 
-use super::init::{get_gui_element, GUIActions};
+use super::init::{get_gui_element, GUIEvents};
 
 #[derive(Clone)]
 pub struct GUITransactions {
@@ -22,10 +22,10 @@ pub struct GUITransactions {
 }
 
 impl GUITransactions {
-    pub fn handle_events(&mut self, message: &GUIActions) {
+    pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
-            GUIActions::WalletChanged => self.update(),
-            GUIActions::WalletsUpdated => self.update(),
+            GUIEvents::WalletChanged => self.update(),
+            GUIEvents::WalletsUpdated => self.update(),
             _ => Ok(()),
         };
 
@@ -70,7 +70,8 @@ impl GUITransactions {
 
                 match movement_clone.block_hash {
                     Some(ref block_hash) => {
-                        let path = format!("store/blocks/{}.bin", hash_as_string(block_hash.clone()));
+                        let path =
+                            format!("store/blocks/{}.bin", hash_as_string(block_hash.clone()));
                         let block = match Block::restore(path) {
                             Ok(block) => block,
                             Err(error) => {

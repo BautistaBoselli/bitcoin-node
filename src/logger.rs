@@ -11,7 +11,7 @@ use chrono::Local;
 use gtk::glib;
 
 use crate::error::CustomError;
-use crate::gui::init::GUIActions;
+use crate::gui::init::GUIEvents;
 
 #[derive(Debug, Clone)]
 pub enum Log {
@@ -26,7 +26,7 @@ pub struct Logger {
 impl Logger {
     pub fn new(
         filename: &String,
-        gui_sender: glib::Sender<GUIActions>,
+        gui_sender: glib::Sender<GUIEvents>,
     ) -> Result<Self, CustomError> {
         let (tx, rx) = mpsc::channel::<Log>();
 
@@ -46,18 +46,18 @@ impl Logger {
                     Log::Message(ref string) => {
                         let current_time = Local::now();
                         let formatted_time = current_time.format("%Y-%m-%d %H:%M:%S");
-                        println!("[{}] {}",formatted_time, string);
-                        writeln!(file, "[{}] {}",formatted_time, string)?;
-                        if let Err(error) = gui_sender.send(GUIActions::Log(message)){
+                        println!("[{}] {}", formatted_time, string);
+                        writeln!(file, "[{}] {}", formatted_time, string)?;
+                        if let Err(error) = gui_sender.send(GUIEvents::Log(message)) {
                             println!("Error sending log message to gui: {}", error);
                         }
                     }
                     Log::Error(ref error) => {
                         let current_time = Local::now();
                         let formatted_time = current_time.format("%Y-%m-%d %H:%M:%S");
-                        println!("[{}] [ERROR] {}",formatted_time, error);
-                        writeln!(file, "[{}] [ERROR] {}",formatted_time, error)?;
-                        if let Err(error) = gui_sender.send(GUIActions::Log(message)){
+                        println!("[{}] [ERROR] {}", formatted_time, error);
+                        writeln!(file, "[{}] [ERROR] {}", formatted_time, error)?;
+                        if let Err(error) = gui_sender.send(GUIEvents::Log(message)) {
                             println!("Error sending log error to gui: {}", error);
                         }
                     }
@@ -108,10 +108,7 @@ mod tests {
             "[{}] Sender test 1\n[{}] Sender test 2\n",
             timestamp_string_1, timestamp_string_2
         );
-        assert_eq!(
-            fs::read_to_string("test1.txt").unwrap(),
-            result
-        );
+        assert_eq!(fs::read_to_string("test1.txt").unwrap(), result);
         fs::remove_file("test1.txt").unwrap();
     }
 
@@ -135,10 +132,7 @@ mod tests {
             "[{}] [ERROR] Error: cannot remove file\n[{}] [ERROR] Error: cannot remove file\n",
             timestamp_string_1, timestamp_string_2
         );
-        assert_eq!(
-            fs::read_to_string("test2.txt").unwrap(),
-            result
-        );
+        assert_eq!(fs::read_to_string("test2.txt").unwrap(), result);
         fs::remove_file("test2.txt").unwrap();
     }
 
@@ -163,10 +157,7 @@ mod tests {
             "[{}] Sender test 1\n[{}] Sender test 2\n",
             timestamp_string_1, timestamp_string_2
         );
-        assert_eq!(
-            fs::read_to_string("test3.txt").unwrap(),
-            result
-        );
+        assert_eq!(fs::read_to_string("test3.txt").unwrap(), result);
         fs::remove_file("test3.txt").unwrap();
     }
 
@@ -199,10 +190,7 @@ mod tests {
             "[{}] Sender test 1\n[{}] Sender test 2\n",
             timestamp_string_1, timestamp_string_2
         );
-        assert_eq!(
-            fs::read_to_string("test4.txt").unwrap(),
-            result
-        );
+        assert_eq!(fs::read_to_string("test4.txt").unwrap(), result);
         fs::remove_file("test4.txt").unwrap();
     }
 }

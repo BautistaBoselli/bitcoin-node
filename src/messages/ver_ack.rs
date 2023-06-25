@@ -46,6 +46,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ver_ack_creation() {
+        let verack = VerAck::new();
+        let serialized_verack = verack.serialize();
+        assert_eq!(serialized_verack, vec![]);
+
+        let verack = VerAck::default();
+        let serialized_verack = verack.serialize();
+        assert_eq!(serialized_verack, vec![]);
+    }
+
+    #[test]
     fn serialize_verack() {
         let verack = VerAck::new();
         let serialized_verack = verack.serialize();
@@ -65,5 +76,12 @@ mod tests {
         let buffer_too_long = vec![0x00];
         let parsed_verack = VerAck::parse(buffer_too_long);
         assert_eq!(parsed_verack.is_err(), true);
+    }
+
+    #[test]
+    fn get_command_verack() {
+        let verack = VerAck::new();
+        let command = verack.get_command();
+        assert_eq!(command, String::from("verack"));
     }
 }
