@@ -40,7 +40,7 @@ pub fn pending_blocks_loop(
 
                 let mut inventories = vec![];
 
-                for block_hash in blocks_to_refetch.iter() {
+                for block_hash in &blocks_to_refetch {
                     node_state.append_pending_block(block_hash.clone())?;
                     inventories.push(Inventory::new(InventoryType::Block, block_hash.clone()));
                 }

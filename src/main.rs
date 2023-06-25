@@ -26,7 +26,7 @@ fn main() {
     let config = match Config::from_file(args[1].as_str()) {
         Ok(config) => config,
         Err(error) => {
-            println!("ERROR: {}", error);
+            println!("ERROR: {error}");
             return;
         }
     };
@@ -36,7 +36,7 @@ fn main() {
     let logger = match Logger::new(&config.log_file, gui_sender.clone()) {
         Ok(logger) => logger,
         Err(error) => {
-            println!("ERROR: {}", error);
+            println!("ERROR: {error}");
             return;
         }
     };
@@ -79,6 +79,6 @@ fn main() {
         node_action_sender,
     );
     if let Err(error) = gui {
-        send_log(&logger_sender, Log::Error(error))
+        send_log(&logger_sender, Log::Error(error));
     };
 }

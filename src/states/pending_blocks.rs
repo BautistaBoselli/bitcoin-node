@@ -11,6 +11,7 @@ pub struct PendingBlocks {
 }
 
 impl PendingBlocks {
+    #[must_use]
     pub fn new() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {
             blocks: HashMap::new(),
@@ -36,13 +37,13 @@ impl PendingBlocks {
     pub fn get_stale_requests(&mut self) -> Result<Vec<Vec<u8>>, CustomError> {
         let mut to_remove = Vec::new();
 
-        for (block_hash, timestamp) in self.blocks.iter() {
+        for (block_hash, timestamp) in &self.blocks {
             if *timestamp + self.stale_time < get_current_timestamp()? {
                 to_remove.push(block_hash.clone());
             }
         }
 
-        for block_hash in to_remove.iter() {
+        for block_hash in &to_remove {
             self.blocks.remove(block_hash);
         }
 

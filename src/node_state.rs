@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map, HashMap},
+    collections::HashMap,
     fs::{File, OpenOptions},
     io::Write,
     sync::{mpsc, Arc, Mutex},
@@ -17,19 +17,22 @@ use crate::{
         headers::{BlockHeader, Headers},
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
-    states::{pending_blocks::PendingBlocks, utxo_state::UTXO, wallets_state::Wallets},
+    states::{
+        pending_blocks::PendingBlocks, pending_txs::PendingTxs, utxo_state::UTXO,
+        wallets_state::Wallets,
+    },
     wallet::Wallet,
 };
 
 pub struct NodeState {
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIActions>,
-    headers_file: File,
     headers: Vec<BlockHeader>,
     wallets: Wallets,
     pending_blocks_ref: Arc<Mutex<PendingBlocks>>,
     utxo: UTXO,
-    pending_tx_set: HashMap<Vec<u8>, Transaction>,
+    headers_file: File,
+    pending_txs: PendingTxs,
     headers_sync: bool,
     blocks_sync: bool,
 }
@@ -40,21 +43,16 @@ impl NodeState {
         gui_sender: Sender<GUIActions>,
     ) -> Result<Arc<Mutex<Self>>, CustomError> {
         let mut headers_file = open_new_file(String::from("store/headers.bin"), true)?;
-        let headers = BlockHeader::restore_headers(&mut headers_file)?;
-
-        let wallets = Wallets::new(String::from("store/wallets.bin"))?;
-
-        let pending_blocks_ref = PendingBlocks::new();
 
         let node_state_ref = Arc::new(Mutex::new(Self {
             logger_sender,
             gui_sender,
-            headers_file,
-            headers,
-            wallets,
-            pending_blocks_ref,
+            headers: BlockHeader::restore_headers(&mut headers_file)?,
+            wallets: Wallets::new(String::from("store/wallets.bin"))?,
+            pending_blocks_ref: PendingBlocks::new(),
             utxo: UTXO::new(String::from("store/utxo.bin"))?,
-            pending_tx_set: HashMap::new(),
+            pending_txs: PendingTxs::new(),
+            headers_file,
             headers_sync: false,
             blocks_sync: false,
         }));
@@ -171,7 +169,7 @@ impl NodeState {
     // Wallets
 
     pub fn get_wallets(&self) -> &Vec<Wallet> {
-        &self.wallets.get_all()
+        self.wallets.get_all()
     }
 
     pub fn append_wallet(
@@ -189,13 +187,13 @@ impl NodeState {
     }
 
     pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
-        self.wallets.set_active(public_key)?;
+        self.wallets.set_active(&public_key)?;
         self.gui_sender.send(GUIActions::WalletChanged)?;
         Ok(())
     }
 
     pub fn update_wallets(&mut self, block: &Block) -> Result<(), CustomError> {
-        let wallets_updated = self.wallets.update(&block, &self.utxo)?;
+        let wallets_updated = self.wallets.update(block, &self.utxo)?;
         if wallets_updated {
             self.gui_sender
                 .send(GUIActions::WalletsUpdated)
@@ -207,71 +205,38 @@ impl NodeState {
     // UTXO
 
     pub fn get_active_wallet_balance(&self) -> Result<u64, CustomError> {
-        let active_wallet = match self.wallets.get_active() {
-            Some(active_wallet) => active_wallet,
-            None => return Err(CustomError::WalletNotFound),
-        };
-
+        let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
         self.utxo.wallet_balance(active_wallet)
     }
 
     pub fn get_active_wallet_utxo(
         &self,
     ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
-        let active_wallet = match self.wallets.get_active() {
-            Some(active_wallet) => active_wallet,
-            None => return Err(CustomError::WalletNotFound),
-        };
-
+        let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
         self.utxo.generate_wallet_utxo(active_wallet)
     }
 
     // Pending Tx
 
     pub fn update_pending_tx(&mut self, block: &Block) -> Result<(), CustomError> {
-        for tx in block.transactions.iter() {
-            if self.pending_tx_set.contains_key(&tx.hash()) {
-                self.pending_tx_set.remove(&tx.hash());
-            }
-        }
-
-        Ok(())
+        self.pending_txs.update_pending_tx(block)
     }
 
     pub fn get_active_wallet_pending_txs(
         &self,
     ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
-        let mut pending_transactions = HashMap::new();
-        let active_wallet = match self.wallets.get_active() {
-            Some(active_wallet) => active_wallet,
-            None => return Err(CustomError::WalletNotFound),
-        };
-        let pubkey_hash = active_wallet.get_pubkey_hash()?;
+        let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
 
-        for (tx_hash, tx) in self.pending_tx_set.iter() {
-            for (index, tx_out) in tx.outputs.iter().enumerate() {
-                if tx_out.is_sent_to_key(&pubkey_hash)? {
-                    let out_point = OutPoint {
-                        hash: tx_hash.clone(),
-                        index: index as u32,
-                    };
-                    pending_transactions.insert(out_point, tx_out.clone());
-                }
-            }
-        }
-        Ok(pending_transactions)
+        self.pending_txs.from_wallet(active_wallet)
     }
 
     pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<(), CustomError> {
-        let tx_hash = transaction.hash();
+        let updated = self.pending_txs.append_pending_tx(transaction.clone());
 
-        if let hash_map::Entry::Vacant(e) = self.pending_tx_set.entry(tx_hash) {
-            if let Some(_wallet) = &self.wallets.get_active() {
-                self.gui_sender
-                    .send(GUIActions::NewPendingTx)
-                    .map_err(|_| CustomError::CannotInitGUI)?;
-            }
-            e.insert(transaction);
+        if updated {
+            self.gui_sender
+                .send(GUIActions::NewPendingTx)
+                .map_err(|_| CustomError::CannotInitGUI)?;
         }
 
         Ok(())
@@ -315,15 +280,13 @@ impl NodeState {
         mut outputs: HashMap<String, u64>,
         fee: u64,
     ) -> Result<Transaction, CustomError> {
-        let active_wallet = match self.get_active_wallet() {
-            Some(active_wallet) => active_wallet,
-            None => return Err(CustomError::WalletNotFound),
-        };
+        let Some(active_wallet) = self.get_active_wallet() else { return Err(CustomError::WalletNotFound) };
+
         let total_value = self.calculate_total_value(fee, &outputs)?;
         let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
 
         active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
-        let (inputs, total_input_value) = calculate_inputs(active_wallet_utxo, total_value);
+        let (inputs, total_input_value) = calculate_inputs(&active_wallet_utxo, total_value);
 
         let change = total_input_value - total_value;
         if change > 0 {
@@ -357,7 +320,7 @@ impl NodeState {
 }
 
 fn calculate_inputs(
-    active_wallet_utxo: Vec<(OutPoint, TransactionOutput)>,
+    active_wallet_utxo: &[(OutPoint, TransactionOutput)],
     total_value: u64,
 ) -> (Vec<OutPoint>, u64) {
     let mut inputs = vec![];

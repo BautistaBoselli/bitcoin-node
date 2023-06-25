@@ -46,9 +46,9 @@ impl UTXO {
     pub fn wallet_balance(&self, wallet: &Wallet) -> Result<u64, CustomError> {
         let mut balance = 0;
         let pubkey_hash = wallet.get_pubkey_hash()?;
-        for (_, value) in self.tx_set.iter() {
+        for value in self.tx_set.values() {
             if value.tx_out.is_sent_to_key(&pubkey_hash)? {
-                balance += value.tx_out.value
+                balance += value.tx_out.value;
             }
         }
         Ok(balance)
@@ -62,7 +62,7 @@ impl UTXO {
         let pubkey_hash = wallet.get_pubkey_hash()?;
 
         let mut active_wallet_utxo = vec![];
-        for (out_point, value) in self.tx_set.iter() {
+        for (out_point, value) in &self.tx_set {
             if value.tx_out.is_sent_to_key(&pubkey_hash)? {
                 active_wallet_utxo.push((out_point.clone(), value.tx_out.clone()));
             }
@@ -135,7 +135,7 @@ impl UTXO {
                 percentage += 10;
                 send_log(
                     logger_sender,
-                    Log::Message(format!("Utxo generation is ({}%) completed...", percentage)),
+                    Log::Message(format!("Utxo generation is ({percentage}%) completed...")),
                 );
                 i = 0;
             }
@@ -153,7 +153,7 @@ impl UTXO {
         buffer.extend(last_timestamp.to_le_bytes());
         buffer.extend((self.tx_set.len() as u64).to_le_bytes());
 
-        for (out_point, value) in self.tx_set.iter() {
+        for (out_point, value) in &self.tx_set {
             buffer.extend(out_point.serialize());
             buffer.extend(value.tx_out.serialize());
             buffer.extend(value.block_hash.clone());
@@ -212,7 +212,7 @@ impl UTXO {
         if Path::new(&self.path).exists() {
             remove_file(self.path.clone())?;
         }
-        let mut file = open_new_file(String::from(self.path.clone()), false)?;
+        let mut file = open_new_file(self.path.clone(), false)?;
 
         file.write_all(&buffer)?;
         Ok(())

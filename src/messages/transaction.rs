@@ -253,7 +253,7 @@ fn compare_p2pkh(
     Ok(hash == *public_key_hash)
 }
 
-fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> {
+fn sign(mut buffer: Vec<u8>, privkey: &[u8]) -> Result<Vec<u8>, CustomError> {
     buffer.extend(SIGHASH_ALL.to_le_bytes());
 
     println!("buffer: {:?}", hash_as_string(buffer.clone()));
@@ -264,7 +264,7 @@ fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> 
     let msg = secp256k1::Message::from_slice(&z.to_byte_array())
         .map_err(|_| CustomError::CannotSignTx)?;
 
-    let key = secp256k1::SecretKey::from_slice(&privkey).map_err(|_| CustomError::CannotSignTx)?;
+    let key = secp256k1::SecretKey::from_slice(privkey).map_err(|_| CustomError::CannotSignTx)?;
     let publickey = secp256k1::PublicKey::from_secret_key(&secp, &key).serialize();
 
     let signature = secp.sign_ecdsa(&msg, &key).serialize_der();
@@ -273,9 +273,9 @@ fn sign(mut buffer: Vec<u8>, privkey: &Vec<u8>) -> Result<Vec<u8>, CustomError> 
 
     script_sig.extend((signature.len() + 1).to_varint_bytes());
     script_sig.extend(signature.to_vec());
-    script_sig.extend((0x1 as u8).to_le_bytes());
+    script_sig.extend((0x1_u8).to_le_bytes());
     script_sig.extend(publickey.len().to_varint_bytes());
-    script_sig.extend(publickey.clone());
+    script_sig.extend(publickey);
 
     Ok(script_sig)
 }

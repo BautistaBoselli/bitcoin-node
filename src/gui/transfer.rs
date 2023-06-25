@@ -87,7 +87,7 @@ impl GUITransfer {
                 .map_err(|_| CustomError::InvalidFee)
             {
                 Ok(fee) => {
-                    if fee <= 0 {
+                    if fee == 0 {
                         send_log(&logger_sender, Log::Error(CustomError::InvalidFee));
                         return;
                     }
@@ -96,12 +96,10 @@ impl GUITransfer {
                         .map_err(|_| CustomError::CannotSendMessageToChannel)
                     {
                         send_log(&logger_sender, Log::Error(error));
-                        return;
                     };
                 }
                 Err(error) => {
                     send_log(&logger_sender, Log::Error(error));
-                    return;
                 }
             };
         });
@@ -132,8 +130,8 @@ fn get_output(
 ) -> Result<Option<(String, u64)>, CustomError> {
     //let check: gtk::ToggleButton = get_gui_element(&builder, &format!("output-{}-check", i))?;
 
-    let pubkey: gtk::Entry = get_gui_element(&builder, &format!("output-{}-pubkey", i))?;
-    let value: gtk::Entry = get_gui_element(&builder, &format!("output-{}-value", i))?;
+    let pubkey: gtk::Entry = get_gui_element(builder, &format!("output-{}-pubkey", i))?;
+    let value: gtk::Entry = get_gui_element(builder, &format!("output-{}-value", i))?;
 
     if pubkey.text().to_string().is_empty() && value.text().to_string().is_empty() {
         return Ok(None);

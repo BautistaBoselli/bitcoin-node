@@ -44,7 +44,7 @@ impl NodeActionLoop {
             gui_sender,
             node_state_ref,
         };
-        node_thread.event_loop()
+        node_thread.event_loop();
     }
 
     pub fn event_loop(&mut self) {
@@ -65,7 +65,7 @@ impl NodeActionLoop {
             if let Err(error) = response {
                 send_log(
                     &self.logger_sender,
-                    Log::Message(format!("Error on NodeActionLoop: {}", error)),
+                    Log::Message(format!("Error on NodeActionLoop: {error}")),
                 );
             }
         }
@@ -81,7 +81,13 @@ impl NodeActionLoop {
             .lock()
             .map_err(|_| CustomError::CannotLockGuard)?;
 
-        let transaction = node_state.make_transaction(outputs, fee)?;
+        let transaction = match node_state.make_transaction(outputs, fee) {
+            Ok(transaction) => transaction,
+            Err(error) => {
+                send_log(&self.logger_sender, Log::Error(error));
+                return Ok(());
+            }
+        };
 
         self.peer_action_sender
             .send(PeerAction::SendTransaction(transaction))?;

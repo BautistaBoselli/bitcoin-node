@@ -52,7 +52,7 @@ impl Wallets {
         Ok(())
     }
 
-    pub fn set_active(&mut self, public_key: String) -> Result<(), CustomError> {
+    pub fn set_active(&mut self, public_key: &str) -> Result<(), CustomError> {
         self.active_pubkey = self
             .wallets
             .iter()
@@ -92,7 +92,7 @@ impl Wallets {
 
     pub fn update(&mut self, block: &Block, utxo: &UTXO) -> Result<bool, CustomError> {
         let mut wallets_updated = false;
-        for tx in block.transactions.iter() {
+        for tx in &block.transactions {
             for wallet in &mut self.wallets {
                 let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo)?;
                 if let Some(mut movement) = movement {
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(wallets.active_pubkey, None);
 
         wallets
-            .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm".to_string())
+            .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm")
             .unwrap();
         assert_eq!(
             wallets.active_pubkey,
@@ -243,7 +243,7 @@ mod tests {
         assert!(wallets.get_active().is_none());
 
         wallets
-            .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm".to_string())
+            .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm")
             .unwrap();
         assert_eq!(
             wallets.active_pubkey,
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(wallets.active_pubkey, None);
 
         wallets
-            .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm".to_string())
+            .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm")
             .unwrap();
 
         assert_eq!(wallets.get_active().unwrap().history.len(), 0);

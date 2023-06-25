@@ -51,7 +51,7 @@ impl PeerActionLoop {
                 PeerAction::GetHeaders(last_header) => self.handle_getheaders(last_header),
                 PeerAction::GetData(inventories) => self.handle_getdata(inventories),
                 PeerAction::SendTransaction(transaction) => {
-                    self.handle_send_transaction(transaction)
+                    self.handle_send_transaction(&transaction)
                 }
                 PeerAction::Terminate => {
                     break;
@@ -61,17 +61,20 @@ impl PeerActionLoop {
             if let Err(error) = response {
                 send_log(
                     &self.logger_sender,
-                    Log::Message(format!("Error on PeerActionLoop: {}", error)),
+                    Log::Message(format!("Error on PeerActionLoop: {error}")),
                 );
             }
         }
         Ok(())
     }
 
-    fn handle_send_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
-        println!("tx enviada");
-        //println!("serialized: {:?}", transaction.serialize());
-        transaction.send(&mut self.stream)
+    fn handle_send_transaction(&mut self, transaction: &Transaction) -> Result<(), CustomError> {
+        transaction.send(&mut self.stream)?;
+        send_log(
+            &self.logger_sender,
+            Log::Message("Sending transaction".to_string()),
+        );
+        Ok(())
     }
     fn handle_getdata(&mut self, inventories: Vec<Inventory>) -> Result<(), CustomError> {
         let inventories_clone = inventories.clone();
