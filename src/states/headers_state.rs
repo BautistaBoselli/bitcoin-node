@@ -42,10 +42,8 @@ impl HeadersState {
         }
 
         while !parser.is_empty() {
-            self.headers.push(BlockHeader::parse(
-                parser.extract_buffer(80)?.to_vec(),
-                false,
-            )?);
+            let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec(), true)?;
+            self.headers.push(header);
         }
         Ok(())
     }
@@ -203,6 +201,9 @@ mod tests {
 
         headers.verify_headers_sync(2000).unwrap();
         assert_eq!(headers.is_synced(), false);
+
+        headers.verify_headers_sync(0).unwrap();
+        assert_eq!(headers.is_synced(), true);
 
         headers.verify_headers_sync(0).unwrap();
         assert_eq!(headers.is_synced(), true);
