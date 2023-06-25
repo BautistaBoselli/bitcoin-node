@@ -27,7 +27,7 @@ pub fn pending_blocks_loop(
                 continue;
             }
 
-            let blocks_to_refetch = node_state.get_stale_block_downloads()?;
+            let blocks_to_refetch = node_state.get_stale_requests()?;
 
             if !blocks_to_refetch.is_empty() {
                 send_log(

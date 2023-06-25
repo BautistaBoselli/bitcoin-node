@@ -5,10 +5,7 @@ use std::{
 
 use bitcoin_hashes::{sha256, Hash};
 
-use super::{
-    headers::{hash_as_string, BlockHeader},
-    transaction::Transaction,
-};
+use super::{headers::BlockHeader, transaction::Transaction};
 
 use crate::{
     error::CustomError,
@@ -237,8 +234,8 @@ mod tests {
 
         assert_eq!(hashes.len(), 6);
         assert_eq!(merging, block.header.merkle_root);
-    }       
-        
+    }
+
     #[test]
     fn get_command_block_test() {
         let buffer = vec![

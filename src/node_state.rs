@@ -17,7 +17,7 @@ use crate::{
         headers::{BlockHeader, Headers},
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
-    states::{utxo_state::UTXO, wallets_state::Wallets},
+    states::{pending_blocks::PendingBlocks, utxo_state::UTXO, wallets_state::Wallets},
     wallet::Wallet,
 };
 
@@ -27,7 +27,7 @@ pub struct NodeState {
     headers_file: File,
     headers: Vec<BlockHeader>,
     wallets: Wallets,
-    pending_blocks_ref: Arc<Mutex<HashMap<Vec<u8>, u64>>>,
+    pending_blocks_ref: Arc<Mutex<PendingBlocks>>,
     utxo: UTXO,
     pending_tx_set: HashMap<Vec<u8>, Transaction>,
     headers_sync: bool,
@@ -44,7 +44,7 @@ impl NodeState {
 
         let wallets = Wallets::new(String::from("store/wallets.bin"))?;
 
-        let pending_blocks_ref = Arc::new(Mutex::new(HashMap::new()));
+        let pending_blocks_ref = PendingBlocks::new();
 
         let node_state_ref = Arc::new(Mutex::new(Self {
             logger_sender,
@@ -62,6 +62,27 @@ impl NodeState {
         Ok(node_state_ref)
     }
 
+    pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
+        let path = format!("store/blocks/{}.bin", block.header.hash_as_string());
+        block.save(path)?;
+
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.remove_block(&block_hash)?;
+        drop(pending_blocks);
+
+        self.verify_sync()?;
+
+        if self.is_synced() {
+            self.utxo.update_from_block(&block, true)?;
+        }
+
+        self.update_pending_tx(&block)?;
+        self.update_wallets(&block)?;
+
+        Ok(())
+    }
+
+    // Headers
     pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
         self.headers.last().map(|header| header.hash())
     }
@@ -85,79 +106,7 @@ impl NodeState {
         self.verify_sync()
     }
 
-    pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
-        let path = format!("store/blocks/{}.bin", block.header.hash_as_string());
-        block.save(path)?;
-
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        pending_blocks.remove(&block_hash);
-        drop(pending_blocks);
-
-        self.verify_sync()?;
-
-        if self.is_synced() {
-            self.utxo.update_from_block(&block, true)?;
-        } else if self.blocks_sync {
-            self.utxo.generate(&self.headers, &mut self.logger_sender)?;
-        }
-
-        self.update_pending_tx(&block)?;
-        self.update_wallets(&block)?;
-
-        Ok(())
-    }
-
-    pub fn append_pending_block(&mut self, header_hash: Vec<u8>) -> Result<(), CustomError> {
-        let current_time = get_current_timestamp()?;
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        pending_blocks.insert(header_hash, current_time);
-        drop(pending_blocks);
-
-        Ok(())
-    }
-
-    fn remove_pending_blocks(&self) -> Result<(), CustomError> {
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        pending_blocks.drain();
-        Ok(())
-    }
-
-    pub fn get_stale_block_downloads(&self) -> Result<Vec<Vec<u8>>, CustomError> {
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        let mut to_remove = Vec::new();
-
-        for (block_hash, timestamp) in pending_blocks.iter() {
-            if *timestamp + 5 < get_current_timestamp()? {
-                to_remove.push(block_hash.clone());
-            }
-        }
-
-        for block_hash in to_remove.iter() {
-            pending_blocks.remove(block_hash);
-        }
-
-        Ok(to_remove)
-    }
-
-    pub fn update_pending_tx(&mut self, block: &Block) -> Result<(), CustomError> {
-        for tx in block.transactions.iter() {
-            if self.pending_tx_set.contains_key(&tx.hash()) {
-                self.pending_tx_set.remove(&tx.hash());
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn update_wallets(&mut self, block: &Block) -> Result<(), CustomError> {
-         let wallets_updated = self.wallets.update(&block, &self.utxo)?;
-        if wallets_updated {
-                self.gui_sender
-                    .send(GUIActions::WalletsUpdated)
-                    .map_err(|_| CustomError::CannotInitGUI)?;
-        }
-        Ok(())
-    }
+    // Sync
 
     pub fn is_synced(&self) -> bool {
         self.headers_sync && self.blocks_sync && self.utxo.is_synced()
@@ -165,16 +114,6 @@ impl NodeState {
 
     pub fn is_blocks_sync(&self) -> bool {
         self.blocks_sync
-    }
-
-    pub fn is_block_pending(&self, block_hash: &Vec<u8>) -> Result<bool, CustomError> {
-        let pending_blocks = self.pending_blocks_ref.lock()?;
-        Ok(pending_blocks.contains_key(block_hash))
-    }
-
-    fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
-        let pending_blocks = self.pending_blocks_ref.lock()?;
-        Ok(pending_blocks.is_empty())
     }
 
     pub fn verify_sync(&mut self) -> Result<(), CustomError> {
@@ -229,6 +168,8 @@ impl NodeState {
         Ok(())
     }
 
+    // Wallets
+
     pub fn get_wallets(&self) -> &Vec<Wallet> {
         &self.wallets.get_all()
     }
@@ -243,15 +184,27 @@ impl NodeState {
         self.wallets.append(new_wallet)
     }
 
+    pub fn get_active_wallet(&self) -> Option<&Wallet> {
+        self.wallets.get_active()
+    }
+
     pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
         self.wallets.set_active(public_key)?;
         self.gui_sender.send(GUIActions::WalletChanged)?;
         Ok(())
     }
 
-    pub fn get_active_wallet(&self) -> Option<&Wallet> {
-        self.wallets.get_active()
+    pub fn update_wallets(&mut self, block: &Block) -> Result<(), CustomError> {
+        let wallets_updated = self.wallets.update(&block, &self.utxo)?;
+        if wallets_updated {
+            self.gui_sender
+                .send(GUIActions::WalletsUpdated)
+                .map_err(|_| CustomError::CannotInitGUI)?;
+        }
+        Ok(())
     }
+
+    // UTXO
 
     pub fn get_active_wallet_balance(&self) -> Result<u64, CustomError> {
         let active_wallet = match self.wallets.get_active() {
@@ -271,6 +224,18 @@ impl NodeState {
         };
 
         self.utxo.generate_wallet_utxo(active_wallet)
+    }
+
+    // Pending Tx
+
+    pub fn update_pending_tx(&mut self, block: &Block) -> Result<(), CustomError> {
+        for tx in block.transactions.iter() {
+            if self.pending_tx_set.contains_key(&tx.hash()) {
+                self.pending_tx_set.remove(&tx.hash());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn get_active_wallet_pending_txs(
@@ -312,6 +277,39 @@ impl NodeState {
         Ok(())
     }
 
+    // Pending Blocks
+
+    pub fn append_pending_block(&mut self, header_hash: Vec<u8>) -> Result<(), CustomError> {
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.append_block(header_hash)?;
+        drop(pending_blocks);
+
+        Ok(())
+    }
+
+    fn remove_pending_blocks(&self) -> Result<(), CustomError> {
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.drain();
+        Ok(())
+    }
+
+    pub fn get_stale_requests(&self) -> Result<Vec<Vec<u8>>, CustomError> {
+        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        pending_blocks.get_stale_requests()
+    }
+
+    pub fn is_block_pending(&self, block_hash: &Vec<u8>) -> Result<bool, CustomError> {
+        let pending_blocks = self.pending_blocks_ref.lock()?;
+        Ok(pending_blocks.is_block_pending(block_hash))
+    }
+
+    fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
+        let pending_blocks = self.pending_blocks_ref.lock()?;
+        Ok(pending_blocks.is_empty())
+    }
+
+    // Transactions
+
     pub fn make_transaction(
         &mut self,
         mut outputs: HashMap<String, u64>,
@@ -335,7 +333,11 @@ impl NodeState {
         Transaction::create(active_wallet, inputs, outputs)
     }
 
-    fn calculate_total_value(&self, fee: u64, outputs: &HashMap<String, u64>) -> Result<u64, CustomError> {
+    fn calculate_total_value(
+        &self,
+        fee: u64,
+        outputs: &HashMap<String, u64>,
+    ) -> Result<u64, CustomError> {
         let mut total_value = fee;
         for output in outputs.values() {
             total_value += output;
@@ -354,7 +356,10 @@ impl NodeState {
     }
 }
 
-fn calculate_inputs(active_wallet_utxo: Vec<(OutPoint, TransactionOutput)>, total_value: u64) -> (Vec<OutPoint>, u64) {
+fn calculate_inputs(
+    active_wallet_utxo: Vec<(OutPoint, TransactionOutput)>,
+    total_value: u64,
+) -> (Vec<OutPoint>, u64) {
     let mut inputs = vec![];
     let mut total_input_value = 0;
     for (out_point, tx_out) in active_wallet_utxo.iter() {
