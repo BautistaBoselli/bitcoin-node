@@ -229,7 +229,13 @@ mod tests {
 
     #[test]
     fn update_wallets_from_new_block() {
-        let mut wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
+        fs::copy(
+            "tests/test_wallets.bin".to_string(),
+            "tests/test_wallets_update.bin".to_string(),
+        )
+        .unwrap();
+
+        let mut wallets = Wallets::new("tests/test_wallets_update.bin".to_string()).unwrap();
         assert_eq!(wallets.active_pubkey, None);
 
         wallets
@@ -274,5 +280,7 @@ mod tests {
 
         assert_eq!(updated, true);
         assert_eq!(wallets.get_active().unwrap().history.len(), 1);
+
+        remove_file("tests/test_wallets_update.bin".to_string()).unwrap();
     }
 }
