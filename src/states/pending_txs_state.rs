@@ -69,7 +69,7 @@ impl PendingTxs {
 #[cfg(test)]
 mod tests {
 
-    use crate::{messages::headers::BlockHeader, states::wallets_state::Wallets};
+    use crate::{states::wallets_state::Wallets, structs::block_header::BlockHeader};
 
     use super::*;
 

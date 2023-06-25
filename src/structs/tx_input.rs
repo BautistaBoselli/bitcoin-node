@@ -55,6 +55,7 @@ mod tests {
         let serialize = input.serialize();
         let mut parser = BufferParser::new(serialize);
         let parsed_input = TransactionInput::parse(&mut parser).unwrap();
+        println!("{:?}", parsed_input.clone());
         assert_eq!(input, parsed_input);
     }
 }

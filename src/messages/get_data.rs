@@ -1,6 +1,6 @@
-use crate::message::Message;
+use crate::{message::Message, structs::inventory::Inventory};
 
-use super::inv::{Inv, Inventory};
+use super::inv::Inv;
 
 pub struct GetData {
     inv: Inv,
@@ -36,7 +36,8 @@ impl Message for GetData {
 #[cfg(test)]
 
 mod tests {
-    use crate::messages::inv::InventoryType;
+
+    use crate::structs::inventory::{Inventory, InventoryType};
 
     use super::*;
 
@@ -44,26 +45,21 @@ mod tests {
     fn serialize_get_data() {
         let inv = Inv::new(vec![Inventory::new(
             InventoryType::Block,
-            vec![
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xab, 0xcd,
-            ],
+            vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xab, 0xcd],
         )]);
         let get_data = GetData { inv };
         let serialized_get_data = get_data.serialize();
         assert_eq!(
             serialized_get_data,
-            vec![
-                1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd,
-            ]
+            vec![1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd,]
         );
     }
 
     #[test]
     fn parse_get_data() {
         let buffer = vec![
-            1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 4, 0,
-            0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0xef, 0xaa, 3, 12, 7,
-            0, 7, 8,
+            1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 4, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0,
+            0, 0, 0xef, 0xaa, 3, 12, 7, 0, 7, 8,
         ];
         let get_data = GetData::parse(buffer).unwrap();
         let inventories = get_data.get_inventories();
@@ -72,9 +68,8 @@ mod tests {
         assert_eq!(
             inventories[0].hash,
             vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 4, 0, 0, 0,
-                0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0xef, 0xaa, 3, 12, 7, 0,
-                7, 8,
+                0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 4, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0xef,
+                0xaa, 3, 12, 7, 0, 7, 8,
             ]
         );
     }

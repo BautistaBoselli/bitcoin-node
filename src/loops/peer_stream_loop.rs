@@ -12,12 +12,16 @@ use crate::{
     messages::{
         block::Block,
         get_data::GetData,
-        headers::{BlockHeader, Headers},
-        inv::{Inv, Inventory, InventoryType},
+        headers::Headers,
+        inv::Inv,
         ping_pong::{Ping, Pong},
         transaction::Transaction,
     },
     peer::{request_headers, NodeAction},
+    structs::{
+        block_header::BlockHeader,
+        inventory::{Inventory, InventoryType},
+    },
 };
 
 pub struct PeerStreamLoop {

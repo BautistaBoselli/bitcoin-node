@@ -11,9 +11,10 @@ use crate::{
     loops::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
     message::{Message, MessageHeader},
     messages::{
-        block::Block, get_headers::GetHeaders, headers::Headers, inv::Inventory,
-        send_headers::SendHeaders, transaction::Transaction, ver_ack::VerAck, version::Version,
+        block::Block, get_headers::GetHeaders, headers::Headers, send_headers::SendHeaders,
+        transaction::Transaction, ver_ack::VerAck, version::Version,
     },
+    structs::inventory::Inventory,
     utils::{get_address_v6, open_stream},
 };
 

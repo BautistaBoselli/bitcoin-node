@@ -6,11 +6,13 @@ use secp256k1::Secp256k1;
 use crate::{
     error::CustomError,
     message::Message,
-    messages::headers::hash_as_string,
     parser::{BufferParser, VarIntSerialize},
     states::utxo_state::UTXO,
-    structs::{outpoint::OutPoint, tx_input::TransactionInput, tx_output::TransactionOutput},
-    wallet::{get_script_pubkey, Movement, Wallet},
+    structs::{
+        block_header::hash_as_string, movement::Movement, outpoint::OutPoint,
+        tx_input::TransactionInput, tx_output::TransactionOutput,
+    },
+    wallet::{get_script_pubkey, Wallet},
 };
 
 const SIGHASH_ALL: u32 = 1;

@@ -9,14 +9,13 @@ use crate::{
     error::CustomError,
     gui::init::GUIEvents,
     logger::{send_log, Log},
-    messages::{
-        block::Block,
-        headers::{BlockHeader, Headers},
-        inv::{Inventory, InventoryType},
-        transaction::Transaction,
-    },
+    messages::{block::Block, headers::Headers, transaction::Transaction},
     node_state::NodeState,
     peer::{NodeAction, PeerAction},
+    structs::{
+        block_header::BlockHeader,
+        inventory::{Inventory, InventoryType},
+    },
 };
 
 const START_DATE_IBD: u32 = 1681095630;

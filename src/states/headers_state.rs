@@ -6,8 +6,9 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::headers::{BlockHeader, Headers},
+    messages::headers::Headers,
     parser::BufferParser,
+    structs::block_header::BlockHeader,
     utils::open_new_file,
 };
 
@@ -57,10 +58,10 @@ impl HeadersState {
     }
 
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
-        let mut file = open_new_file(self.path.clone(), false)?;
+        let mut file = open_new_file(self.path.clone(), true)?;
 
         let mut buffer = vec![];
-        for header in &self.headers {
+        for header in &headers.headers {
             let header_buffer: Vec<u8> = header.serialize();
             buffer.extend(header_buffer);
         }

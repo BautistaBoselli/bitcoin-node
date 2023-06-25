@@ -36,6 +36,7 @@ mod tests {
         };
         let serialized = outpoint.serialize();
         let parsed_outpoint = OutPoint::parse(serialized).unwrap();
+        println!("{:?}", parsed_outpoint);
         assert_eq!(outpoint, parsed_outpoint);
     }
 }
