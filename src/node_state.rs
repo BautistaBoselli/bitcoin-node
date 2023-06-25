@@ -231,7 +231,7 @@ impl NodeState {
         Ok(pending_blocks.is_block_pending(block_hash))
     }
 
-    fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
+    pub fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
         let pending_blocks = self.pending_blocks_ref.lock()?;
         Ok(pending_blocks.is_empty())
     }
