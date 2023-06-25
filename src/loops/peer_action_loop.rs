@@ -8,8 +8,9 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     message::Message,
-    messages::{get_data::GetData, inv::Inventory, transaction::Transaction},
+    messages::{get_data::GetData, transaction::Transaction},
     peer::{request_headers, NodeAction, PeerAction},
+    structs::inventory::Inventory,
 };
 
 pub struct PeerActionLoop {

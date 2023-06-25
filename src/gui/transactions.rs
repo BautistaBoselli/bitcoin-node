@@ -8,8 +8,9 @@ use gtk::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::{block::Block, headers::hash_as_string},
+    messages::block::Block,
     node_state::NodeState,
+    structs::block_header::hash_as_string,
 };
 
 use super::init::{get_gui_element, GUIEvents};
@@ -48,7 +49,9 @@ impl GUITransactions {
             .map_err(|_| CustomError::CannotLockGuard)?;
         let active_wallet = match node_state.get_active_wallet() {
             Some(wallet) => wallet,
-            None => return Err(CustomError::WalletNotFound),
+            None => {
+                return Ok(());
+            }
         };
         let history = active_wallet.get_history();
         remove_transactions(&tx_list_box);

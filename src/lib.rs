@@ -10,5 +10,6 @@ pub mod node_state;
 pub mod parser;
 pub mod peer;
 pub mod states;
+pub mod structs;
 pub mod utils;
 pub mod wallet;

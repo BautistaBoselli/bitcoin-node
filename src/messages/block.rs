@@ -5,12 +5,13 @@ use std::{
 
 use bitcoin_hashes::{sha256, Hash};
 
-use super::{headers::BlockHeader, transaction::Transaction};
+use super::transaction::Transaction;
 
 use crate::{
     error::CustomError,
     message::Message,
     parser::{BufferParser, VarIntSerialize},
+    structs::block_header::BlockHeader,
     utils::open_new_file,
 };
 

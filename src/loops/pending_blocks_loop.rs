@@ -7,9 +7,9 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::inv::{Inventory, InventoryType},
     node_state::NodeState,
     peer::PeerAction,
+    structs::inventory::{Inventory, InventoryType},
 };
 
 pub fn pending_blocks_loop(
