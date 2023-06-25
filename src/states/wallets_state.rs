@@ -162,6 +162,32 @@ mod tests {
     }
 
     #[test]
+    fn append_wallet_duplicated_wallet() {
+        fs::copy(
+            "tests/test_wallets.bin".to_string(),
+            "tests/test_wallets_append_duplicated.bin".to_string(),
+        )
+        .unwrap();
+
+        let mut wallets =
+            Wallets::new("tests/test_wallets_append_duplicated.bin".to_string()).unwrap();
+        assert_eq!(wallets.wallets.len(), 1);
+
+        let new_wallet = Wallet::new(
+            String::from("wallet 2"),
+            String::from("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm"),
+            String::from("private key 2"),
+            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+        )
+        .unwrap();
+
+        let result = wallets.append(new_wallet);
+        assert!(result.is_err());
+
+        remove_file("tests/test_wallets_append_duplicated.bin".to_string()).unwrap();
+    }
+
+    #[test]
     fn save_wallets() {
         let mut wallets = Wallets::new("tests/save_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.wallets.len(), 0);
@@ -213,6 +239,8 @@ mod tests {
     fn get_active_wallet() {
         let mut wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.active_pubkey, None);
+
+        assert!(wallets.get_active().is_none());
 
         wallets
             .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm".to_string())
