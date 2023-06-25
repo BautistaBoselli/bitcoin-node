@@ -1,8 +1,9 @@
 use crate::{
     error::CustomError,
-    messages::transaction::OutPoint,
     parser::{BufferParser, VarIntSerialize},
 };
+
+use super::outpoint::OutPoint;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionInput {
@@ -39,7 +40,7 @@ mod tests {
     use crate::parser::BufferParser;
 
     #[test]
-    fn serialize() {
+    fn serialize_and_parse() {
         let input = TransactionInput {
             previous_output: OutPoint {
                 hash: vec![

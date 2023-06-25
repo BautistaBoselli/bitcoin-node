@@ -114,11 +114,8 @@ mod tests {
     use std::fs::{self, remove_file};
 
     use crate::{
-        messages::{
-            headers::BlockHeader,
-            transaction::{OutPoint, Transaction, TransactionOutput},
-        },
-        structs::tx_input::TransactionInput,
+        messages::{headers::BlockHeader, transaction::Transaction},
+        structs::{outpoint::OutPoint, tx_input::TransactionInput, tx_output::TransactionOutput},
     };
 
     use super::*;

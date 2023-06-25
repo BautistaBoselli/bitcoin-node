@@ -9,15 +9,12 @@ use crate::{
     error::CustomError,
     gui::init::GUIEvents,
     logger::{send_log, Log},
-    messages::{
-        block::Block,
-        headers::Headers,
-        transaction::{OutPoint, Transaction, TransactionOutput},
-    },
+    messages::{block::Block, headers::Headers, transaction::Transaction},
     states::{
         headers_state::HeadersState, pending_blocks_state::PendingBlocks,
         pending_txs_state::PendingTxs, utxo_state::UTXO, wallets_state::Wallets,
     },
+    structs::{outpoint::OutPoint, tx_output::TransactionOutput},
     wallet::Wallet,
 };
 

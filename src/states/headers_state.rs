@@ -42,7 +42,7 @@ impl HeadersState {
         }
 
         while !parser.is_empty() {
-            let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec(), true)?;
+            let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec(), false)?;
             self.headers.push(header);
         }
         Ok(())

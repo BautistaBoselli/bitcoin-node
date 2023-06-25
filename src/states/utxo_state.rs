@@ -1,12 +1,10 @@
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::{
-        block::Block,
-        headers::BlockHeader,
-        transaction::{OutPoint, TransactionOutput},
-    },
+    messages::{block::Block, headers::BlockHeader},
     parser::BufferParser,
+    structs::outpoint::OutPoint,
+    structs::tx_output::TransactionOutput,
     utils::open_new_file,
     wallet::Wallet,
 };

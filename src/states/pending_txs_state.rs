@@ -2,10 +2,8 @@ use std::collections::{hash_map, HashMap};
 
 use crate::{
     error::CustomError,
-    messages::{
-        block::Block,
-        transaction::{OutPoint, Transaction, TransactionOutput},
-    },
+    messages::{block::Block, transaction::Transaction},
+    structs::{outpoint::OutPoint, tx_output::TransactionOutput},
     wallet::Wallet,
 };
 

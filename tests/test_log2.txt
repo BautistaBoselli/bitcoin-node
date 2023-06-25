@@ -1,2 +1,0 @@
-[2023-06-25 18:22:52] Successful handshake with ::ffff:185.28.96.16
-[2023-06-25 18:22:53] Successful handshake with ::ffff:185.107.68.135
