@@ -9,6 +9,7 @@ use crate::{
     messages::headers::hash_as_string,
     parser::{BufferParser, VarIntSerialize},
     states::utxo_state::UTXO,
+    structs::tx_input::TransactionInput,
     wallet::{get_script_pubkey, Movement, Wallet},
 };
 
@@ -149,35 +150,6 @@ impl Message for Transaction {
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         let mut parser = BufferParser::new(buffer);
         Transaction::parse_from_parser(&mut parser)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct TransactionInput {
-    pub previous_output: OutPoint,
-    pub script_sig: Vec<u8>,
-    pub sequence: u32,
-}
-
-impl TransactionInput {
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = vec![];
-        buffer.extend(self.previous_output.serialize());
-        buffer.extend(self.script_sig.len().to_varint_bytes());
-        buffer.extend(self.script_sig.clone());
-        buffer.extend(self.sequence.to_le_bytes());
-        buffer
-    }
-    pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
-        let previous_output = OutPoint::parse(parser.extract_buffer(36)?.to_vec())?;
-        let script_sig_length = parser.extract_varint()? as usize;
-        let script_sig = parser.extract_buffer(script_sig_length)?.to_vec();
-        let sequence = parser.extract_u32()?;
-        Ok(Self {
-            previous_output,
-            script_sig,
-            sequence,
-        })
     }
 }
 

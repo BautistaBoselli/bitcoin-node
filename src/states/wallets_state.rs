@@ -113,9 +113,12 @@ impl Wallets {
 mod tests {
     use std::fs::{self, remove_file};
 
-    use crate::messages::{
-        headers::BlockHeader,
-        transaction::{OutPoint, Transaction, TransactionInput, TransactionOutput},
+    use crate::{
+        messages::{
+            headers::BlockHeader,
+            transaction::{OutPoint, Transaction, TransactionOutput},
+        },
+        structs::tx_input::TransactionInput,
     };
 
     use super::*;
