@@ -15,8 +15,8 @@ use crate::{
         transaction::{OutPoint, Transaction, TransactionOutput},
     },
     states::{
-        headers_state::HeadersState, pending_blocks::PendingBlocks, pending_txs::PendingTxs,
-        utxo_state::UTXO, wallets_state::Wallets,
+        headers_state::HeadersState, pending_blocks_state::PendingBlocks,
+        pending_txs_state::PendingTxs, utxo_state::UTXO, wallets_state::Wallets,
     },
     wallet::Wallet,
 };
