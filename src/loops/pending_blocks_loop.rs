@@ -27,7 +27,7 @@ pub fn pending_blocks_loop(
                 continue;
             }
 
-            let blocks_to_refetch = node_state.get_stale_block_downloads()?;
+            let blocks_to_refetch = node_state.get_stale_requests()?;
 
             if !blocks_to_refetch.is_empty() {
                 send_log(
@@ -40,7 +40,7 @@ pub fn pending_blocks_loop(
 
                 let mut inventories = vec![];
 
-                for block_hash in blocks_to_refetch.iter() {
+                for block_hash in &blocks_to_refetch {
                     node_state.append_pending_block(block_hash.clone())?;
                     inventories.push(Inventory::new(InventoryType::Block, block_hash.clone()));
                 }

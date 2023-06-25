@@ -8,7 +8,7 @@ use crate::{
     logger::{send_log, Log},
 };
 
-use super::init::{get_gui_element, GUIActions};
+use super::init::{get_gui_element, GUIEvents};
 
 #[derive(Clone)]
 pub struct GUILogs {
@@ -17,9 +17,9 @@ pub struct GUILogs {
 }
 
 impl GUILogs {
-    pub fn handle_events(&self, message: &GUIActions) {
+    pub fn handle_events(&self, message: &GUIEvents) {
         let result = match message {
-            GUIActions::Log(log) => self.handle_log(log),
+            GUIEvents::Log(log) => self.handle_log(log),
             _ => Ok(()),
         };
 

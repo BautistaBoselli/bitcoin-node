@@ -12,7 +12,7 @@ use crate::{
     messages::{
         block::Block,
         get_data::GetData,
-        headers::Headers,
+        headers::{BlockHeader, Headers},
         inv::{Inv, Inventory, InventoryType},
         ping_pong::{Ping, Pong},
         transaction::Transaction,
@@ -28,6 +28,7 @@ pub struct PeerStreamLoop {
 }
 
 impl PeerStreamLoop {
+    #[must_use]
     pub fn spawn(
         version: i32,
         stream: TcpStream,
@@ -36,10 +37,10 @@ impl PeerStreamLoop {
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut peer_action_thread = Self {
-                version,
                 stream,
-                logger_sender,
                 node_action_sender,
+                version,
+                logger_sender,
             };
             peer_action_thread.event_loop()
         })
@@ -62,23 +63,23 @@ impl PeerStreamLoop {
             if let Err(error) = response {
                 send_log(
                     &self.logger_sender,
-                    Log::Message(format!("Error on PeerStreamLoop: {}", error)),
+                    Log::Message(format!("Error on PeerStreamLoop: {error}")),
                 );
             }
         }
     }
 
     fn handle_headers(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
-        let response = match Headers::read(&mut self.stream, response_header.payload_size) {
-            Ok(response) => response,
-            Err(_) => {
+        let response =
+            if let Ok(response) = Headers::read(&mut self.stream, response_header.payload_size) {
+                response
+            } else {
                 self.node_action_sender.send(NodeAction::GetHeadersError)?;
                 return Ok(());
-            }
-        };
+            };
 
         if response.headers.len() == 2000 {
-            let last_header = response.headers.last().map(|h| h.hash());
+            let last_header = response.headers.last().map(BlockHeader::hash);
             request_headers(
                 last_header,
                 self.version,
@@ -94,25 +95,22 @@ impl PeerStreamLoop {
 
     fn handle_block(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let block = Block::read(&mut self.stream, response_header.payload_size)?;
-        match block.create_merkle_root() {
-            Ok(_) => {
-                self.node_action_sender
-                    .send(NodeAction::Block((block.header.hash(), block)))?;
-            }
-            Err(_) => {
-                let inventory = Inventory::new(InventoryType::Block, block.header.hash());
+        if block.create_merkle_root().is_ok() {
+            self.node_action_sender
+                .send(NodeAction::Block((block.header.hash(), block)))?;
+        } else {
+            let inventory = Inventory::new(InventoryType::Block, block.header.hash());
 
-                self.node_action_sender
-                    .send(NodeAction::GetDataError(vec![inventory]))?;
+            self.node_action_sender
+                .send(NodeAction::GetDataError(vec![inventory]))?;
 
-                send_log(
-                    &self.logger_sender,
-                    Log::Message(format!(
-                        "Error validating the merkle root in the block: {:?}",
-                        block.header.hash()
-                    )),
-                );
-            }
+            send_log(
+                &self.logger_sender,
+                Log::Message(format!(
+                    "Error validating the merkle root in the block: {:?}",
+                    block.header.hash()
+                )),
+            );
         };
         Ok(())
     }
@@ -144,7 +142,7 @@ impl PeerStreamLoop {
 
     fn handle_notfound(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let notfound = GetData::read(&mut self.stream, response_header.payload_size)?;
-        let inventories = notfound.get_inventories().to_owned();
+        let inventories = notfound.get_inventories().clone();
         self.node_action_sender
             .send(NodeAction::GetDataError(inventories))?;
         Ok(())

@@ -1,5 +1,3 @@
-use std::{fs::File, io::Read};
-
 use bitcoin_hashes::{sha256d, Hash};
 
 use crate::{
@@ -103,29 +101,6 @@ impl BlockHeader {
     pub fn hash_as_string(&self) -> String {
         hash_as_string(self.hash())
     }
-
-    pub fn parse_headers(buffer: Vec<u8>) -> Result<Vec<BlockHeader>, CustomError> {
-        let mut parser = BufferParser::new(buffer);
-        if parser.len() % 80 != 0 {
-            return Err(CustomError::SerializedBufferIsInvalid);
-        }
-
-        let mut headers = vec![];
-        while !parser.is_empty() {
-            headers.push(BlockHeader::parse(
-                parser.extract_buffer(80)?.to_vec(),
-                false,
-            )?);
-        }
-        Ok(headers)
-    }
-
-    pub fn restore_headers(headers_file: &mut File) -> Result<Vec<BlockHeader>, CustomError> {
-        let mut saved_headers_buffer = vec![];
-        headers_file.read_to_end(&mut saved_headers_buffer)?;
-
-        Self::parse_headers(saved_headers_buffer)
-    }
 }
 
 pub fn hash_as_string(hash: Vec<u8>) -> String {
@@ -139,15 +114,6 @@ pub fn hash_as_string(hash: Vec<u8>) -> String {
 impl Headers {
     pub fn new() -> Self {
         Headers { headers: vec![] }
-    }
-
-    pub fn serialize_headers(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = vec![];
-        for header in &self.headers {
-            let header_buffer: Vec<u8> = header.serialize();
-            buffer.extend(header_buffer);
-        }
-        buffer
     }
 }
 
@@ -303,15 +269,5 @@ mod tests {
         let headers = Headers::parse(buffer);
 
         assert!(headers.is_err());
-    }
-
-    #[test]
-
-    fn parse_empty_headers_buffer() {
-        let buffer = vec![];
-
-        let headers = BlockHeader::parse_headers(buffer).unwrap();
-
-        assert_eq!(headers.len(), 0);
     }
 }

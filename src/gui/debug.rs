@@ -25,10 +25,13 @@ impl GUIDebug {
         let clone = node_action_sender.clone();
         debug_button.connect_clicked(move |_| {
             let mut outputs = HashMap::new();
-            outputs.insert(String::from("mniwvWuHto1y9vmMEqQX5mvrXMVYDizbu2"), 1000000);
+            outputs.insert(
+                String::from("mniwvWuHto1y9vmMEqQX5mvrXMVYDizbu2"),
+                1_000_000,
+            );
             //outputs.insert(String::from("1A1zP1eP5QGefi2DMPTfTL5SLmDonROuch"), 700000);
 
-            let fee = 500000;
+            let fee = 500_000;
 
             clone
                 .send(NodeAction::MakeTransaction((outputs, fee)))

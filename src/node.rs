@@ -10,11 +10,11 @@ use gtk::glib;
 use crate::{
     config::Config,
     error::CustomError,
-    gui::init::GUIActions,
+    gui::init::GUIEvents,
     logger::{send_log, Log, Logger},
+    loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
-    loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
 };
 pub struct Node {
     pub address: SocketAddrV6,
@@ -53,22 +53,18 @@ impl Node {
             node_action_receiver: Some(node_action_receiver),
             peers: vec![],
             npeers: config.npeers,
-            // event_loop_thread: None,
             node_state_ref,
         };
-
-        // node.connect(addresses, config.npeers);
-        // node.initialize_pending_blocks_loop();
-        // node.initialize_ibd()?;
-        // node.initialize_event_loop(node_action_receiver, gui_sender);
 
         Ok(node)
     }
 
-    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIActions>) {
+    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIEvents>) {
+        self.initialize_pending_blocks_loop();
+
         thread::spawn(move || -> Result<(), CustomError> {
             self.connect(addresses, self.npeers);
-            self.initialize_pending_blocks_loop();
+
             if let Err(error) = self.initialize_ibd() {
                 send_log(&self.logger_sender, Log::Error(error));
             }
@@ -126,7 +122,10 @@ impl Node {
     }
 
     fn initialize_ibd(&self) -> Result<(), CustomError> {
-        let node_state = self.node_state_ref.lock().map_err(|_| CustomError::CannotLockGuard)?;
+        let node_state = self
+            .node_state_ref
+            .lock()
+            .map_err(|_| CustomError::CannotLockGuard)?;
         let last_header = node_state.get_last_header_hash();
         drop(node_state);
         self.peer_action_sender
@@ -137,7 +136,7 @@ impl Node {
     fn initialize_event_loop(
         &mut self,
         // node_action_receiver: mpsc::Receiver<NodeAction>,
-        gui_sender: glib::Sender<GUIActions>,
+        gui_sender: glib::Sender<GUIEvents>,
     ) -> Result<(), CustomError> {
         if let Some(receiver) = self.node_action_receiver.take() {
             NodeActionLoop::start(

@@ -1,6 +1,4 @@
-use std::io::{Read, Write};
-
-use crate::{error::CustomError, node_state::open_new_file, parser::BufferParser, utxo::UTXO};
+use crate::{error::CustomError, parser::BufferParser, states::utxo_state::UTXO};
 
 #[derive(Clone, Debug)]
 pub struct Movement {
@@ -69,6 +67,16 @@ impl Wallet {
         privkey: String,
         utxo_set: &UTXO,
     ) -> Result<Self, CustomError> {
+        if name.is_empty() || pubkey.is_empty() || privkey.is_empty() {
+            return Err(CustomError::Validation(
+                "Name, public key and private key must not be empty".to_string(),
+            ));
+        }
+        if pubkey.len() != 34 {
+            return Err(CustomError::Validation(
+                "Public key must be 34 characters long".to_string(),
+            ));
+        }
         let mut wallet = Self {
             name,
             pubkey,
@@ -102,49 +110,25 @@ impl Wallet {
         buffer
     }
 
-    pub fn parse_wallets(buffer: Vec<u8>) -> Result<Vec<Self>, CustomError> {
-        let mut parser = BufferParser::new(buffer);
-        let mut wallets = Vec::new();
-        while !parser.is_empty() {
-            let name_len = parser.extract_u8()? as usize;
-            if name_len == 0 {
-                return Err(CustomError::Validation(String::from(
-                    "Wallet name not present",
-                )));
-            }
-            let name = parser.extract_string(name_len)?;
+    pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
+        let name_len = parser.extract_u8()? as usize;
+        let name = parser.extract_string(name_len)?;
 
-            let pubkey_len = parser.extract_u8()? as usize;
-            if pubkey_len == 0 {
-                return Err(CustomError::Validation(String::from(
-                    "Wallet pubkey not present",
-                )));
-            }
-            let pubkey = parser.extract_string(pubkey_len)?;
+        let pubkey_len = parser.extract_u8()? as usize;
+        let pubkey = parser.extract_string(pubkey_len)?;
 
-            let privkey_len = parser.extract_u8()? as usize;
-            if privkey_len == 0 {
-                return Err(CustomError::Validation(String::from(
-                    "Wallet privkey not present",
-                )));
-            }
-            let privkey = parser.extract_string(privkey_len)?;
+        let privkey_len = parser.extract_u8()? as usize;
+        let privkey = parser.extract_string(privkey_len)?;
 
-            let history_len = parser.extract_u32()? as usize;
-            let mut history = Vec::new();
-            for _ in 0..history_len {
-                history.push(Movement::parse(&mut parser)?);
-            }
-            wallets.push(Self {
-                name,
-                pubkey,
-                privkey,
-                history,
-            });
+        let history_len = parser.extract_u32()? as usize;
+        let mut history = Vec::new();
+        for _ in 0..history_len {
+            history.push(Movement::parse(parser)?);
         }
-        Ok(wallets)
-    }
 
+        Ok(Self{name, pubkey, privkey, history})
+    }
+    
     pub fn get_pubkey_hash(&self) -> Result<Vec<u8>, CustomError> {
         get_pubkey_hash(self.pubkey.clone())
     }
@@ -164,28 +148,8 @@ impl Wallet {
     pub fn get_history(&self) -> Vec<Movement> {
         self.history.clone()
     }
-
-    pub fn save_wallets(wallets: &mut [Self]) -> Result<(), CustomError> {
-        let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
-        let mut wallets_buffer = vec![];
-        for wallet in wallets.iter() {
-            wallets_buffer.append(&mut wallet.serialize());
-        }
-        wallets_file.write_all(&wallets_buffer)?;
-        Ok(())
-    }
-
-    pub fn restore_wallets() -> Result<Vec<Self>, CustomError> {
-        let mut wallets_file = open_new_file(String::from("store/wallets.bin"), false)?;
-        let mut saved_wallets_buffer = vec![];
-        wallets_file.read_to_end(&mut saved_wallets_buffer)?;
-        let wallets = match Self::parse_wallets(saved_wallets_buffer) {
-            Ok(wallets) => wallets,
-            Err(_) => vec![],
-        };
-        Ok(wallets)
-    }
 }
+
 
 pub fn get_pubkey_hash(pubkey: String) -> Result<Vec<u8>, CustomError> {
     let decoded_pubkey = bs58::decode(pubkey)
@@ -230,33 +194,83 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wallet_serialization() {
+    fn wallet_creation() {
+        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test"),
-            String::from("pubkey"),
+            String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
             String::from("privkey"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+            &utxo_set,
         )
         .unwrap();
-        let serialized_wallet = wallet.serialize();
-        let parsed_wallet = Wallet::parse_wallets(serialized_wallet).unwrap();
-        assert_eq!(parsed_wallet[0].name, String::from("test"));
-        assert_eq!(parsed_wallet[0].pubkey, String::from("pubkey"));
-        assert_eq!(parsed_wallet[0].privkey, String::from("privkey"));
+        assert_eq!(wallet.name, String::from("test"));
+        assert_eq!(wallet.pubkey, String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"));
+        assert_eq!(wallet.privkey, String::from("privkey"));
+        assert_eq!(wallet.history.len(), 0);
     }
 
     #[test]
-    fn parse_invalid_wallet() {
+    fn wallet_creation_with_invalid_pubkey() {
+        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from("invalid_pubkey"),
+            String::from("privkey"),
+            &utxo_set,
+        );
+        assert_eq!(wallet.is_err(), true);
+    }
+
+    #[test]
+    fn wallet_creation_with_no_name() {
+        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let wallet = Wallet::new(
+            String::from(""),
+            String::from("pubkey"),
+            String::from("privkey"),
+            &utxo_set,
+        );
+        assert_eq!(wallet.is_err(), true);
+    }
+
+    #[test]
+    fn wallet_creation_with_no_pubkey() {
+        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let wallet = Wallet::new(
+            String::from("test"),
+            String::from(""),
+            String::from("privkey"),
+            &utxo_set,
+        );
+        assert_eq!(wallet.is_err(), true);
+    }
+
+    #[test]
+    fn wallet_creation_with_no_privkey() {
+        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test"),
             String::from("pubkey"),
             String::from(""),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
+            &utxo_set,
+        );
+        assert_eq!(wallet.is_err(), true);
+    }
+
+    #[test]
+    fn wallet_serialization() {
+        let wallet = Wallet{
+            name: String::from("test"),
+            pubkey: String::from("pubkey"),
+            privkey: String::from("privkey"),
+            history: vec![],
+        };
         let serialized_wallet = wallet.serialize();
-        let parsed_wallet = Wallet::parse_wallets(serialized_wallet);
-        assert!(parsed_wallet.is_err());
+        let mut parser = BufferParser::new(serialized_wallet);
+        let parsed_wallet = Wallet::parse(&mut parser).unwrap();
+        assert_eq!(parsed_wallet.name, String::from("test"));
+        assert_eq!(parsed_wallet.pubkey, String::from("pubkey"));
+        assert_eq!(parsed_wallet.privkey, String::from("privkey"));
     }
 
     #[test]
@@ -294,13 +308,12 @@ mod tests {
 
     #[test]
     fn wallet_history_serialization() {
-        let mut wallet = Wallet::new(
-            String::from("test"),
-            String::from("pubkey"),
-            String::from("privkey"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
+        let mut wallet = Wallet{
+            name: String::from("test"),
+            pubkey: String::from("pubkey"),
+            privkey: String::from("privkey"),
+            history: vec![],
+        };
         wallet.update_history(Movement {
             tx_hash: vec![
                 158, 58, 146, 241, 218, 207, 194, 196, 103, 192, 89, 27, 56, 110, 195, 138, 29,
@@ -313,9 +326,10 @@ mod tests {
             ]),
         });
         let serialized_wallet = wallet.serialize();
-        let parsed_wallet = Wallet::parse_wallets(serialized_wallet).unwrap();
+        let mut parser = BufferParser::new(serialized_wallet);
+        let parsed_wallet = Wallet::parse(&mut parser).unwrap();
         assert_eq!(
-            parsed_wallet[0].history[0].block_hash,
+            parsed_wallet.history[0].block_hash,
             Some(vec![
                 167, 131, 118, 190, 70, 199, 31, 2, 255, 135, 123, 36, 232, 182, 60, 178, 98, 181,
                 242, 112, 111, 183, 22, 128, 11, 0, 0, 0, 0, 0, 0, 0
@@ -325,13 +339,12 @@ mod tests {
 
     #[test]
     fn wallet_pubkey_hash() {
-        let wallet = Wallet::new(
-            String::from("test"),
-            String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
-            String::from("privkey"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
+        let wallet = Wallet{
+            name: String::from("test"),
+            pubkey: String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
+            privkey: String::from("privkey"),
+            history: vec![],
+        };
         let pubkey_hash = wallet.get_pubkey_hash().unwrap();
         assert_eq!(
             pubkey_hash,
@@ -343,27 +356,13 @@ mod tests {
     }
 
     #[test]
-    fn wallet_incorrect_pubkey_hash() {
-        let wallet = Wallet::new(
-            String::from("test"),
-            String::from("test"),
-            String::from("privkey"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
-        let pubkey_hash = wallet.get_pubkey_hash();
-        assert!(pubkey_hash.is_err());
-    }
-
-    #[test]
     fn wallet_script_pubkey() {
-        let wallet = Wallet::new(
-            String::from("test"),
-            String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
-            String::from("privkey"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
+        let wallet = Wallet{
+            name: String::from("test"),
+            pubkey: String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
+            privkey: String::from("privkey"),
+            history: vec![],
+        };
         let script_pubkey = wallet.get_script_pubkey().unwrap();
         assert_eq!(
             script_pubkey,
@@ -376,13 +375,12 @@ mod tests {
 
     #[test]
     fn wallet_privkey_hash() {
-        let wallet = Wallet::new(
-            String::from("test"),
-            String::from("pubkey"),
-            String::from("cNpwEsaVLhju18SJowLtdCNaJtvMvqL4jtFLm2FXw7vZjg4sRWvH"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
+        let wallet = Wallet{
+            name: String::from("test"),
+            pubkey: String::from("pubkey"),
+            privkey: String::from("cNpwEsaVLhju18SJowLtdCNaJtvMvqL4jtFLm2FXw7vZjg4sRWvH"),
+            history: vec![],
+        };
         let privkey_hash = wallet.get_privkey_hash().unwrap();
         assert_eq!(
             privkey_hash,
@@ -395,13 +393,12 @@ mod tests {
 
     #[test]
     fn wallet_incorrect_privkey_hash() {
-        let wallet = Wallet::new(
-            String::from("test"),
-            String::from("pubkey"),
-            String::from("test"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
-        )
-        .unwrap();
+        let wallet = Wallet{
+            name: String::from("test"),
+            pubkey: String::from("pubkey"),
+            privkey: String::from("test"),
+            history: vec![],
+        };
         let privkey_hash = wallet.get_privkey_hash();
         assert!(privkey_hash.is_err());
     }

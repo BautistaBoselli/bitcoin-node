@@ -7,7 +7,7 @@ use gtk::glib;
 
 use crate::{
     error::CustomError,
-    gui::init::GUIActions,
+    gui::init::GUIEvents,
     logger::{send_log, Log},
     messages::{
         block::Block,
@@ -25,7 +25,7 @@ pub struct NodeActionLoop {
     pub node_action_receiver: mpsc::Receiver<NodeAction>,
     pub peer_action_sender: mpsc::Sender<PeerAction>,
     pub logger_sender: mpsc::Sender<Log>,
-    pub gui_sender: glib::Sender<GUIActions>,
+    pub gui_sender: glib::Sender<GUIEvents>,
     pub node_state_ref: Arc<Mutex<NodeState>>,
 }
 
@@ -34,7 +34,7 @@ impl NodeActionLoop {
         node_action_receiver: mpsc::Receiver<NodeAction>,
         peer_action_sender: mpsc::Sender<PeerAction>,
         logger_sender: mpsc::Sender<Log>,
-        gui_sender: glib::Sender<GUIActions>,
+        gui_sender: glib::Sender<GUIEvents>,
         node_state_ref: Arc<Mutex<NodeState>>,
     ) {
         let mut node_thread = Self {
@@ -44,7 +44,7 @@ impl NodeActionLoop {
             gui_sender,
             node_state_ref,
         };
-        node_thread.event_loop()
+        node_thread.event_loop();
     }
 
     pub fn event_loop(&mut self) {
@@ -65,7 +65,7 @@ impl NodeActionLoop {
             if let Err(error) = response {
                 send_log(
                     &self.logger_sender,
-                    Log::Message(format!("Error on NodeActionLoop: {}", error)),
+                    Log::Message(format!("Error on NodeActionLoop: {error}")),
                 );
             }
         }
@@ -81,7 +81,13 @@ impl NodeActionLoop {
             .lock()
             .map_err(|_| CustomError::CannotLockGuard)?;
 
-        let transaction = node_state.make_transaction(outputs, fee)?;
+        let transaction = match node_state.make_transaction(outputs, fee) {
+            Ok(transaction) => transaction,
+            Err(error) => {
+                send_log(&self.logger_sender, Log::Error(error));
+                return Ok(());
+            }
+        };
 
         self.peer_action_sender
             .send(PeerAction::SendTransaction(transaction))?;

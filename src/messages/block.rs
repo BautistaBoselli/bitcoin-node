@@ -5,16 +5,13 @@ use std::{
 
 use bitcoin_hashes::{sha256, Hash};
 
-use super::{
-    headers::{hash_as_string, BlockHeader},
-    transaction::Transaction,
-};
+use super::{headers::BlockHeader, transaction::Transaction};
 
 use crate::{
     error::CustomError,
     message::Message,
-    node_state::open_new_file,
     parser::{BufferParser, VarIntSerialize},
+    utils::open_new_file,
 };
 
 #[derive(Debug)]
@@ -31,16 +28,15 @@ impl Block {
         }
     }
 
-    pub fn restore(header_hash: String) -> Result<Self, CustomError> {
-        let mut block_file = open_new_file(format!("store/blocks/{}.bin", header_hash), true)?;
+    pub fn restore(path: String) -> Result<Self, CustomError> {
+        let mut block_file = open_new_file(path, true)?;
         let mut block_buffer = Vec::new();
         block_file.read_to_end(&mut block_buffer)?;
         Self::parse(block_buffer)
     }
 
-    pub fn save(&self) -> Result<(), CustomError> {
-        let filename = hash_as_string(self.header.hash());
-        let mut block_file = open_new_file(format!("store/blocks/{}.bin", filename), true)?;
+    pub fn save(&self, path: String) -> Result<(), CustomError> {
+        let mut block_file = open_new_file(path, true)?;
         block_file.write_all(&self.serialize())?;
         Ok(())
     }
@@ -177,7 +173,7 @@ impl Message for Block {
 mod tests {
     use std::io::Read;
 
-    use crate::node_state::open_new_file;
+    use crate::utils::open_new_file;
 
     use super::*;
 
@@ -238,8 +234,8 @@ mod tests {
 
         assert_eq!(hashes.len(), 6);
         assert_eq!(merging, block.header.merkle_root);
-    }       
-        
+    }
+
     #[test]
     fn get_command_block_test() {
         let buffer = vec![

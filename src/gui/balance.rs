@@ -11,7 +11,7 @@ use crate::{
     node_state::NodeState,
 };
 
-use super::init::{get_gui_element, GUIActions};
+use super::init::{get_gui_element, GUIEvents};
 
 #[derive(Clone)]
 pub struct GUIBalance {
@@ -23,11 +23,11 @@ pub struct GUIBalance {
 }
 
 impl GUIBalance {
-    pub fn handle_events(&mut self, message: &GUIActions) {
+    pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
-            GUIActions::WalletChanged => self.handle_wallet_changed(),
-            GUIActions::NewPendingTx => self.handle_new_pending_tx(),
-            GUIActions::NewBlock => self.handle_new_block(),
+            GUIEvents::WalletChanged => self.handle_wallet_changed(),
+            GUIEvents::NewPendingTx => self.handle_new_pending_tx(),
+            GUIEvents::WalletsUpdated => self.handle_wallet_updated(),
             _ => Ok(()),
         };
 
@@ -41,7 +41,7 @@ impl GUIBalance {
         self.update_pending_txs()
     }
 
-    fn handle_new_block(&mut self) -> Result<(), CustomError> {
+    fn handle_wallet_updated(&mut self) -> Result<(), CustomError> {
         self.update_available_balance()?;
         self.update_pending_txs()
     }
@@ -55,7 +55,7 @@ impl GUIBalance {
 
         match node_state.get_active_wallet_balance() {
             Ok(balance) => {
-                self.available_balance = (balance as f64) / 100000000.0;
+                self.available_balance = (balance as f64) / 100_000_000.0;
             }
             Err(error) => {
                 send_log(&self.logger_sender, Log::Error(error));
@@ -80,7 +80,7 @@ impl GUIBalance {
         for tx_output in pending_transactions.values() {
             let pending_tx_row = gtk::ListBoxRow::new();
             pending_tx_row.add(&gtk::Label::new(Some(tx_output.value.to_string().as_str())));
-            self.pending_balance = (tx_output.value as f64) / 100000000.0;
+            self.pending_balance = (tx_output.value as f64) / 100_000_000.0;
             pending_tx_row.show_all();
             pending_tx_list_box.add(&pending_tx_row);
         }

@@ -8,13 +8,13 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
+    loops::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
     message::{Message, MessageHeader},
     messages::{
         block::Block, get_headers::GetHeaders, headers::Headers, inv::Inventory,
         send_headers::SendHeaders, transaction::Transaction, ver_ack::VerAck, version::Version,
     },
-    network::{get_address_v6, open_stream},
-    loops::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
+    utils::{get_address_v6, open_stream},
 };
 
 pub const GENESIS: [u8; 32] = [

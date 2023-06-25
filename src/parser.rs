@@ -8,6 +8,7 @@ pub struct BufferParser {
 }
 
 impl BufferParser {
+    #[must_use]
     pub fn new(buffer: Vec<u8>) -> Self {
         Self { buffer, pos: 0 }
     }
