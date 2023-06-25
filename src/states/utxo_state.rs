@@ -14,9 +14,9 @@ use std::{
     collections::HashMap,
     fs::remove_file,
     io::{Read, Write},
+    path::Path,
     sync::mpsc::Sender,
     vec,
-    path::Path
 };
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -234,7 +234,7 @@ fn calculate_starting_index(headers: &Vec<BlockHeader>, last_timestamp: u32) -> 
 #[cfg(test)]
 mod tests {
 
-    use std::{fs, time::Duration, thread};
+    use std::fs;
 
     use chrono::Local;
     use gtk::glib::{self, Priority};
@@ -413,12 +413,12 @@ mod tests {
         let logger_sender = logger.get_sender();
 
         let path = format!("tests/test_block.bin");
-        
+
         let block = Block::restore(path).unwrap();
-        
+
         println!("hash: {}", block.header.hash_as_string());
         let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
-        
+
         let headers = vec![block.header.clone()];
         utxo_set
             .generate(&headers, &mut logger_sender.clone())
