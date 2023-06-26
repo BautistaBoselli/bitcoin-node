@@ -34,7 +34,7 @@ impl HeadersState {
 
     fn restore(&mut self) -> Result<(), CustomError> {
         let mut buffer = vec![];
-        let mut file = open_new_file(self.path.clone(), false)?;
+        let mut file = open_new_file(self.path.clone(), true)?;
         file.read_to_end(&mut buffer)?;
 
         let mut parser = BufferParser::new(buffer);

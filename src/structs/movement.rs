@@ -3,7 +3,7 @@ use crate::{error::CustomError, parser::BufferParser};
 #[derive(Clone, Debug)]
 pub struct Movement {
     pub tx_hash: Vec<u8>,
-    pub value: u64,
+    pub value: i64,
     pub block_hash: Option<Vec<u8>>,
 }
 
@@ -29,7 +29,7 @@ impl Movement {
     pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let tx_hash_len = parser.extract_u8()? as usize;
         let tx_hash = parser.extract_buffer(tx_hash_len)?.to_vec();
-        let value = parser.extract_u64()?;
+        let value = parser.extract_i64()?;
         let block_hash_present = parser.extract_u8()?;
         let block_hash = match block_hash_present {
             0 => None,

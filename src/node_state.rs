@@ -14,7 +14,7 @@ use crate::{
         headers_state::HeadersState, pending_blocks_state::PendingBlocks,
         pending_txs_state::PendingTxs, utxo_state::UTXO, wallets_state::Wallets,
     },
-    structs::{outpoint::OutPoint, tx_output::TransactionOutput},
+    structs::{movement::Movement, outpoint::OutPoint, tx_output::TransactionOutput},
     wallet::Wallet,
 };
 
@@ -58,12 +58,12 @@ impl NodeState {
 
         self.verify_sync()?;
 
+        self.update_wallets(&block)?;
+        self.update_pending_tx(&block)?;
+
         if self.is_synced() {
             self.utxo.update_from_block(&block, true)?;
         }
-
-        self.update_pending_tx(&block)?;
-        self.update_wallets(&block)?;
 
         Ok(())
     }
@@ -182,12 +182,10 @@ impl NodeState {
         self.pending_txs.update_pending_tx(block)
     }
 
-    pub fn get_active_wallet_pending_txs(
-        &self,
-    ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
+    pub fn get_active_wallet_pending_txs(&self) -> Result<Vec<Movement>, CustomError> {
         let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
 
-        self.pending_txs.from_wallet(active_wallet)
+        self.pending_txs.from_wallet(active_wallet, &self.utxo)
     }
 
     pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<(), CustomError> {

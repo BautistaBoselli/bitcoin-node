@@ -92,6 +92,7 @@ impl Wallets {
 
     pub fn update(&mut self, block: &Block, utxo: &UTXO) -> Result<bool, CustomError> {
         let mut wallets_updated = false;
+
         for tx in &block.transactions {
             for wallet in &mut self.wallets {
                 let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo)?;

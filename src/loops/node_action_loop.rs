@@ -3,11 +3,8 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use gtk::glib;
-
 use crate::{
     error::CustomError,
-    gui::init::GUIEvents,
     logger::{send_log, Log},
     messages::{block::Block, headers::Headers, transaction::Transaction},
     node_state::NodeState,
@@ -21,11 +18,11 @@ use crate::{
 const START_DATE_IBD: u32 = 1681095630;
 
 pub struct NodeActionLoop {
-    pub node_action_receiver: mpsc::Receiver<NodeAction>,
-    pub peer_action_sender: mpsc::Sender<PeerAction>,
-    pub logger_sender: mpsc::Sender<Log>,
-    pub gui_sender: glib::Sender<GUIEvents>,
-    pub node_state_ref: Arc<Mutex<NodeState>>,
+    node_action_receiver: mpsc::Receiver<NodeAction>,
+    peer_action_sender: mpsc::Sender<PeerAction>,
+    logger_sender: mpsc::Sender<Log>,
+    node_state_ref: Arc<Mutex<NodeState>>,
+    npeers: u8,
 }
 
 impl NodeActionLoop {
@@ -33,15 +30,15 @@ impl NodeActionLoop {
         node_action_receiver: mpsc::Receiver<NodeAction>,
         peer_action_sender: mpsc::Sender<PeerAction>,
         logger_sender: mpsc::Sender<Log>,
-        gui_sender: glib::Sender<GUIEvents>,
         node_state_ref: Arc<Mutex<NodeState>>,
+        npeers: u8,
     ) {
         let mut node_thread = Self {
             node_action_receiver,
             peer_action_sender,
             logger_sender,
-            gui_sender,
             node_state_ref,
+            npeers,
         };
         node_thread.event_loop();
     }
@@ -88,8 +85,10 @@ impl NodeActionLoop {
             }
         };
 
-        self.peer_action_sender
-            .send(PeerAction::SendTransaction(transaction))?;
+        for _i in 0..self.npeers {
+            self.peer_action_sender
+                .send(PeerAction::SendTransaction(transaction.clone()))?;
+        }
 
         drop(node_state);
 
@@ -175,6 +174,16 @@ impl NodeActionLoop {
 
     fn handle_pending_transaction(&mut self, transaction: Transaction) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        if !node_state.is_synced() {
+            drop(node_state);
+            return Ok(());
+        }
+
+        // println!(
+        //     "New pending transaction received: {:?}",
+        //     transaction.clone().hash()
+        // );
+
         send_log(
             &self.logger_sender,
             Log::Message("New pending transaction received".to_string()),
