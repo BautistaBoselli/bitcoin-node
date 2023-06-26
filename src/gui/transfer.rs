@@ -17,6 +17,12 @@ use super::init::{get_gui_element, GUIEvents};
 const TRANSFER_OUTPUTS: u8 = 3;
 
 #[derive(Clone)]
+/// GUITransfer es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con el envio de transacciones. Permite enviar transacciones a una o mas direcciones ingresando para cada una la pubkey y el monto, ademas del fee.
+/// Los elementos son:
+/// - builder: Builder de gtk.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
 pub struct GUITransfer {
     pub logger_sender: Sender<Log>,
     pub builder: gtk::Builder,
@@ -24,11 +30,13 @@ pub struct GUITransfer {
 }
 
 impl GUITransfer {
+    /// Maneja los GUIEvents recibidos y hace las acciones acorde a cada envento.
+    /// Para WalletChanged: Resetea los campos de la transaccion.
+    /// Para TransactionSent: Muestra un dialogo de transaccion enviada y resetea los campos.
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::WalletChanged => self.reset_tx_fields(),
             GUIEvents::TransactionSent => self.handle_sent_transaction(),
-            // GUIActions:: => self.update_txs(),
             _ => Ok(()),
         };
 
@@ -36,6 +44,8 @@ impl GUITransfer {
             send_log(&self.logger_sender, Log::Error(error));
         }
     }
+    /// Establece los callbacks de los elementos de la interfaz grafica.
+    /// Para el boton de enviar transaccion: Envia la transaccion al nodo (o abre una ventana de error en caso de estar mal ingresada) con los valores leidos de la interfaz.
     pub fn handle_interactivity(
         &self,
         node_action_sender: &Sender<NodeAction>,

@@ -17,6 +17,12 @@ use super::{
 };
 
 #[derive(Clone)]
+/// GUIHistory es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con el historial de movimientos de una wallet y los lista (tx hash, enviado o recibido, valor y pedir el merkle proof de esa tx).
+/// Los elementos son:
+/// - builder: Builder de gtk.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
 pub struct GUIHistory {
     pub logger_sender: Sender<Log>,
     pub builder: gtk::Builder,
@@ -24,6 +30,9 @@ pub struct GUIHistory {
 }
 
 impl GUIHistory {
+    /// Maneja los GUIEvents recibidos y hace las acciones acorde a cada envento.
+    /// Para WalletChanged: Actualiza la lista de movimientos.
+    /// Para WalletsUpdated: Actualiza la lista de movimientos.
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::WalletChanged => self.update_txs(),

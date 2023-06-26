@@ -19,6 +19,12 @@ use super::{
 };
 
 #[derive(Clone)]
+/// GUIUtxo es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con los UTXO de una wallet y los lista (tx hash, fecha de creacion, valor y pedir el merkle proof de esa tx).
+/// Los elementos son:
+/// - builder: Builder de gtk.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
 pub struct GUIUtxo {
     pub logger_sender: Sender<Log>,
     pub builder: gtk::Builder,
@@ -26,6 +32,9 @@ pub struct GUIUtxo {
 }
 
 impl GUIUtxo {
+    /// Maneja los GUIEvents recibidos y hace las acciones acorde a cada envento.
+    /// Para WalletChanged: Actualiza la lista de UTXO.
+    /// Para WalletsUpdated: Actualiza la lista de UTXO.
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::WalletChanged => self.update_utxo(),

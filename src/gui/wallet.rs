@@ -11,6 +11,8 @@ use crate::{
 use super::init::get_gui_element;
 
 #[derive(Clone)]
+/// GUIWallet es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con la billetera. Permite agregar y cambiar de wallet y muestra la wallet activa.
 pub struct GUIWallet {
     pub builder: gtk::Builder,
     pub node_state_ref: Arc<Mutex<NodeState>>,
@@ -18,6 +20,7 @@ pub struct GUIWallet {
 }
 
 impl GUIWallet {
+    /// Inicializa la los datos del combobox para seleccionar wallet.
     pub fn initialize(&self) -> Result<(), CustomError> {
         let select_wallet_cb: gtk::ComboBoxText =
             get_gui_element(&self.builder, "select-wallet-combo-box")?;
@@ -27,6 +30,13 @@ impl GUIWallet {
         Ok(())
     }
 
+    /// Agrega los callbacks a los elementos de la interfaz grafica.
+    /// Los callbacks son:
+    /// - handle_add_wallet_trigger: Muestra el dialogo para agregar una wallet.
+    /// - handle_add_wallet_submit: Agrega la wallet ingresada a la lista de wallets.
+    /// - cancel_add_wallet: Cancela el agregado de una wallet.
+    /// - handle_change_wallet: Cambia la wallet activa.
+    ///
     pub fn handle_interactivity(&self) -> Result<(), CustomError> {
         self.handle_add_wallet_trigger()?;
         self.handle_add_wallet_submit()?;
@@ -77,10 +87,15 @@ impl GUIWallet {
         let logger_sender = self.logger_sender.clone();
 
         action.connect_clicked(move |_| {
-            let mut node_state = match node_state_ref.lock().map_err(|_| CustomError::CannotLockGuard){
+            let mut node_state = match node_state_ref
+                .lock()
+                .map_err(|_| CustomError::CannotLockGuard)
+            {
                 Ok(node_state) => node_state,
-                Err(error) => {send_log(&logger_sender, Log::Error(error));
-                 return}
+                Err(error) => {
+                    send_log(&logger_sender, Log::Error(error));
+                    return;
+                }
             };
             if let Err(error) = node_state.append_wallet(
                 name.text().to_string(),
