@@ -14,16 +14,28 @@ use crate::error::CustomError;
 use crate::gui::init::GUIEvents;
 
 #[derive(Debug, Clone)]
+/// Log es el tipo de dato que se envia al logger.
+/// Puede ser un Message o un Error.
+/// Los Message reciben un String y esos seran los logs que se guarden en el archivo, impriman en consola y se muestren en la interfaz.
+/// Los Error reciben un CustomError y haran los mismo que los Message, y ademas muestran una ventana popup con el error.
 pub enum Log {
     Message(String),
     Error(CustomError),
 }
 
+/// Logger es una estructura que contiene los elementos necesarios para manejar los logs.
+/// Los elementos son:
+/// - tx: Sender para enviar logs al logger.
 pub struct Logger {
     tx: Sender<Log>,
 }
 
 impl Logger {
+    /// Inicializa el logger.
+    /// Si el archivo donde se guardan los logs existe, lo borra.
+    /// Crea el archivo de logs en la ubicacion recibida
+    /// Inicializa el thread que escucha los Logs recibidos por un channel que crea.
+    /// Los logs se manejan como se comenta en el enum Log.
     pub fn new(
         filename: &String,
         gui_sender: glib::Sender<GUIEvents>,
@@ -68,11 +80,15 @@ impl Logger {
 
         Ok(Self { tx })
     }
+
+    /// Devuelve el sender para enviar logs al logger.
     pub fn get_sender(&self) -> Sender<Log> {
         self.tx.clone()
     }
 }
 
+/// Funcion auxiliar para enviar logs al logger.
+/// Si no se puede enviar el log, se imprime el error y se imprime el mensaje original.
 pub fn send_log(logger_sender: &Sender<Log>, message: Log) {
     if let Err(error) = logger_sender.send(message.clone()) {
         println!("Error sending log message: {}", error);

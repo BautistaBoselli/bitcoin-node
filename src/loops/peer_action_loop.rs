@@ -63,9 +63,6 @@ impl PeerActionLoop {
                 PeerAction::SendTransaction(transaction) => {
                     self.handle_send_transaction(&transaction)
                 }
-                PeerAction::Terminate => {
-                    break;
-                }
             };
 
             if let Err(error) = response {
@@ -75,7 +72,6 @@ impl PeerActionLoop {
                 );
             }
         }
-        Ok(())
     }
 
     fn handle_send_transaction(&mut self, transaction: &Transaction) -> Result<(), CustomError> {

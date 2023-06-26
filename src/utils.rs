@@ -7,17 +7,23 @@ use std::{
 
 use crate::error::CustomError;
 
+/// get_addresses resuelve la direccion del seed y devuelve un iterador de direcciones.
 pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, CustomError> {
     (seed, port)
         .to_socket_addrs()
         .map_err(|_| CustomError::CannotResolveSeedAddress)
 }
 
+/// open_stream abre un stream a la direccion recibida.
+/// Devuelve un error si no se puede conectar.
 pub fn open_stream(address: SocketAddr) -> Result<TcpStream, CustomError> {
     TcpStream::connect_timeout(&address, Duration::from_millis(500))
         .map_err(|_| CustomError::CannotConnectToNode)
 }
 
+/// get_address_v6 devuelve una direccion ipv6 desde un address.
+/// Si el address es ipv4, lo mapea a ipv6.
+/// Si el address es ipv6, devuelve el mismo address.
 pub fn get_address_v6(address: SocketAddr) -> SocketAddrV6 {
     let ip_v6 = match address {
         SocketAddr::V4(addr) => addr.ip().to_ipv6_mapped(),
@@ -26,6 +32,11 @@ pub fn get_address_v6(address: SocketAddr) -> SocketAddrV6 {
     SocketAddrV6::new(ip_v6, address.port(), 0, 0)
 }
 
+/// open_new_file abre un archivo en la ubicacion recibida.
+/// Si el archivo no existe, lo crea.
+/// Si el archivo existe, lo abre.
+/// Si append es true, escribe al final del archivo.
+/// Si append es false, sobreescribe el archivo.
 pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File, CustomError> {
     let file = OpenOptions::new()
         .read(true)
@@ -36,6 +47,7 @@ pub fn open_new_file(path_to_file: String, append: bool) -> Result<std::fs::File
     Ok(file)
 }
 
+/// get_current_timestamp devuelve el timestamp actual.
 pub fn get_current_timestamp() -> Result<u64, CustomError> {
     Ok(SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?

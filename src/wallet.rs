@@ -3,6 +3,12 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
+/// Wallet es una estructura que contiene los elementos necesarios para manejar las wallets.
+/// Los elementos son:
+/// - name: Nombre de la wallet.
+/// - pubkey: Public key de la wallet.
+/// - privkey: Private key de la wallet.
+/// - history: Historial de Movements de la wallet.
 pub struct Wallet {
     pub name: String,
     pub pubkey: String,
@@ -11,6 +17,8 @@ pub struct Wallet {
 }
 
 impl Wallet {
+    /// Inicializa la wallet.
+    /// Genera un historial a partir del utxo
     pub fn new(
         name: String,
         pubkey: String,
@@ -45,6 +53,7 @@ impl Wallet {
         Ok(wallet)
     }
 
+    /// Serializa la wallet.
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
         buffer.push(self.name.len() as u8);
@@ -60,6 +69,7 @@ impl Wallet {
         buffer
     }
 
+    /// Deserializa la wallet.
     pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let name_len = parser.extract_u8()? as usize;
         let name = parser.extract_string(name_len)?;
@@ -84,27 +94,33 @@ impl Wallet {
         })
     }
 
+    /// Devuelve el hash de la public key de la wallet.
     pub fn get_pubkey_hash(&self) -> Result<Vec<u8>, CustomError> {
         get_pubkey_hash(self.pubkey.clone())
     }
 
+    /// Devuelve el hash de la private key de la wallet.
     pub fn get_privkey_hash(&self) -> Result<Vec<u8>, CustomError> {
         get_privkey_hash(self.privkey.clone())
     }
 
+    /// Devuelve el script pubkey de la wallet.
     pub fn get_script_pubkey(&self) -> Result<Vec<u8>, CustomError> {
         get_script_pubkey(self.pubkey.clone())
     }
 
+    /// Actualiza el historial de la wallet.
     pub fn update_history(&mut self, movement: Movement) {
         self.history.push(movement);
     }
 
+    /// Devuelve el historial de la wallet.
     pub fn get_history(&self) -> Vec<Movement> {
         self.history.clone()
     }
 }
 
+/// Devuelve el hash de una public key.
 pub fn get_pubkey_hash(pubkey: String) -> Result<Vec<u8>, CustomError> {
     let decoded_pubkey = bs58::decode(pubkey)
         .into_vec()
@@ -118,6 +134,7 @@ pub fn get_pubkey_hash(pubkey: String) -> Result<Vec<u8>, CustomError> {
     }
 }
 
+/// Devuelve el hash de una private key.
 pub fn get_privkey_hash(privkey: String) -> Result<Vec<u8>, CustomError> {
     let decoded_privkey = bs58::decode(privkey)
         .into_vec()
@@ -131,6 +148,7 @@ pub fn get_privkey_hash(privkey: String) -> Result<Vec<u8>, CustomError> {
     }
 }
 
+/// Devuelve el script pubkey de una public key.
 pub fn get_script_pubkey(pubkey: String) -> Result<Vec<u8>, CustomError> {
     let mut script_pubkey = Vec::new();
     script_pubkey.push(0x76);

@@ -16,6 +16,20 @@ use crate::{
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
 };
+
+/// Node es la estructura que representa nuestro nodo.
+/// Los elementos son:
+/// - address: Direccion del nodo.
+/// - services: Servicios del nodo.
+/// - version: Version del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
+/// - peer_action_sender: Sender para enviar acciones al los peers.
+/// - peer_action_receiver: Receiver para recibir acciones del peer.
+/// - node_action_sender: Sender para enviar acciones al nodo.
+/// - node_action_receiver: Receiver para recibir acciones del nodo.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - peers: Vector de peers.
+/// - npeers: Cantidad de peers.
 pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
@@ -31,6 +45,8 @@ pub struct Node {
 }
 
 impl Node {
+    /// Inicializa el nodo.
+    /// Crea los channels necesarios para la comunicacion con los peers y el logger.
     pub fn new(
         config: &Config,
         logger: &Logger,
@@ -58,6 +74,10 @@ impl Node {
         Ok(node)
     }
 
+    /// Inicializa el nodo en un thread.
+    /// Comienza el thread de pending_blocks_loop.
+    /// Comienza la descarga de headers.
+    /// Comienza el thread de node_action_loop.
     pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIEvents>) {
         self.initialize_pending_blocks_loop();
 
@@ -74,7 +94,7 @@ impl Node {
         });
     }
 
-    pub fn connect(&mut self, addresses: IntoIter<SocketAddr>, mut number_of_peers: u8) {
+    fn connect(&mut self, addresses: IntoIter<SocketAddr>, mut number_of_peers: u8) {
         send_log(
             &self.logger_sender,
             Log::Message(format!(
@@ -148,11 +168,6 @@ impl Node {
             return Ok(());
         }
         Err(CustomError::CannotStartEventLoop)
-    }
-
-    pub fn execute(&self, peer_message: PeerAction) -> Result<(), CustomError> {
-        self.peer_action_sender.send(peer_message)?;
-        Ok(())
     }
 }
 
