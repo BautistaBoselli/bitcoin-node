@@ -49,7 +49,7 @@ impl GUITransfer {
         send_button.connect_clicked(move |_| {
             let mut outputs = HashMap::new();
             for i in 0..TRANSFER_OUTPUTS {
-                match get_output(&builder, i, logger_sender.clone()) {
+                match get_output(&builder, i) {
                     Ok(Some((pubkey, value))) => outputs.insert(pubkey, value),
                     Ok(None) => continue,
                     Err(error) => {
@@ -67,26 +67,24 @@ impl GUITransfer {
                 }
             };
 
-            match fee_entry
-                .text()
-                .to_string()
-                .parse::<u64>()
-                .map_err(|_| CustomError::InvalidFee)
-            {
+            match fee_entry.text().to_string().parse::<u64>() {
                 Ok(fee) => {
                     if fee == 0 {
                         send_log(&logger_sender, Log::Error(CustomError::InvalidFee));
                         return;
                     }
-                    if let Err(error) = node_action_sender_clone
+                    if node_action_sender_clone
                         .send(NodeAction::MakeTransaction((outputs, fee)))
-                        .map_err(|_| CustomError::CannotSendMessageToChannel)
+                        .is_err()
                     {
-                        send_log(&logger_sender, Log::Error(error));
+                        send_log(
+                            &logger_sender,
+                            Log::Error(CustomError::CannotSendMessageToChannel),
+                        );
                     };
                 }
-                Err(error) => {
-                    send_log(&logger_sender, Log::Error(error));
+                Err(_) => {
+                    send_log(&logger_sender, Log::Error(CustomError::InvalidFee));
                 }
             };
         });
@@ -117,9 +115,7 @@ impl GUITransfer {
         for i in 0..TRANSFER_OUTPUTS {
             let label: gtk::Label =
                 get_gui_element(&self.builder, &format!("tx-information-label{}", i))?;
-            if let Ok(Some((pubkey, value))) =
-                get_output(&self.builder, i, self.logger_sender.clone())
-            {
+            if let Ok(Some((pubkey, value))) = get_output(&self.builder, i) {
                 label.set_text(&format!("Transaction of {} sent to: {}", value, pubkey));
             };
         }
@@ -131,11 +127,7 @@ impl GUITransfer {
     }
 }
 
-fn get_output(
-    builder: &gtk::Builder,
-    i: u8,
-    logger_sender: Sender<Log>,
-) -> Result<Option<(String, u64)>, CustomError> {
+fn get_output(builder: &gtk::Builder, i: u8) -> Result<Option<(String, u64)>, CustomError> {
     let pubkey: gtk::Entry = get_gui_element(builder, &format!("output-{}-pubkey", i))?;
     let value: gtk::Entry = get_gui_element(builder, &format!("output-{}-value", i))?;
 
@@ -143,9 +135,7 @@ fn get_output(
         return Ok(None);
     }
     if pubkey.text().to_string().len() != 34 || value.text().to_string().is_empty() {
-        let message = Log::Error(CustomError::InvalidTransferFields);
-        send_log(&logger_sender, message);
-        return Ok(None);
+        return Err(CustomError::InvalidTransferFields);
     }
 
     let value = value

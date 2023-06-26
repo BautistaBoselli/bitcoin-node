@@ -17,7 +17,7 @@ use crate::{
         utxo_state::{UTXOValue, UTXO},
         wallets_state::Wallets,
     },
-    structs::{movement::Movement, outpoint::OutPoint},
+    structs::{block_header::BlockHeader, movement::Movement, outpoint::OutPoint},
     wallet::Wallet,
 };
 
@@ -78,7 +78,12 @@ impl NodeState {
 
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
         self.headers.append_headers(headers)?;
+        self.gui_sender.send(GUIEvents::NewHeaders)?;
         self.verify_sync()
+    }
+
+    pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
+        self.headers.get_last_headers(count)
     }
 
     // Sync
@@ -196,6 +201,10 @@ impl NodeState {
             self.gui_sender
                 .send(GUIEvents::NewPendingTx)
                 .map_err(|_| CustomError::CannotInitGUI)?;
+            send_log(
+                &self.logger_sender,
+                Log::Message("New pending transaction received".to_string()),
+            );
         }
 
         Ok(())

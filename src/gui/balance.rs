@@ -1,7 +1,7 @@
 use std::sync::{mpsc, Arc, Mutex};
 
 use gtk::{
-    traits::{ContainerExt, LabelExt, WidgetExt},
+    traits::{BoxExt, ContainerExt, LabelExt, WidgetExt},
     ListBox,
 };
 
@@ -11,7 +11,10 @@ use crate::{
     node_state::NodeState,
 };
 
-use super::init::{get_gui_element, GUIEvents};
+use super::{
+    init::{get_gui_element, GUIEvents},
+    table_cells::{side_label, value_label},
+};
 
 #[derive(Clone)]
 pub struct GUIBalance {
@@ -55,7 +58,7 @@ impl GUIBalance {
 
         match node_state.get_active_wallet_balance() {
             Ok(balance) => {
-                self.available_balance = (balance as f64) / 100_000_000.0;
+                self.available_balance = balance as f64;
             }
             Err(error) => {
                 send_log(&self.logger_sender, Log::Error(error));
@@ -77,13 +80,21 @@ impl GUIBalance {
             return Ok(());
         }
         let pending_transactions = node_state.get_active_wallet_pending_txs()?;
-        remove_transactions(&pending_tx_list_box);
 
         self.pending_balance = 0.0;
-        for tx_output in pending_transactions {
+        reset_table(&pending_tx_list_box);
+        for movement in pending_transactions {
+            self.pending_balance += movement.value as f64;
             let pending_tx_row = gtk::ListBoxRow::new();
-            pending_tx_row.add(&gtk::Label::new(Some(tx_output.value.to_string().as_str())));
-            self.pending_balance += (tx_output.value as f64) / 100_000_000.0;
+            let pending_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            pending_box.set_homogeneous(true);
+
+            let side_label = side_label(movement.value);
+            pending_box.add(&side_label);
+            let value_label = value_label(movement.value);
+            pending_box.add(&value_label);
+
+            pending_tx_row.add(&pending_box);
             pending_tx_row.show_all();
             pending_tx_list_box.add(&pending_tx_row);
         }
@@ -102,27 +113,41 @@ impl GUIBalance {
         let transfer_balance: gtk::Label =
             get_gui_element(&self.builder, "label-transfer-balance")?;
 
-        available_balance
-            .set_text(format!("Balance:    {:.8} BTC", self.available_balance).as_str());
-        pending_balance.set_text(format!("Pending:    {:.8} BTC", self.pending_balance).as_str());
+        let available_btc = self.available_balance / 100_000_000.0;
+        available_balance.set_text(format!("Balance:    {:.8} BTC", available_btc).as_str());
 
-        let total_balance_string = format!(
-            "Total:	     {:.8} BTC",
-            self.available_balance + self.pending_balance
-        );
-        let total_balance_string_satoshi = format!(
-            "Total:  {:.0} Sat",
-            (self.available_balance + self.pending_balance) * 100_000_000.0
-        );
-        total_balance.set_text(&total_balance_string.as_str());
-        transfer_balance.set_text(&total_balance_string_satoshi.as_str());
+        let pending_btc = self.pending_balance / 100_000_000.0;
+        pending_balance.set_text(format!("Pending:    {:.8} BTC", pending_btc).as_str());
+
+        let total_satoshi = self.available_balance + self.pending_balance;
+        let total_btc = total_satoshi / 100_000_000.0;
+        let total_balance_string = format!("Total:	     {:.8} BTC", total_btc);
+        let total_balance_string_satoshi = format!("Total:  {:.0} Sat", total_satoshi);
+
+        total_balance.set_text(total_balance_string.as_str());
+        transfer_balance.set_text(total_balance_string_satoshi.as_str());
 
         Ok(())
     }
 }
 
-fn remove_transactions(list_box: &ListBox) {
+fn reset_table(list_box: &ListBox) {
     list_box.foreach(|child| {
         list_box.remove(child);
     });
+    let utxo_row = gtk::ListBoxRow::new();
+    let utxo_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let side_label = gtk::Label::new(None);
+    let value_label = gtk::Label::new(None);
+
+    utxo_box.set_homogeneous(true);
+    side_label.set_markup("<b>Side</b>");
+    value_label.set_markup("<b>Value</b>");
+
+    utxo_box.add(&side_label);
+    utxo_box.add(&value_label);
+
+    utxo_row.add(&utxo_box);
+    utxo_row.show_all();
+    list_box.add(&utxo_row);
 }
