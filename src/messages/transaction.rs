@@ -59,18 +59,17 @@ impl Transaction {
         public_key_hash: &Vec<u8>,
         utxo: &UTXO,
     ) -> Result<Option<Movement>, CustomError> {
-        let mut value = 0;
-
-        for output in &self.outputs {
-            if output.is_sent_to_key(public_key_hash)? {
-                value += output.value;
-            }
-        }
+        let mut value: i64 = 0;
         for input in &self.inputs {
             if let Some(utxo_value) = utxo.tx_set.get(&input.previous_output) {
                 if utxo_value.tx_out.is_sent_to_key(public_key_hash)? {
-                    value -= utxo_value.tx_out.value;
+                    value -= utxo_value.tx_out.value as i64;
                 }
+            }
+        }
+        for output in &self.outputs {
+            if output.is_sent_to_key(public_key_hash)? {
+                value += output.value as i64;
             }
         }
         if value != 0 {

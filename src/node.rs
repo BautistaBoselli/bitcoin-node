@@ -5,12 +5,9 @@ use std::{
     vec::IntoIter,
 };
 
-use gtk::glib;
-
 use crate::{
     config::Config,
     error::CustomError,
-    gui::init::GUIEvents,
     logger::{send_log, Log, Logger},
     loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
     node_state::NodeState,
@@ -28,7 +25,6 @@ pub struct Node {
     node_state_ref: Arc<Mutex<NodeState>>,
     peers: Vec<Peer>,
     npeers: u8,
-    // pub event_loop_thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Node {
@@ -59,7 +55,7 @@ impl Node {
         Ok(node)
     }
 
-    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIEvents>) {
+    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>) {
         self.initialize_pending_blocks_loop();
 
         thread::spawn(move || -> Result<(), CustomError> {
@@ -68,7 +64,7 @@ impl Node {
             if let Err(error) = self.initialize_ibd() {
                 send_log(&self.logger_sender, Log::Error(error));
             }
-            if let Err(error) = self.initialize_event_loop(gui_sender.clone()) {
+            if let Err(error) = self.initialize_event_loop() {
                 send_log(&self.logger_sender, Log::Error(error));
             }
             Ok(())
@@ -133,18 +129,14 @@ impl Node {
         Ok(())
     }
 
-    fn initialize_event_loop(
-        &mut self,
-        // node_action_receiver: mpsc::Receiver<NodeAction>,
-        gui_sender: glib::Sender<GUIEvents>,
-    ) -> Result<(), CustomError> {
+    fn initialize_event_loop(&mut self) -> Result<(), CustomError> {
         if let Some(receiver) = self.node_action_receiver.take() {
             NodeActionLoop::start(
                 receiver,
                 self.peer_action_sender.clone(),
                 self.logger_sender.clone(),
-                gui_sender,
                 self.node_state_ref.clone(),
+                self.npeers,
             );
             return Ok(());
         }

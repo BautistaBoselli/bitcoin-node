@@ -37,7 +37,7 @@ impl Wallet {
             if value.tx_out.is_sent_to_key(&wallet.get_pubkey_hash()?)? {
                 wallet.history.push(Movement {
                     tx_hash: outpoint.hash.clone(),
-                    value: value.tx_out.value,
+                    value: value.tx_out.value as i64,
                     block_hash: Some(value.block_hash.clone()),
                 });
             }

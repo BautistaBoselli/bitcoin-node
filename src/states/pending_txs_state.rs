@@ -1,11 +1,16 @@
-use std::collections::{hash_map, HashMap};
+use std::{
+    collections::{hash_map, HashMap},
+    vec,
+};
 
 use crate::{
     error::CustomError,
     messages::{block::Block, transaction::Transaction},
-    structs::{outpoint::OutPoint, tx_output::TransactionOutput},
+    structs::movement::Movement,
     wallet::Wallet,
 };
+
+use super::utxo_state::UTXO;
 
 pub struct PendingTxs {
     tx_set: HashMap<Vec<u8>, Transaction>,
@@ -44,32 +49,26 @@ impl PendingTxs {
         Ok(())
     }
 
-    pub fn from_wallet(
-        &self,
-        wallet: &Wallet,
-    ) -> Result<HashMap<OutPoint, TransactionOutput>, CustomError> {
-        let mut pending_transactions = HashMap::new();
+    pub fn from_wallet(&self, wallet: &Wallet, utxo: &UTXO) -> Result<Vec<Movement>, CustomError> {
         let pubkey_hash = wallet.get_pubkey_hash()?;
+        let mut pending_movements = vec![];
 
-        for (tx_hash, tx) in &self.tx_set {
-            for (index, tx_out) in tx.outputs.iter().enumerate() {
-                if tx_out.is_sent_to_key(&pubkey_hash)? {
-                    let out_point = OutPoint {
-                        hash: tx_hash.clone(),
-                        index: index as u32,
-                    };
-                    pending_transactions.insert(out_point, tx_out.clone());
-                }
+        for tx in self.tx_set.values() {
+            if let Some(mov) = tx.get_movement(&pubkey_hash, utxo)? {
+                pending_movements.push(mov);
             }
         }
-        Ok(pending_transactions)
+        Ok(pending_movements)
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{states::wallets_state::Wallets, structs::block_header::BlockHeader};
+    use crate::{
+        states::wallets_state::Wallets,
+        structs::{block_header::BlockHeader, tx_output::TransactionOutput},
+    };
 
     use super::*;
 
@@ -170,8 +169,12 @@ mod tests {
         pending_txs.append_pending_tx(tx);
 
         let pendings_from_wallet = pending_txs
-            .from_wallet(&wallets.get_active().unwrap())
+            .from_wallet(
+                &wallets.get_active().unwrap(),
+                &UTXO::new("tests/test_utxo.bin".to_string()).unwrap(),
+            )
             .unwrap();
         assert_eq!(pendings_from_wallet.len(), 1);
+        assert_eq!(pendings_from_wallet[0].value, 100);
     }
 }
