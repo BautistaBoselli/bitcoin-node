@@ -274,19 +274,6 @@
             <property name="spacing">8</property>
             <property name="baseline-position">bottom</property>
             <child>
-              <object class="GtkButton" id="debug">
-                <property name="label" translatable="yes">Debug</property>
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="receives-default">True</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
               <object class="GtkComboBoxText" id="select-wallet-combo-box">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
