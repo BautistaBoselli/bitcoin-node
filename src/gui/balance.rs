@@ -99,17 +99,23 @@ impl GUIBalance {
             get_gui_element(&self.builder, "label-available-balance")?;
         let pending_balance: gtk::Label = get_gui_element(&self.builder, "label-pending-balance")?;
         let total_balance: gtk::Label = get_gui_element(&self.builder, "label-total-balance")?;
+        let transfer_balance: gtk::Label =
+            get_gui_element(&self.builder, "label-transfer-balance")?;
 
         available_balance
             .set_text(format!("Balance:    {:.8} BTC", self.available_balance).as_str());
         pending_balance.set_text(format!("Pending:    {:.8} BTC", self.pending_balance).as_str());
-        total_balance.set_text(
-            format!(
-                "Total:	     {:.8} BTC",
-                self.available_balance + self.pending_balance
-            )
-            .as_str(),
+
+        let total_balance_string = format!(
+            "Total:	     {:.8} BTC",
+            self.available_balance + self.pending_balance
         );
+        let total_balance_string_satoshi = format!(
+            "Total:  {:.0} Sat",
+            (self.available_balance + self.pending_balance) * 100_000_000.0
+        );
+        total_balance.set_text(&total_balance_string.as_str());
+        transfer_balance.set_text(&total_balance_string_satoshi.as_str());
 
         Ok(())
     }

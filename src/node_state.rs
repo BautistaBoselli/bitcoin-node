@@ -265,12 +265,6 @@ impl NodeState {
         }
         let wallet_balance = self.get_active_wallet_balance()?;
         if total_value > wallet_balance {
-            send_log(
-                &self.logger_sender,
-                Log::Error(CustomError::Validation(
-                    "Insufficient funds to make transaction".to_string(),
-                )),
-            );
             return Err(CustomError::InsufficientFunds);
         }
         Ok(total_value)

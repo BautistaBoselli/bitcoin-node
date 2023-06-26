@@ -8,8 +8,8 @@ use gtk::{
 use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
 
 use super::{
-    balance::GUIBalance, debug::GUIDebug, logs::GUILogs, transactions::GUITransactions,
-    transfer::GUITransfer, wallet::GUIWallet, window::GUIWindow,
+    balance::GUIBalance, debug::GUIDebug, history::GUIHistory, logs::GUILogs,
+    transfer::GUITransfer, utxo::GUIUtxo, wallet::GUIWallet, window::GUIWindow,
 };
 
 pub enum GUIEvents {
@@ -19,6 +19,7 @@ pub enum GUIEvents {
     NewPendingTx,
     NodeStateReady,
     NewBlock,
+    TransactionSent,
 }
 
 pub struct GUI {
@@ -27,7 +28,8 @@ pub struct GUI {
     balance: GUIBalance,
     logs: GUILogs,
     debug: GUIDebug,
-    transactions: GUITransactions,
+    history: GUIHistory,
+    utxo: GUIUtxo,
     transfer: GUITransfer,
     window: GUIWindow,
 }
@@ -70,7 +72,13 @@ impl GUI {
             node_state_ref: node_state_ref.clone(),
         };
 
-        let transactions = GUITransactions {
+        let history = GUIHistory {
+            builder: builder.clone(),
+            logger_sender: logger_sender.clone(),
+            node_state_ref: node_state_ref.clone(),
+        };
+
+        let utxo = GUIUtxo {
             builder: builder.clone(),
             logger_sender: logger_sender.clone(),
             node_state_ref: node_state_ref.clone(),
@@ -93,7 +101,8 @@ impl GUI {
             balance,
             logs,
             debug,
-            transactions,
+            history,
+            utxo,
             transfer,
             window,
         };
@@ -123,9 +132,10 @@ impl GUI {
     fn gui_actions_loop(&self, gui_receiver: Receiver<GUIEvents>) -> Result<(), CustomError> {
         let mut balance = self.balance.clone();
         let logs = self.logs.clone();
-        let mut transactions = self.transactions.clone();
+        let mut transactions = self.history.clone();
         let window = self.window.clone();
         let mut transfer = self.transfer.clone();
+        let mut utxo = self.utxo.clone();
 
         gui_receiver.attach(None, move |message| {
             balance.handle_events(&message);
@@ -133,6 +143,7 @@ impl GUI {
             transactions.handle_events(&message);
             window.handle_events(&message);
             transfer.handle_events(&message);
+            utxo.handle_events(&message);
 
             glib::Continue(true)
         });

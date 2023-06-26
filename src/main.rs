@@ -70,7 +70,7 @@ fn main() {
         }
     };
 
-    node.spawn(addresses);
+    node.spawn(addresses, gui_sender);
 
     let gui = GUI::start(
         gui_receiver,

@@ -3,8 +3,11 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
+use gtk::glib;
+
 use crate::{
     error::CustomError,
+    gui::init::GUIEvents,
     logger::{send_log, Log},
     messages::{block::Block, headers::Headers, transaction::Transaction},
     node_state::NodeState,
@@ -18,6 +21,7 @@ use crate::{
 const START_DATE_IBD: u32 = 1681095630;
 
 pub struct NodeActionLoop {
+    gui_sender: glib::Sender<GUIEvents>,
     node_action_receiver: mpsc::Receiver<NodeAction>,
     peer_action_sender: mpsc::Sender<PeerAction>,
     logger_sender: mpsc::Sender<Log>,
@@ -27,6 +31,7 @@ pub struct NodeActionLoop {
 
 impl NodeActionLoop {
     pub fn start(
+        gui_sender: glib::Sender<GUIEvents>,
         node_action_receiver: mpsc::Receiver<NodeAction>,
         peer_action_sender: mpsc::Sender<PeerAction>,
         logger_sender: mpsc::Sender<Log>,
@@ -34,6 +39,7 @@ impl NodeActionLoop {
         npeers: u8,
     ) {
         let mut node_thread = Self {
+            gui_sender,
             node_action_receiver,
             peer_action_sender,
             logger_sender,
@@ -89,6 +95,8 @@ impl NodeActionLoop {
             self.peer_action_sender
                 .send(PeerAction::SendTransaction(transaction.clone()))?;
         }
+
+        self.gui_sender.send(GUIEvents::TransactionSent)?;
 
         drop(node_state);
 

@@ -3,7 +3,7 @@ use std::{
     sync::{mpsc::Sender, Arc, Mutex},
 };
 
-use gtk::traits::{ButtonExt, EntryExt};
+use gtk::traits::{ButtonExt, DialogExt, EntryExt, LabelExt, WidgetExt};
 
 use crate::{
     error::CustomError,
@@ -27,6 +27,7 @@ impl GUITransfer {
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::WalletChanged => self.reset_tx_fields(),
+            GUIEvents::TransactionSent => self.handle_sent_transaction(),
             // GUIActions:: => self.update_txs(),
             _ => Ok(()),
         };
@@ -57,20 +58,6 @@ impl GUITransfer {
                     }
                 };
             }
-
-            // let receiver_1 = get_output(&builder, 1, logger_sender.clone());
-            // let receiver_2 = get_output(&builder, 2, logger_sender.clone());
-            // let receiver_3 = get_output(&builder, 3, logger_sender.clone());
-
-            // if let Ok(Some((pubkey, value))) = receiver_1 {
-            //     outputs.insert(pubkey, value);
-            // }
-            // if let Ok(Some((pubkey, value))) = receiver_2 {
-            //     outputs.insert(pubkey, value);
-            // }
-            // if let Ok(Some((pubkey, value))) = receiver_3 {
-            //     outputs.insert(pubkey, value);
-            // }
 
             let fee_entry: gtk::Entry = match get_gui_element(&builder, "tx-fee") {
                 Ok(fee_entry) => fee_entry,
@@ -117,8 +104,29 @@ impl GUITransfer {
             let receiver_value: gtk::Entry =
                 get_gui_element(&self.builder, &format!("output-{}-value", i))?;
             receiver_value.set_text("");
+            let label: gtk::Label =
+                get_gui_element(&self.builder, &format!("tx-information-label{}", i))?;
+            label.set_text("");
         }
+        Ok(())
+    }
 
+    fn handle_sent_transaction(&self) -> Result<(), CustomError> {
+        let dialog: gtk::MessageDialog = get_gui_element(&self.builder, "successful-tx-dialog")?;
+
+        for i in 0..TRANSFER_OUTPUTS {
+            let label: gtk::Label =
+                get_gui_element(&self.builder, &format!("tx-information-label{}", i))?;
+            if let Ok(Some((pubkey, value))) =
+                get_output(&self.builder, i, self.logger_sender.clone())
+            {
+                label.set_text(&format!("Transaction of {} sent to: {}", value, pubkey));
+            };
+        }
+        dialog.run();
+        dialog.hide();
+
+        self.reset_tx_fields()?;
         Ok(())
     }
 }
@@ -128,8 +136,6 @@ fn get_output(
     i: u8,
     logger_sender: Sender<Log>,
 ) -> Result<Option<(String, u64)>, CustomError> {
-    //let check: gtk::ToggleButton = get_gui_element(&builder, &format!("output-{}-check", i))?;
-
     let pubkey: gtk::Entry = get_gui_element(builder, &format!("output-{}-pubkey", i))?;
     let value: gtk::Entry = get_gui_element(builder, &format!("output-{}-value", i))?;
 
@@ -142,11 +148,11 @@ fn get_output(
         return Ok(None);
     }
 
-    Ok(Some((
-        pubkey.text().to_string(),
-        value
-            .text()
-            .parse::<u64>()
-            .map_err(|_| CustomError::InvalidValue)?,
-    )))
+    let value = value
+        .text()
+        .to_string()
+        .parse::<u64>()
+        .map_err(|_| CustomError::InvalidValue)?;
+
+    Ok(Some((pubkey.text().to_string(), value)))
 }
