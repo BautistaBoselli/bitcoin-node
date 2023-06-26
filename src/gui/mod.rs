@@ -1,8 +1,10 @@
 pub mod balance;
+pub mod blocks;
 pub mod debug;
 pub mod history;
 pub mod init;
 pub mod logs;
+pub mod table_cells;
 pub mod transfer;
 pub mod utxo;
 pub mod wallet;

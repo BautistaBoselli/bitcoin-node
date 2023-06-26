@@ -8,7 +8,7 @@ use gtk::{
 use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
 
 use super::{
-    balance::GUIBalance, debug::GUIDebug, history::GUIHistory, logs::GUILogs,
+    balance::GUIBalance, blocks::GUIBlocks, debug::GUIDebug, history::GUIHistory, logs::GUILogs,
     transfer::GUITransfer, utxo::GUIUtxo, wallet::GUIWallet, window::GUIWindow,
 };
 
@@ -20,6 +20,7 @@ pub enum GUIEvents {
     NodeStateReady,
     NewBlock,
     TransactionSent,
+    NewHeaders,
 }
 
 pub struct GUI {
@@ -30,6 +31,7 @@ pub struct GUI {
     debug: GUIDebug,
     history: GUIHistory,
     utxo: GUIUtxo,
+    blocks: GUIBlocks,
     transfer: GUITransfer,
     window: GUIWindow,
 }
@@ -84,6 +86,12 @@ impl GUI {
             node_state_ref: node_state_ref.clone(),
         };
 
+        let blocks = GUIBlocks {
+            builder: builder.clone(),
+            logger_sender: logger_sender.clone(),
+            node_state_ref: node_state_ref.clone(),
+        };
+
         let transfer = GUITransfer {
             builder: builder.clone(),
             logger_sender: logger_sender.clone(),
@@ -103,6 +111,7 @@ impl GUI {
             debug,
             history,
             utxo,
+            blocks,
             transfer,
             window,
         };
@@ -119,6 +128,7 @@ impl GUI {
         // initialize
         self.wallet.initialize()?;
         self.window.initialize()?;
+        self.blocks.initialize()?;
 
         // interactivity
         self.wallet.handle_interactivity()?;
@@ -136,6 +146,7 @@ impl GUI {
         let window = self.window.clone();
         let mut transfer = self.transfer.clone();
         let mut utxo = self.utxo.clone();
+        let mut blocks = self.blocks.clone();
 
         gui_receiver.attach(None, move |message| {
             balance.handle_events(&message);
@@ -144,6 +155,7 @@ impl GUI {
             window.handle_events(&message);
             transfer.handle_events(&message);
             utxo.handle_events(&message);
+            blocks.handle_events(&message);
 
             glib::Continue(true)
         });

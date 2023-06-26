@@ -57,6 +57,10 @@ impl HeadersState {
         self.headers.last().map(|header| header.hash())
     }
 
+    pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
+        self.headers.iter().rev().take(count).cloned().collect()
+    }
+
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
         let mut file = open_new_file(self.path.clone(), true)?;
 

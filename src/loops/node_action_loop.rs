@@ -78,10 +78,7 @@ impl NodeActionLoop {
         outputs: HashMap<String, u64>,
         fee: u64,
     ) -> Result<(), CustomError> {
-        let mut node_state = self
-            .node_state_ref
-            .lock()
-            .map_err(|_| CustomError::CannotLockGuard)?;
+        let mut node_state = self.node_state_ref.lock()?;
 
         let transaction = match node_state.make_transaction(outputs, fee) {
             Ok(transaction) => transaction,
@@ -96,6 +93,7 @@ impl NodeActionLoop {
                 .send(PeerAction::SendTransaction(transaction.clone()))?;
         }
 
+        node_state.append_pending_tx(transaction)?;
         self.gui_sender.send(GUIEvents::TransactionSent)?;
 
         drop(node_state);
@@ -187,15 +185,6 @@ impl NodeActionLoop {
             return Ok(());
         }
 
-        // println!(
-        //     "New pending transaction received: {:?}",
-        //     transaction.clone().hash()
-        // );
-
-        send_log(
-            &self.logger_sender,
-            Log::Message("New pending transaction received".to_string()),
-        );
         node_state.append_pending_tx(transaction)?;
         drop(node_state);
         Ok(())
