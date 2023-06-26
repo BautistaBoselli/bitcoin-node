@@ -12,6 +12,11 @@ use crate::{
     structs::inventory::{Inventory, InventoryType},
 };
 
+/// pending_blocks_loop es una funcion que genera un loop que se encarga de reenviar los bloques que no fueron recibidos por los peers.
+/// Los elementos son:
+/// - node_state_ref: Referencia al estado del nodo.
+/// - peer_action_sender: Sender para enviar acciones al los peers.
+/// - logger_sender: Sender para enviar logs al logger.
 pub fn pending_blocks_loop(
     node_state_ref: Arc<Mutex<NodeState>>,
     peer_action_sender: mpsc::Sender<PeerAction>,

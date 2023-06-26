@@ -20,6 +20,15 @@ use crate::{
 
 const START_DATE_IBD: u32 = 1681095630;
 
+/// NodeActionLoop es una estructura que contiene los elementos necesarios para manejar los mensajes recibidos por el nodo.
+/// Genera el loop de eventos alrededor de los NodeAction recibidoe por node_action_receiver.
+/// Los elementos son:
+/// - gui_sender: Sender para enviar eventos a la interfaz grafica.
+/// - node_action_receiver: Receiver para recibir acciones del nodo.
+/// - peer_action_sender: Sender para enviar acciones al los peers.
+/// - logger_sender: Sender para enviar logs al logger.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - npeers: Cantidad de peers.
 pub struct NodeActionLoop {
     gui_sender: glib::Sender<GUIEvents>,
     node_action_receiver: mpsc::Receiver<NodeAction>,
@@ -30,6 +39,7 @@ pub struct NodeActionLoop {
 }
 
 impl NodeActionLoop {
+    /// Inicializa el loop de eventos.
     pub fn start(
         gui_sender: glib::Sender<GUIEvents>,
         node_action_receiver: mpsc::Receiver<NodeAction>,
@@ -49,7 +59,7 @@ impl NodeActionLoop {
         node_thread.event_loop();
     }
 
-    pub fn event_loop(&mut self) {
+    fn event_loop(&mut self) {
         while let Ok(message) = self.node_action_receiver.recv() {
             let response = match message {
                 NodeAction::Block((block_hash, block)) => self.handle_block(block_hash, block),
