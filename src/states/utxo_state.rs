@@ -109,7 +109,7 @@ impl UTXO {
             )),
         );
         let new_last_timestamp =
-            self.update_from_headers(headers, starting_index, logger_sender)?;
+            self.update_from_headers(headers, starting_index, logger_sender, last_timestamp)?;
 
         self.sync = true;
         self.save(new_last_timestamp)?;
@@ -145,11 +145,12 @@ impl UTXO {
         headers: &Vec<BlockHeader>,
         starting_index: usize,
         logger_sender: &mut Sender<Log>,
+        last_timestamp: u32,
     ) -> Result<u32, CustomError> {
         let mut i = 0;
         let mut percentage = 0;
 
-        let mut new_timestamp = 0;
+        let mut new_timestamp = last_timestamp;
 
         for (_index, header) in headers.iter().enumerate().skip(starting_index) {
             if i > (headers.len() - starting_index) / 10 {
