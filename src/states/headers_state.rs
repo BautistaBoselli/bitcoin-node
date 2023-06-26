@@ -12,6 +12,12 @@ use crate::{
     utils::open_new_file,
 };
 
+/// HeadersState es una estructura que contiene los elementos necesarios para manejar los headers.
+/// Los elementos son:
+/// - headers: Headers del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
+/// - path: Path del archivo donde se guardan los headers.
+/// - sync: Indica si los headers del nodo estan sincronizados con la red.
 pub struct HeadersState {
     headers: Vec<BlockHeader>,
     logger_sender: Sender<Log>,
@@ -20,6 +26,9 @@ pub struct HeadersState {
 }
 
 impl HeadersState {
+    /// Inicializa los headers del nodo.
+    /// Si el archivo donde se guardan los headers no existe, se crea.
+    /// Si el archivo existe, se restauran los headers.
     pub fn new(path: String, logger_sender: Sender<Log>) -> Result<Self, CustomError> {
         let mut headers = Self {
             headers: Vec::new(),
@@ -49,18 +58,23 @@ impl HeadersState {
         Ok(())
     }
 
+    /// Devuelve todos los headers del nodo.
     pub fn get_all(&self) -> &Vec<BlockHeader> {
         &self.headers
     }
 
+    /// Devuelve el hash del ultimo header del nodo.
     pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
         self.headers.last().map(|header| header.hash())
     }
 
+    /// Devuelve los ultimos count headers del nodo.
     pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
         self.headers.iter().rev().take(count).cloned().collect()
     }
 
+    /// Agrega los headers al nodo y los almacena.
+    /// Tambien verifica si con los nuevos queda sincronizado con la red
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
         let mut file = open_new_file(self.path.clone(), true)?;
 
@@ -88,6 +102,7 @@ impl HeadersState {
         Ok(())
     }
 
+    /// Verifica si con los nuevos headers queda sincronizado con la red
     pub fn verify_headers_sync(&mut self, new_headers_count: usize) -> Result<(), CustomError> {
         if self.sync {
             return Ok(());
@@ -103,6 +118,7 @@ impl HeadersState {
         Ok(())
     }
 
+    /// Devuelve si los headers del nodo estan sincronizados con la red.
     pub fn is_synced(&self) -> bool {
         self.sync
     }

@@ -20,6 +20,11 @@ use std::{
 const START_DATE_IBD: u32 = 1681095630;
 
 #[derive(Debug, PartialEq, Clone)]
+/// UTXOValue es una estructura que contiene los valores que necesitamos guardar de las UTXO.
+/// Los elementos son:
+/// - tx_out: TransactionOutput.
+/// - block_hash: Hash del bloque donde se encuentra el UTXO.
+/// - block_timestamp: Timestamp del bloque donde se encuentra el UTXO.
 pub struct UTXOValue {
     pub tx_out: TransactionOutput,
     pub block_hash: Vec<u8>,
@@ -27,6 +32,14 @@ pub struct UTXOValue {
 }
 
 #[derive(PartialEq)]
+/// UTXO es una estructura que contiene los elementos necesarios para manejar las UTXO.
+/// Los elementos son:
+/// - tx_set: HashMap que contiene las UTXO con su OutPoint y UTXOValue.
+/// - sync: Indica si las UTXO estan sincronizadas con la red.
+/// - path: Path del archivo donde se guardan las UTXO.
+///
+/// El UTXO tiene un sistema de guardado tipo checkpoint
+/// donde cada vez que se actualiza genera un archivo donde lista los utxo del momento y el timestamp del ultimo bloque procesado.
 pub struct UTXO {
     pub tx_set: HashMap<OutPoint, UTXOValue>,
     sync: bool,
@@ -34,6 +47,8 @@ pub struct UTXO {
 }
 
 impl UTXO {
+    /// Inicializa las UTXO con el path del archivo donde se almacena.
+    /// El utxo comienza desincronizado y vacio.
     pub fn new(path: String) -> Result<Self, CustomError> {
         Ok(Self {
             tx_set: HashMap::new(),
@@ -42,6 +57,7 @@ impl UTXO {
         })
     }
 
+    /// Devuelve el balance de una wallet.
     pub fn wallet_balance(&self, wallet: &Wallet) -> Result<u64, CustomError> {
         let mut balance = 0;
         let pubkey_hash = wallet.get_pubkey_hash()?;
@@ -53,7 +69,7 @@ impl UTXO {
         Ok(balance)
     }
 
-    /// Returns all the unspent transactions from a particular wallet
+    /// Devuelve las UTXO de una wallet.
     pub fn generate_wallet_utxo(
         &self,
         wallet: &Wallet,
@@ -70,10 +86,14 @@ impl UTXO {
         Ok(active_wallet_utxo)
     }
 
+    /// Devuelve si el utxo esta sincronizado.
     pub fn is_synced(&self) -> bool {
         self.sync
     }
 
+    /// Genera las UTXO a partir de los headers.
+    /// Si el archivo donde se guardan las UTXO no existe, se crea.
+    /// Si el archivo existe, se restauran las UTXO hasta ese punto y se recorren unicamente los bloques posteriores al timestamp guardado en el archivo.
     pub fn generate(
         &mut self,
         headers: &Vec<BlockHeader>,
@@ -182,6 +202,7 @@ impl UTXO {
         Ok((last_timestamp, tx_set))
     }
 
+    /// Actualiza las UTXO a partir de un bloque, eliminando los outputs gastados y agregando los nuevos outputs.
     pub fn update_from_block(&mut self, block: &Block, save: bool) -> Result<(), CustomError> {
         for tx in &block.transactions {
             for tx_in in &tx.inputs {

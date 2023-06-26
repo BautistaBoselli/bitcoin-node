@@ -7,6 +7,11 @@ use crate::{
 
 use super::utxo_state::UTXO;
 
+/// Wallets es una estructura que contiene los elementos necesarios para manejar los wallets.
+/// Los elementos son:
+/// - wallets: Vector de wallets.
+/// - active_pubkey: Public key del wallet activo.
+/// - path: Path del archivo donde se guardan los wallets.
 pub struct Wallets {
     wallets: Vec<Wallet>,
     active_pubkey: Option<String>,
@@ -14,6 +19,9 @@ pub struct Wallets {
 }
 
 impl Wallets {
+    /// Inicializa los wallets del nodo.
+    /// Si el archivo donde se guardan los wallets no existe, se crea.
+    /// Si el archivo existe, se restauran los wallets.
     pub fn new(path: String) -> Result<Self, CustomError> {
         let mut wallets = Self {
             wallets: Vec::new(),
@@ -52,6 +60,7 @@ impl Wallets {
         Ok(())
     }
 
+    /// Establece la wallet activa.
     pub fn set_active(&mut self, public_key: &str) -> Result<(), CustomError> {
         self.active_pubkey = self
             .wallets
@@ -61,10 +70,12 @@ impl Wallets {
         Ok(())
     }
 
+    /// Devuelve todas las wallets.
     pub fn get_all(&self) -> &Vec<Wallet> {
         &self.wallets
     }
 
+    /// Agrega una wallet a la lista de wallets.
     pub fn append(&mut self, new_wallet: Wallet) -> Result<(), CustomError> {
         if self
             .wallets
@@ -80,6 +91,7 @@ impl Wallets {
         Ok(())
     }
 
+    /// Devuelve la wallet activa.
     pub fn get_active(&self) -> Option<&Wallet> {
         match self.active_pubkey {
             Some(ref active_wallet) => self
@@ -90,6 +102,7 @@ impl Wallets {
         }
     }
 
+    /// Actualiza las wallets con la informacion del nuevo bloque.
     pub fn update(&mut self, block: &Block, utxo: &UTXO) -> Result<bool, CustomError> {
         let mut wallets_updated = false;
 
