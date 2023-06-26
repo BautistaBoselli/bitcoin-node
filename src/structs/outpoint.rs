@@ -1,18 +1,25 @@
 use crate::{error::CustomError, parser::BufferParser};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
+
+/// Esta estructura representa un outpoint, la cual contiene:
+/// - hash: Hash de la transaccion
+/// - index: Indice de la transaccion
 pub struct OutPoint {
     pub hash: Vec<u8>,
     pub index: u32,
 }
 
 impl OutPoint {
+    /// Esta funcion se encarga de serializar un outpoint en un vector de bytes.
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(self.hash.clone());
         buffer.extend(self.index.to_le_bytes());
         buffer
     }
+
+    /// Esta funcion se encarga de parsear un outpoint a partir de un vector de bytes.
     pub fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
         let mut parser = BufferParser::new(buffer);
         let hash = parser.extract_buffer(32)?.to_vec();

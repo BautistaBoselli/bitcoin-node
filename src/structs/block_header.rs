@@ -81,17 +81,20 @@ impl BlockHeader {
         false
     }
 
+    /// Esta funcion se encarga de calcular el hash del header de un bloque
     pub fn hash(&self) -> Vec<u8> {
         sha256d::Hash::hash(&self.serialize())
             .to_byte_array()
             .to_vec()
     }
 
+    /// Esta funcion se encarga de calcular el hash del header de un bloque y devolverlo como un string
     pub fn hash_as_string(&self) -> String {
         hash_as_string(self.hash())
     }
 }
 
+/// Esta funcion se encarga de convertir un vector de bytes en hexa que forma un hash a un string
 pub fn hash_as_string(hash: Vec<u8>) -> String {
     let mut filename = String::with_capacity(2 * hash.len());
     for byte in hash {

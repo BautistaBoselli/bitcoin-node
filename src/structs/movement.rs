@@ -1,6 +1,11 @@
 use crate::{error::CustomError, parser::BufferParser};
 
 #[derive(Clone, Debug)]
+
+/// Esta estructura representa un movimiento de fondos, la cual contiene:
+/// - tx_hash: Hash de la transaccion
+/// - value: Valor de la transaccion
+/// - block_hash: Hash del bloque en el que se encuentra la transaccion, en caso de una transaccion pendiente, no validada, este campo es None
 pub struct Movement {
     pub tx_hash: Vec<u8>,
     pub value: i64,
@@ -8,6 +13,7 @@ pub struct Movement {
 }
 
 impl Movement {
+    /// Esta funcion se encarga de serializar un movement en un vector de bytes.
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
         buffer.push(self.tx_hash.len() as u8);
@@ -26,6 +32,9 @@ impl Movement {
         buffer
     }
 
+    /// Esta funcion se encarga de parsear un movement a partir de un BufferParser.
+    /// Devuelve CustomError si:
+    /// - Falla alguna extraccion del BufferParser
     pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let tx_hash_len = parser.extract_u8()? as usize;
         let tx_hash = parser.extract_buffer(tx_hash_len)?.to_vec();
