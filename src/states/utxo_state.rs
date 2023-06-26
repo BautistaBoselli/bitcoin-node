@@ -99,7 +99,7 @@ impl UTXO {
         headers: &Vec<BlockHeader>,
         logger_sender: &mut Sender<Log>,
     ) -> Result<(), CustomError> {
-        let mut last_timestamp = self.restore_utxo()?;
+        let last_timestamp = self.restore_utxo()?;
         let starting_index = calculate_starting_index(headers, last_timestamp);
         send_log(
             logger_sender,
@@ -108,10 +108,11 @@ impl UTXO {
                 headers.len() - starting_index
             )),
         );
-        self.update_from_headers(headers, starting_index, logger_sender, &mut last_timestamp)?;
+        let new_last_timestamp =
+            self.update_from_headers(headers, starting_index, logger_sender)?;
 
         self.sync = true;
-        self.save(last_timestamp)?;
+        self.save(new_last_timestamp)?;
 
         send_log(
             logger_sender,
@@ -144,10 +145,11 @@ impl UTXO {
         headers: &Vec<BlockHeader>,
         starting_index: usize,
         logger_sender: &mut Sender<Log>,
-        last_timestamp: &mut u32,
-    ) -> Result<(), CustomError> {
+    ) -> Result<u32, CustomError> {
         let mut i = 0;
         let mut percentage = 0;
+
+        let mut new_timestamp = 0;
 
         for (_index, header) in headers.iter().enumerate().skip(starting_index) {
             if i > (headers.len() - starting_index) / 10 {
@@ -161,10 +163,10 @@ impl UTXO {
             let path = format!("store/blocks/{}.bin", header.hash_as_string());
             let block = Block::restore(path)?;
             self.update_from_block(&block, false)?;
-            *last_timestamp = header.timestamp;
+            new_timestamp = header.timestamp;
             i += 1;
         }
-        Ok(())
+        Ok(new_timestamp)
     }
 
     fn serialize(&mut self, last_timestamp: u32) -> Vec<u8> {
