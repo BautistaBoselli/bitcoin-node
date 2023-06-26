@@ -18,6 +18,13 @@ use crate::{
 const SIGHASH_ALL: u32 = 1;
 
 #[derive(Debug, Clone)]
+
+/// Esta estructura representa una transacción de Bitcoin.
+/// Contiene los siguientes campos:
+/// - version: Versión de la transacción.
+/// - inputs: Vector de TransactionInputs de la transacción.
+/// - outputs: Vector de TransactionOutputs de la transacción.
+/// - lock_time: Tiempo de bloqueo de la transacción.
 pub struct Transaction {
     pub version: u32,
     pub inputs: Vec<TransactionInput>,
@@ -26,12 +33,14 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// Esta funcion se encarga de hashear una transacción.
     pub fn hash(&self) -> Vec<u8> {
         sha256::Hash::hash(sha256::Hash::hash(self.serialize().as_slice()).as_byte_array())
             .as_byte_array()
             .to_vec()
     }
 
+    /// Esta funcion se encarga de parsear una transacción a partir de un parser.
     pub fn parse_from_parser(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let version = parser.extract_u32()?;
         let tx_in_count = parser.extract_varint()? as usize;
@@ -54,6 +63,9 @@ impl Transaction {
         })
     }
 
+    /// Esta funcion se encarga de obtener un movement de una transacción.(ver structs/movement.rs)
+    /// Recibe por parametro el hash del public key de la wallet en la cual se quiere ver si se realizo un movimiento, el estado de UTXO, y la transaccion en la que se realizo el movimiento.
+    /// Devuelve un Option<Movement> que puede ser None si no se realizo ningun movimiento para la wallet indicada por el public key hash en la transacción, o Some(Movement) si se realizo un movimiento para la wallet determinada por la public key hash.
     pub fn get_movement(
         &self,
         public_key_hash: &Vec<u8>,
@@ -83,6 +95,13 @@ impl Transaction {
         }
     }
 
+    /// Esta funcion se encarga de crear una transacción.
+    /// Recibe por parametro la wallet de la cual se quiere enviar la transacción, un vector de OutPoint que contiene los outpoints de las transacciones que se quieren gastar, y un HashMap que contiene los public key hash de las wallets a las cuales se quiere enviar dinero y la cantidad de dinero que se quiere enviar a cada una.
+    /// Crea la transacción y la manda a firmar con la wallet de la cual se quiere enviar la transacción.
+    /// Finalmente devuelve la transacción firmada.
+    /// Devuelve CustomError si:
+    /// - No se puede obtener el script pubkey de la wallet de la cual se quiere enviar la transacción.
+    /// - No se pudo firmar la transacción.
     pub fn create(
         sender_wallet: &Wallet,
         inputs_outpoints: Vec<OutPoint>,
@@ -117,6 +136,9 @@ impl Transaction {
         Ok(transaction)
     }
 
+    /// Esta funcion se encarga de mandar a firmar una transacción.
+    /// Recibe por parametro la wallet con la cual se quiere firmar la transacción.
+    /// Devuelve CustomError si no se pudo obtener el hash del private key de la wallet o si no se pudo firmar la transacción.
     fn sign(&mut self, wallet: &Wallet) -> Result<(), CustomError> {
         let privkey_hash = wallet.get_privkey_hash()?;
         let serialized_unsigned_tx = self.serialize();
@@ -128,6 +150,8 @@ impl Transaction {
     }
 }
 
+/// Implementa el trait Message para la estructura Transaction.
+/// Permite serializar, parsear y obtener el comando
 impl Message for Transaction {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
@@ -154,6 +178,8 @@ impl Message for Transaction {
     }
 }
 
+/// Esta funcion se encarga de firmar una transacción.
+/// Recibe un buffer que contiene la transacción a firmar y el hash del private key de la wallet con la cual se quiere firmar la transacción.
 fn sign(mut buffer: Vec<u8>, privkey: &[u8]) -> Result<Vec<u8>, CustomError> {
     buffer.extend(SIGHASH_ALL.to_le_bytes());
 

@@ -4,10 +4,9 @@ use crate::{
     parser::{BufferParser, VarIntSerialize},
 };
 
-// use super::headers::{parse_var_int, serialize_var_int};
-
 #[derive(PartialEq, Debug)]
 
+/// Esta estructura representa el mensaje 'getheaders' de Bitcoin, el cual se utiliza para pedirle a un nodo que nos envie los headers de los bloques que tiene a partir de un bloque especifico.
 pub struct GetHeaders {
     pub version: i32,
     pub block_locator_hashes: Vec<Vec<u8>>,
@@ -15,6 +14,7 @@ pub struct GetHeaders {
 }
 
 impl GetHeaders {
+    /// Esta funcion se encarga de crear un nuevo mensaje 'getheaders' con la version, el block locator hashes y el hash stop que se reciben por parametro
     pub fn new(version: i32, block_locator_hashes: Vec<Vec<u8>>, hash_stop: Vec<u8>) -> Self {
         GetHeaders {
             version,
@@ -24,6 +24,8 @@ impl GetHeaders {
     }
 }
 
+/// Implementa el trait Message para el mensaje 'getheaders'.
+/// Permite serializar, parsear y obtener el comando
 impl Message for GetHeaders {
     fn get_command(&self) -> String {
         String::from("getheaders")

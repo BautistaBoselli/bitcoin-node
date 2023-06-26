@@ -2,8 +2,7 @@ use crate::{error::CustomError, message::Message};
 
 #[derive(Debug)]
 /// SendHeaders es un mensaje vacio que se envia tras intercambiar los mensajes de version.
-/// Sirve para confirmar que se ha establecido la conexión.
-///
+/// Sirve para confirmar que se ha establecido la conexión y para recibir los headers de los bloques directamente.
 pub struct SendHeaders {}
 
 impl SendHeaders {
@@ -20,20 +19,16 @@ impl Default for SendHeaders {
 }
 
 /// Implementa el trait Message para el mensaje de verificación de conexión.
+/// Permite serializar, parsear y obtener el comando
 impl Message for SendHeaders {
-    /// Devuelve el comando del mensaje.
-    /// En este caso, el comando es "SendHeaders".
     fn get_command(&self) -> String {
         String::from("sendheaders")
     }
 
-    /// Devuelve un vector vacío.
     fn serialize(&self) -> Vec<u8> {
         vec![]
     }
 
-    /// Parsea un vector de bytes en un mensaje de verificación de conexión.
-    /// Si el vector no está vacío, devuelve un CustomError.
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         if !buffer.is_empty() {
             return Err(CustomError::SerializedBufferIsInvalid);

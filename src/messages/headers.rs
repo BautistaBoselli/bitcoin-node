@@ -7,12 +7,13 @@ use crate::{
 
 #[derive(Debug)]
 
-///Esta estructura es la que se encarga de almacenar los headers de los bloques, esto lo hace en un vector de 'blockHeaders'
+///Esta estructura es la que se encarga de almacenar los headers de los bloques, esto lo hace en un vector de 'BlockHeaders'
 pub struct Headers {
     pub headers: Vec<BlockHeader>,
 }
 
 impl Headers {
+    /// Esta funcion se encarga de crear un nuevo Headers con un vector vacio de 'BlockHeaders'
     pub fn new() -> Self {
         Headers { headers: vec![] }
     }
@@ -24,6 +25,8 @@ impl Default for Headers {
     }
 }
 
+/// Implementa el trair Message para Headers
+/// Permite serializar, parsear y obtener el comando
 impl Message for Headers {
     fn get_command(&self) -> String {
         String::from("headers")
