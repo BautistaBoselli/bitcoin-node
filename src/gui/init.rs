@@ -12,6 +12,16 @@ use super::{
     transfer::GUITransfer, utxo::GUIUtxo, wallet::GUIWallet, window::GUIWindow,
 };
 
+/// GUIEvents es un enum que contiene los eventos que se pueden recibir en el canal de eventos de la interfaz grafica.
+/// Los eventos son:
+/// - Log: Recibe un Log y lo muestra en la lista de logs.
+/// - WalletChanged: Se cambio la wallet activa.
+/// - WalletsUpdated: Se Actualizo alguna de las wallets cargadas.
+/// - NewPendingTx: Alguna de las wallets cargadas recibio una pending transaction.
+/// - NodeStateReady: El node state ya se sincronizo y se puede mostrar la informacion.
+/// - NewBlock: Llego un nuevo bloque.
+/// - TransactionSent: Se envio una transaccion del usuario.
+/// - NewHeaders: Hay nuevos Headers.
 pub enum GUIEvents {
     Log(Log),
     WalletChanged,
@@ -23,6 +33,18 @@ pub enum GUIEvents {
     NewHeaders,
 }
 
+/// GUI es una estructura que contiene los elementos que manejan la interfaz grafica
+/// Contiene y les maneja el ciclo de vida a cada uno de los elementos de la interfaz grafica.
+/// Los elementos son:
+/// - node_action_sender: Sender para enviar acciones al nodo.
+/// - wallet: GUIWallet.
+/// - balance: GUIBalance.
+/// - logs: GUILogs.
+/// - history: GUIHistory.
+/// - utxo: GUIUtxo.
+/// - blocks: GUIBlocks.
+/// - transfer: GUITransfer.
+/// - window: GUIWindow.
 pub struct GUI {
     node_action_sender: mpsc::Sender<NodeAction>,
     wallet: GUIWallet,
@@ -36,6 +58,9 @@ pub struct GUI {
 }
 
 impl GUI {
+    /// Inicializa la interfaz grafica.
+    /// Crea los elementos de la interfaz grafica y los inicializa.
+    /// Inicializa el ciclo de vida de la interfaz grafica (escuchar los GUIEvents).
     pub fn start(
         gui_receiver: Receiver<GUIEvents>,
         node_state_ref: Arc<Mutex<NodeState>>,
@@ -117,6 +142,8 @@ impl GUI {
         Ok(())
     }
 
+    /// Inicializa los elementos de la interfaz grafica.
+    /// Establece la interactividad de los elementos que la necesitan.
     pub fn handle_interactivity(&self) -> Result<(), CustomError> {
         // initialize
         self.wallet.initialize()?;
@@ -156,6 +183,8 @@ impl GUI {
     }
 }
 
+/// Devuelve un elemento de la interfaz grafica.
+/// Si no existe el elemento devuelve un error.
 pub fn get_gui_element<T: IsA<Object>>(
     builder: &gtk::Builder,
     name: &str,

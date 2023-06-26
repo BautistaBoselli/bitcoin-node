@@ -1,10 +1,14 @@
 use crate::{error::CustomError, message::Message, parser::BufferParser};
 
 const NONCE_BYTES: usize = 8;
+
+/// Esta es la estructura de un mensaje ping, la cual contiene un nonce
 pub struct Ping {
     pub nonce: u64,
 }
 
+/// Implementa el trait Message para el mensaje ping.
+/// Permite serializar, parsear y obtener el comando
 impl Message for Ping {
     fn get_command(&self) -> String {
         String::from("ping")
@@ -24,10 +28,13 @@ impl Message for Ping {
     }
 }
 
+/// Esta es la estructura de un mensaje pong, la cual contiene un nonce que debe ser igual al nonce del mensaje ping
 pub struct Pong {
     pub nonce: u64,
 }
 
+/// Implementa el trait Message para el mensaje pong.
+/// Permite serializar, parsear y obtener el comando
 impl Message for Pong {
     fn get_command(&self) -> String {
         String::from("pong")
@@ -72,7 +79,6 @@ mod tests {
         let parsed_ping = Ping::parse(serialized_ping).unwrap();
         assert_eq!(parsed_ping.nonce, ping.nonce);
     }
-
 
     #[test]
     fn parse_pong() {

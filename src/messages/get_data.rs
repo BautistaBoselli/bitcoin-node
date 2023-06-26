@@ -2,21 +2,26 @@ use crate::{message::Message, structs::inventory::Inventory};
 
 use super::inv::Inv;
 
+/// Esta estructura representa al mensaje 'getdata' de Bitcoin, el cual se utiliza para pedirle a un nodo que nos envie un inventario de bloques o transacciones
 pub struct GetData {
     inv: Inv,
 }
 
 impl GetData {
+    /// Esta funcion se encarga de crear un nuevo mensaje 'getdata' con un vector de inventarios que recibe por parametro
     pub fn new(inventories: Vec<Inventory>) -> Self {
         let inv = Inv::new(inventories);
         Self { inv }
     }
 
+    /// Esta funcion se encarga de devolver el vector de inventarios del mensaje 'getdata'
     pub fn get_inventories(&self) -> &Vec<Inventory> {
         &self.inv.inventories
     }
 }
 
+/// Implementa el trait Message para el mensaje 'getdata'
+/// Permite serializar, parsear y obtener el comando
 impl Message for GetData {
     fn serialize(&self) -> Vec<u8> {
         self.inv.serialize()

@@ -13,6 +13,14 @@ use crate::{
     structs::inventory::Inventory,
 };
 
+/// PeerActionLoop es una estructura que contiene los elementos necesarios para manejar los las acciones a enviar al peer asociado.
+/// Genera el loop de eventos alrededor de los PeerAction recibido por peer_action_receiver.
+/// Los elementos son:
+/// - peer_action_receiver: Receiver para recibir acciones del peer.
+/// - version: Version del nodo.
+/// - stream: Stream del peer.
+/// - logger_sender: Sender para enviar logs al logger.
+/// - node_action_sender: Sender para enviar acciones al nodo.
 pub struct PeerActionLoop {
     pub peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     pub version: i32,
@@ -22,6 +30,7 @@ pub struct PeerActionLoop {
 }
 
 impl PeerActionLoop {
+    /// Inicializa el loop de eventos en un thread.
     pub fn spawn(
         peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
         version: i32,
@@ -41,7 +50,7 @@ impl PeerActionLoop {
         })
     }
 
-    pub fn event_loop(&mut self) -> Result<(), CustomError> {
+    fn event_loop(&mut self) -> Result<(), CustomError> {
         loop {
             let peer_message = self
                 .peer_action_receiver
@@ -54,9 +63,6 @@ impl PeerActionLoop {
                 PeerAction::SendTransaction(transaction) => {
                     self.handle_send_transaction(&transaction)
                 }
-                PeerAction::Terminate => {
-                    break;
-                }
             };
 
             if let Err(error) = response {
@@ -66,7 +72,6 @@ impl PeerActionLoop {
                 );
             }
         }
-        Ok(())
     }
 
     fn handle_send_transaction(&mut self, transaction: &Transaction) -> Result<(), CustomError> {

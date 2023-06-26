@@ -4,18 +4,20 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-///Esta es la estructura de un mensaje inv, la cual contiene un vector de inventories
+/// Esta es la estructura de un mensaje inv, la cual contiene un vector de inventories
 pub struct Inv {
     pub inventories: Vec<Inventory>,
 }
 
 impl Inv {
+    /// Esta funcion se encarga de crear un nuevo mensaje inv con un vector de inventories que recibe por parametro
     pub fn new(inventories: Vec<Inventory>) -> Self {
         Self { inventories }
     }
 }
 
-///Implementa el trait Message para el mensaje inv.
+/// Implementa el trait Message para el mensaje inv.
+/// Permite serializar, parsear y obtener el comando
 impl Message for Inv {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];

@@ -6,6 +6,11 @@ use crate::{
 use super::outpoint::OutPoint;
 
 #[derive(Debug, Clone, PartialEq)]
+
+/// Esta estructura representa un input de una transaccion, la cual contiene:
+/// - previous_output: Outpoint de la transaccion que genero el input
+/// - script_sig: Script que se debe ejecutar para firmar transacciones
+/// - sequence: Numero de version definido por el usuario
 pub struct TransactionInput {
     pub previous_output: OutPoint,
     pub script_sig: Vec<u8>,
@@ -13,6 +18,7 @@ pub struct TransactionInput {
 }
 
 impl TransactionInput {
+    /// Esta funcion se encarga de serializar un input en un vector de bytes.
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(self.previous_output.serialize());
@@ -21,6 +27,10 @@ impl TransactionInput {
         buffer.extend(self.sequence.to_le_bytes());
         buffer
     }
+
+    /// Esta funcion se encarga de parsear un input a partir de un BufferParser.
+    /// Devuelve CustomError si:
+    /// - Falla alguna de las extracciones del BufferParser
     pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let previous_output = OutPoint::parse(parser.extract_buffer(36)?.to_vec())?;
         let script_sig_length = parser.extract_varint()? as usize;

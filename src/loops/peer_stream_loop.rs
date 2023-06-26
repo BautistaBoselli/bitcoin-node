@@ -24,6 +24,13 @@ use crate::{
     },
 };
 
+/// PeerStreamLoop es una estructura que contiene los elementos necesarios para manejar los mensajes recibidos del peer asociado.
+/// Genera el loop de eventos alrededor de los mensajes recibidos por el TcpStream.
+/// Los elementos son:
+/// - stream: Stream del peer.
+/// - node_action_sender: Sender para enviar acciones al nodo.
+/// - version: Version del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
 pub struct PeerStreamLoop {
     pub stream: TcpStream,
     pub node_action_sender: mpsc::Sender<NodeAction>,
@@ -33,6 +40,7 @@ pub struct PeerStreamLoop {
 
 impl PeerStreamLoop {
     #[must_use]
+    /// Inicializa el loop de eventos en un thread.
     pub fn spawn(
         version: i32,
         stream: TcpStream,
@@ -50,7 +58,7 @@ impl PeerStreamLoop {
         })
     }
 
-    pub fn event_loop(&mut self) -> Result<(), CustomError> {
+    fn event_loop(&mut self) -> Result<(), CustomError> {
         loop {
             let response_header = MessageHeader::read(&mut self.stream)?;
 

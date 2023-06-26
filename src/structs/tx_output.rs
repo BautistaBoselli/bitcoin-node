@@ -4,12 +4,17 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+
+/// Esta estructura representa un output de una transaccion, la cual contiene:
+/// - value: Valor del output
+/// - script_pubkey: public key como bitcoin script
 pub struct TransactionOutput {
     pub value: u64,
     pub script_pubkey: Vec<u8>,
 }
 
 impl TransactionOutput {
+    /// Esta funcion se encarga de serializar un output en un vector de bytes.
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(self.value.to_le_bytes());
@@ -18,6 +23,7 @@ impl TransactionOutput {
         buffer
     }
 
+    /// Esta funcion se encarga de parsear un output a partir de un BufferParser.
     pub fn parse(parser: &mut BufferParser) -> Result<Self, CustomError> {
         let value = parser.extract_u64()?;
         let script_pk_length = parser.extract_varint()? as usize;
@@ -28,6 +34,7 @@ impl TransactionOutput {
         })
     }
 
+    /// Esta funcion se encarga de verificar si un output esta enviado a una clave publica del tipo P2PKH.
     pub fn is_sent_to_key(&self, public_key_hash: &Vec<u8>) -> Result<bool, CustomError> {
         let parser = &mut BufferParser::new(self.script_pubkey.clone());
         match parser.extract_u8() {
@@ -37,6 +44,7 @@ impl TransactionOutput {
     }
 }
 
+/// Esta funcion se encarga de comparar un script pubkey con una clave publica del tipo P2PKH.
 fn compare_p2pkh(
     parser: &mut BufferParser,
     public_key_hash: &Vec<u8>,

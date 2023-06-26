@@ -11,12 +11,19 @@ use crate::{
 use super::init::{get_gui_element, GUIEvents};
 
 #[derive(Clone)]
+/// GUILogs es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con los logs. Muestra los logs en la pantalla de carga y en la pantalla principal.
+/// Los elementos son:
+/// - builder: Builder de gtk.
+/// - logger_sender: Sender para enviar logs al logger.
 pub struct GUILogs {
     pub builder: gtk::Builder,
     pub logger_sender: mpsc::Sender<Log>,
 }
 
 impl GUILogs {
+    /// Maneja los GUIEvents recibidos y hace las acciones acorde a cada envento.
+    /// Para Log: Actualiza los logs en la interfaz.
     pub fn handle_events(&self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::Log(log) => self.handle_log(log),
@@ -28,7 +35,7 @@ impl GUILogs {
         }
     }
 
-    pub fn handle_log(&self, log: &Log) -> Result<(), CustomError> {
+    fn handle_log(&self, log: &Log) -> Result<(), CustomError> {
         let logs: gtk::Label = get_gui_element(&self.builder, "logs")?;
         let load_screen_logs: gtk::Label = get_gui_element(&self.builder, "load-screen-logs")?;
         let dialog_error: gtk::MessageDialog = get_gui_element(&self.builder, "error-dialog")?;

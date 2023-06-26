@@ -60,15 +60,12 @@ impl Version {
 }
 
 /// Implementa el trait Message para el mensaje de versión.
+/// Permite serializar, parsear y obtener el comando
 impl Message for Version {
-    /// Devuelve el comando del mensaje.
-    /// En este caso, el comando es "version".
     fn get_command(&self) -> String {
         String::from("version")
     }
 
-    /// Devuelve un mensaje de versión serializado en un vector de bytes.
-    /// La mayoria de datos se envia en little endian, excepto las direcciones ip y puertos del nodo transmisor y receptor que se envian en big endian.
     fn serialize(&self) -> Vec<u8> {
         let mut buffer = vec![];
         buffer.extend_from_slice(&self.version.to_le_bytes());
@@ -94,8 +91,6 @@ impl Message for Version {
         buffer
     }
 
-    /// Deserializa un vector de bytes en un mensaje de versión.
-    /// Devuelve un CustomError si el vector de bytes no contiene la cantidad minima de bytes de un mensaje versión válido.
     fn parse(buffer: Vec<u8>) -> Result<Self, CustomError>
     where
         Self: Sized,

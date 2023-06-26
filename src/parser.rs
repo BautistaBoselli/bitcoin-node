@@ -2,6 +2,10 @@ use std::net::{Ipv6Addr, SocketAddrV6};
 
 use crate::error::CustomError;
 
+/// BufferParser es una estructura que contiene los elementos necesarios para parsear un buffer.
+/// Los elementos son:
+/// - buffer: Buffer a parsear.
+/// - pos: Posicion actual del buffer.
 pub struct BufferParser {
     buffer: Vec<u8>,
     pos: usize,
@@ -9,18 +13,22 @@ pub struct BufferParser {
 
 impl BufferParser {
     #[must_use]
+    /// Inicializa el parser de un buffer en la posicion 0.
     pub fn new(buffer: Vec<u8>) -> Self {
         Self { buffer, pos: 0 }
     }
 
+    /// Devuelve el largo restante del buffer.
     pub fn len(&mut self) -> usize {
         self.buffer.len() - self.pos
     }
 
+    /// Devuelve true si fue recorrido completamente
     pub fn is_empty(&mut self) -> bool {
         self.buffer.len() - self.pos == 0
     }
 
+    /// Extrae un buffer de tamaño size del buffer.
     pub fn extract_buffer(&mut self, size: usize) -> Result<&[u8], CustomError> {
         let buffer = match self.buffer.get(self.pos..(self.pos + size)) {
             Some(buffer) => Ok(buffer),
@@ -30,6 +38,7 @@ impl BufferParser {
         buffer
     }
 
+    /// extrae un u8 del buffer
     pub fn extract_u8(&mut self) -> Result<u8, CustomError> {
         let slice: [u8; 1] = self
             .extract_buffer(1)?
@@ -38,6 +47,8 @@ impl BufferParser {
 
         Ok(u8::from_le_bytes(slice))
     }
+
+    /// extrae un u16 del buffer
     pub fn extract_u16(&mut self) -> Result<u16, CustomError> {
         let slice: [u8; 2] = self
             .extract_buffer(2)?
@@ -46,6 +57,8 @@ impl BufferParser {
 
         Ok(u16::from_le_bytes(slice))
     }
+
+    /// extrae un u32 del buffer
     pub fn extract_u32(&mut self) -> Result<u32, CustomError> {
         let slice: [u8; 4] = self
             .extract_buffer(4)?
@@ -54,6 +67,8 @@ impl BufferParser {
 
         Ok(u32::from_le_bytes(slice))
     }
+
+    /// extrae un u64 del buffer
     pub fn extract_u64(&mut self) -> Result<u64, CustomError> {
         let slice: [u8; 8] = self
             .extract_buffer(8)?
@@ -62,6 +77,8 @@ impl BufferParser {
 
         Ok(u64::from_le_bytes(slice))
     }
+
+    /// extrae un i8 del buffer
     pub fn extract_i8(&mut self) -> Result<i8, CustomError> {
         let slice: [u8; 1] = self
             .extract_buffer(1)?
@@ -70,6 +87,8 @@ impl BufferParser {
 
         Ok(i8::from_le_bytes(slice))
     }
+
+    /// extrae un i16 del buffer
     pub fn extract_i16(&mut self) -> Result<i16, CustomError> {
         let slice: [u8; 2] = self
             .extract_buffer(2)?
@@ -78,6 +97,8 @@ impl BufferParser {
 
         Ok(i16::from_le_bytes(slice))
     }
+
+    /// extrae un i32 del buffer
     pub fn extract_i32(&mut self) -> Result<i32, CustomError> {
         let slice: [u8; 4] = self
             .extract_buffer(4)?
@@ -86,6 +107,8 @@ impl BufferParser {
 
         Ok(i32::from_le_bytes(slice))
     }
+
+    /// extrae un i64 del buffer
     pub fn extract_i64(&mut self) -> Result<i64, CustomError> {
         let slice: [u8; 8] = self
             .extract_buffer(8)?
@@ -95,6 +118,7 @@ impl BufferParser {
         Ok(i64::from_le_bytes(slice))
     }
 
+    /// extrae un varint del buffer
     pub fn extract_varint(&mut self) -> Result<u64, CustomError> {
         let first_byte = self.extract_u8()?;
         let slice = match first_byte {
@@ -129,6 +153,7 @@ impl BufferParser {
         Ok(slice)
     }
 
+    /// extrae una direccion del buffer
     pub fn extract_address(&mut self) -> Result<SocketAddrV6, CustomError> {
         let ipv6 = Ipv6Addr::new(
             u16::from_be_bytes([self.extract_u8()?, self.extract_u8()?]),
@@ -144,6 +169,8 @@ impl BufferParser {
         let socket = SocketAddrV6::new(ipv6, port, 0, 0);
         Ok(socket)
     }
+
+    /// extrae un string del buffer del tamaño recibido
     pub fn extract_string(&mut self, size: usize) -> Result<String, CustomError> {
         let buffer = self.extract_buffer(size)?;
         let string = String::from_utf8(buffer.to_vec())

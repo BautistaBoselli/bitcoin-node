@@ -17,6 +17,12 @@ use super::{
 };
 
 #[derive(Clone)]
+/// GUIBlocks es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con los bloques. Muestra un listado de los ultimos 100 bloques (fecha de creacion, tx hash, version y nbits).
+/// Los elementos son:
+/// - builder: Builder de gtk.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
 pub struct GUIBlocks {
     pub logger_sender: Sender<Log>,
     pub builder: gtk::Builder,
@@ -24,6 +30,8 @@ pub struct GUIBlocks {
 }
 
 impl GUIBlocks {
+    /// Maneja los GUIEvents recibidos y hace las acciones acorde a cada envento.
+    /// Para NewHeaders: Actualiza la lista de bloques.
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::NewHeaders => self.update_blocks(),
@@ -35,6 +43,7 @@ impl GUIBlocks {
         }
     }
 
+    /// Inicializa la lista de bloques.
     pub fn initialize(&self) -> Result<(), CustomError> {
         self.update_blocks()
     }

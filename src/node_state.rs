@@ -21,6 +21,16 @@ use crate::{
     wallet::Wallet,
 };
 
+/// NodeState es una estructura que contiene el estado del nodo.
+/// Los elementos son (para mas informacion de cada una de estas estructuras ver su documentacion en la carpeta states):
+/// - logger_sender: Sender para enviar logs al logger.
+/// - gui_sender: Sender para enviar eventos a la interfaz grafica.
+/// - headers: HeadersState.
+/// - wallets: Wallets.
+/// - pending_blocks_ref: Referencia a PendingBlocks.
+/// - utxo: UTXO.
+/// - pending_txs: PendingTxs.
+/// - blocks_sync: Indica si los bloques estan sincronizados.
 pub struct NodeState {
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIEvents>,
@@ -33,6 +43,7 @@ pub struct NodeState {
 }
 
 impl NodeState {
+    /// Inicializa el estado del nodo. Inicializa todas sus estructuras indicando donde se encuentra el archivo donde se guardan.
     pub fn new(
         logger_sender: mpsc::Sender<Log>,
         gui_sender: Sender<GUIEvents>,
@@ -51,6 +62,8 @@ impl NodeState {
         Ok(node_state_ref)
     }
 
+    /// Agrega un bloque nuevo, lo guarda en su archivo y actualiza los pending_blocks, wallets, pending_txs y utxo.
+    /// Tambien verifica si ahora el nodo esta actualizado con la red
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
         let path = format!("store/blocks/{}.bin", block.header.hash_as_string());
         block.save(path)?;
@@ -71,31 +84,43 @@ impl NodeState {
         Ok(())
     }
 
-    // Headers
+    /********************     HEADERS     ********************/
+
+    /// devuelve el hash del ultimo header guardado
     pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
         self.headers.get_last_header_hash()
     }
 
+    /// agrega un header nuevo en HeadersState
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
         self.headers.append_headers(headers)?;
         self.gui_sender.send(GUIEvents::NewHeaders)?;
         self.verify_sync()
     }
 
+    /// Devuelve los ultimos count headers del HeaderState
     pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
         self.headers.get_last_headers(count)
     }
 
-    // Sync
+    /********************     SYNC     ********************/
 
+    /// Devuelve true si el nodo esta sincronizado con la red
     pub fn is_synced(&self) -> bool {
         self.headers.is_synced() && self.blocks_sync && self.utxo.is_synced()
     }
 
+    /// Devuelve true si los bloques estan sincronizados
     pub fn is_blocks_sync(&self) -> bool {
         self.blocks_sync
     }
 
+    /// Verifica si el nodo esta sincronizado con la red
+    /// Si el nodo esta sincronizado, envia un evento a la interfaz grafica para indicar que el nodo esta listo para usarse
+    /// Si el nodo no esta sincronizado, verifica si los headers estan sincronizados
+    /// Si los headers estan sincronizados, verifica si los bloques estan sincronizados
+    /// Si los bloques estan sincronizados, genera el UTXO
+    ///
     pub fn verify_sync(&mut self) -> Result<(), CustomError> {
         if self.headers.is_synced() {
             self.verify_blocks_sync()?;
@@ -115,6 +140,7 @@ impl NodeState {
         Ok(())
     }
 
+    /// Verifica si los bloques estan sincronizados
     fn verify_blocks_sync(&mut self) -> Result<(), CustomError> {
         if self.blocks_sync {
             return Ok(());
@@ -134,12 +160,14 @@ impl NodeState {
         Ok(())
     }
 
-    // Wallets
+    /********************     WALLETS     ********************/
 
+    /// Devuelve todas las wallets del nodo
     pub fn get_wallets(&self) -> &Vec<Wallet> {
         self.wallets.get_all()
     }
 
+    /// Agrega una wallet nueva a WalletState
     pub fn append_wallet(
         &mut self,
         name: String,
@@ -150,16 +178,19 @@ impl NodeState {
         self.wallets.append(new_wallet)
     }
 
+    /// Devuelve la wallet activa de WalletState
     pub fn get_active_wallet(&self) -> Option<&Wallet> {
         self.wallets.get_active()
     }
 
+    /// Cambia la wallet activa de WalletState
     pub fn change_wallet(&mut self, public_key: String) -> Result<(), CustomError> {
         self.wallets.set_active(&public_key)?;
         self.gui_sender.send(GUIEvents::WalletChanged)?;
         Ok(())
     }
 
+    /// Actualiza las wallets de WalletState
     pub fn update_wallets(&mut self, block: &Block) -> Result<(), CustomError> {
         let wallets_updated = self.wallets.update(block, &self.utxo)?;
         if wallets_updated {
@@ -170,30 +201,35 @@ impl NodeState {
         Ok(())
     }
 
-    // UTXO
+    /********************     UTXO     ********************/
 
+    /// Devuelve el balance de la wallet activa
     pub fn get_active_wallet_balance(&self) -> Result<u64, CustomError> {
         let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
         self.utxo.wallet_balance(active_wallet)
     }
 
+    /// Devuelve el UTXO de la wallet activa
     pub fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, UTXOValue)>, CustomError> {
         let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
         self.utxo.generate_wallet_utxo(active_wallet)
     }
 
-    // Pending Tx
+    /********************     PENDING TXs     ********************/
 
+    /// Actualiza las pending txs de PendingTxs
     pub fn update_pending_tx(&mut self, block: &Block) -> Result<(), CustomError> {
         self.pending_txs.update_pending_tx(block)
     }
 
+    /// Devuelve las pending txs de la wallet activa
     pub fn get_active_wallet_pending_txs(&self) -> Result<Vec<Movement>, CustomError> {
         let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
 
         self.pending_txs.from_wallet(active_wallet, &self.utxo)
     }
 
+    /// Agrega una pending tx nueva a PendingTxs
     pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<(), CustomError> {
         let updated = self.pending_txs.append_pending_tx(transaction);
 
@@ -210,8 +246,9 @@ impl NodeState {
         Ok(())
     }
 
-    // Pending Blocks
+    /********************     PENDING BLOCKS     ********************/
 
+    /// Agrega un pending block nuevo a PendingBlocks
     pub fn append_pending_block(&mut self, header_hash: Vec<u8>) -> Result<(), CustomError> {
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
         pending_blocks.append_block(header_hash)?;
@@ -220,29 +257,38 @@ impl NodeState {
         Ok(())
     }
 
+    /// Remueve todos los pending blocks de PendingBlocks
     fn remove_pending_blocks(&self) -> Result<(), CustomError> {
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
         pending_blocks.drain();
         Ok(())
     }
 
+    /// Devuelve los pending blocks de PendingBlocks
     pub fn get_stale_requests(&self) -> Result<Vec<Vec<u8>>, CustomError> {
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
         pending_blocks.get_stale_requests()
     }
 
+    /// Devuelve true si el bloque esta en PendingBlocks
     pub fn is_block_pending(&self, block_hash: &Vec<u8>) -> Result<bool, CustomError> {
         let pending_blocks = self.pending_blocks_ref.lock()?;
         Ok(pending_blocks.is_block_pending(block_hash))
     }
 
+    /// Devuelve true si PendingBlocks esta vacio
     pub fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
         let pending_blocks = self.pending_blocks_ref.lock()?;
         Ok(pending_blocks.is_empty())
     }
 
-    // Transactions
+    /********************     TRANSACTIONS     ********************/
 
+    /// Realiza una transaccion nueva para la active wallet de WalletsState
+    /// con los outputs y el fee recibidos por parametro
+    /// Devuelve la transaccion creada
+    /// Si no hay una wallet activa, devuelve un error
+    /// Si no hay suficientes fondos, devuelve un error
     pub fn make_transaction(
         &mut self,
         mut outputs: HashMap<String, u64>,

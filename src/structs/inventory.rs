@@ -27,6 +27,7 @@ pub struct Inventory {
 }
 
 impl Inventory {
+    /// Esta funcion se encarga de crear un nuevo inventario, dado un tipo de inventario y un hash recibidos como parametros.
     pub fn new(inventory_type: InventoryType, hash: Vec<u8>) -> Self {
         Self {
             inventory_type,
@@ -34,6 +35,7 @@ impl Inventory {
         }
     }
 
+    /// Esta funcion se encarga de serializar un inventario en un vector de bytes.
     pub fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         let inventory_type = match self.inventory_type {
@@ -50,6 +52,11 @@ impl Inventory {
         buffer
     }
 
+    /// Esta funcion se encarga de parsear un vector de bytes a un inventario.
+    /// Devuelve CustomError si:
+    /// - El vector de bytes no tiene 36 bytes de longitud
+    /// - El tipo de inventario no es valido
+    /// - El hash no tiene 32 bytes de longitud
     pub fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
         let mut parser = BufferParser::new(buffer);
         if parser.len() != 36 {

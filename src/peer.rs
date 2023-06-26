@@ -18,18 +18,31 @@ use crate::{
     utils::{get_address_v6, open_stream},
 };
 
+/// GENESIS es el hash del bloque genesis de la blockchain de Bitcoin.
 pub const GENESIS: [u8; 32] = [
     111, 226, 140, 10, 182, 241, 179, 114, 193, 166, 162, 70, 174, 99, 247, 79, 147, 30, 131, 101,
     225, 90, 8, 156, 104, 214, 25, 0, 0, 0, 0, 0,
 ];
 
+/// PeerAction es una enumeracion de las acciones que puede realizar un peer.
+/// Las acciones son:
+/// - GetHeaders: Solicita headers al peer.
+/// - GetData: Solicita data al peer.
+/// - SendTransaction: Envia una transaccion al peer.
 pub enum PeerAction {
     GetHeaders(Option<Vec<u8>>),
     GetData(Vec<Inventory>),
     SendTransaction(Transaction),
-    Terminate,
 }
 
+/// NodeAction es una enumeracion de las acciones que puede realizar el nodo.
+/// Las acciones son:
+/// - NewHeaders: Recibe nuevos headers.
+/// - GetHeadersError: Error al solicitar headers.
+/// - Block: Recibe un bloque.
+/// - GetDataError: Error al solicitar data.
+/// - PendingTransaction: Recibe una transaccion.
+/// - MakeTransaction: Solicitar una transaccion.
 pub enum NodeAction {
     NewHeaders(Headers),
     GetHeadersError,
@@ -39,6 +52,19 @@ pub enum NodeAction {
     MakeTransaction((HashMap<String, u64>, u64)),
 }
 
+/// Peer es una representacion de los Peers a los que nos conectamos, contiene los elementos necesarios para manejar la conexion con el peer.
+/// Cada peer tiene dos threads asociados:
+/// - peer_action_thread: Thread que escucha las acciones a realizar por el peer.
+/// - peer_stream_thread: Thread que escucha el stream del peer.
+///
+/// Los elementos son:
+/// - address: Direccion del peer.
+/// - services: Servicios del peer.
+/// - version: Version del peer.
+/// - stream: Stream del peer.
+/// - peer_action_thread: Thread que escucha las acciones a realizar por el peer.
+/// - peer_stream_thread: Thread que escucha el stream del peer.
+///
 pub struct Peer {
     pub address: SocketAddrV6,
     pub services: u64,
@@ -49,6 +75,8 @@ pub struct Peer {
 }
 
 impl Peer {
+    /// Inicializa el peer.
+    /// Realiza el handshake con el peer y crea los threads asociados.
     pub fn new(
         address: SocketAddr,
         sender_address: SocketAddrV6,
@@ -73,7 +101,8 @@ impl Peer {
         Ok(peer)
     }
 
-    pub fn handshake(
+    /// Realiza el handshake de Node con el Peer.
+    fn handshake(
         &mut self,
         sender_address: SocketAddrV6,
         logger_sender: &mut mpsc::Sender<Log>,

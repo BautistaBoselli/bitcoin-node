@@ -12,6 +12,9 @@ use crate::{
 
 use super::utxo_state::UTXO;
 
+/// PendingTxs es una estructura que contiene los elementos necesarios para manejar las transacciones pendientes.
+/// Los elementos son:
+/// - tx_set: HashMap que contiene los hashes de las transacciones pendientes con su Transaction.
 pub struct PendingTxs {
     tx_set: HashMap<Vec<u8>, Transaction>,
 }
@@ -23,12 +26,14 @@ impl Default for PendingTxs {
 }
 
 impl PendingTxs {
+    /// Inicializa la estructura.
     pub fn new() -> Self {
         PendingTxs {
             tx_set: HashMap::new(),
         }
     }
 
+    /// Agrega una transaccion a la lista de transacciones pendientes, devuelte true si es una transaccion que no teniamos.
     pub fn append_pending_tx(&mut self, transaction: Transaction) -> bool {
         let tx_hash = transaction.hash();
 
@@ -39,6 +44,7 @@ impl PendingTxs {
         false
     }
 
+    /// Actualiza la lista de transacciones pendientes, eliminando las transacciones que esten en el bloque.
     pub fn update_pending_tx(&mut self, block: &Block) -> Result<(), CustomError> {
         for tx in &block.transactions {
             if self.tx_set.contains_key(&tx.hash()) {
@@ -49,6 +55,7 @@ impl PendingTxs {
         Ok(())
     }
 
+    /// Devuelve las transacciones pendientes que pertenecen a la wallet.
     pub fn from_wallet(&self, wallet: &Wallet, utxo: &UTXO) -> Result<Vec<Movement>, CustomError> {
         let pubkey_hash = wallet.get_pubkey_hash()?;
         let mut pending_movements = vec![];

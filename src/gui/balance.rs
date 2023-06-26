@@ -17,6 +17,15 @@ use super::{
 };
 
 #[derive(Clone)]
+/// GUIBalance es una estructura que contiene los elementos de la interfaz grafica
+/// relacionados con el balance de la billetera y transacciones pendientes.
+///
+/// Los elementos son:
+/// - builder: Builder de gtk.
+/// - node_state_ref: Referencia al estado del nodo.
+/// - logger_sender: Sender para enviar logs al logger.
+/// - available_balance: Balance disponible de la billetera.
+/// - pending_balance: Balance pendiente de la billetera.
 pub struct GUIBalance {
     pub builder: gtk::Builder,
     pub node_state_ref: Arc<Mutex<NodeState>>,
@@ -26,6 +35,11 @@ pub struct GUIBalance {
 }
 
 impl GUIBalance {
+    /// Maneja los GUIEvents recibidos y hace las acciones acorde a cada envento.
+    ///
+    /// Para WalletChanged: Actualiza el balance pendiente y disponible y las transacciones pendientes.
+    /// Para WalletsUpdated: Actualiza el balance pendiente y disponible y las transacciones pendientes.
+    /// Para NewPendingTx: Actualiza las transacciones pendientes y el balance pendinente.
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
             GUIEvents::WalletChanged => self.handle_wallet_changed(),

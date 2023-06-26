@@ -16,12 +16,15 @@ use crate::{
 };
 
 #[derive(Debug)]
+
+/// Esta estructura es la que se encarga de almacenar los bloques, esto lo hace con un BlockHeader y en un vector de 'transactions' por cada uno
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
 }
 
 impl Block {
+    /// Esta funcion se encarga de crear un nuevo bloque, recibe un BlockHeader y un vector de 'transactions' para formar al mismo
     pub fn new(header: BlockHeader, transactions: Vec<Transaction>) -> Self {
         Self {
             header,
@@ -29,6 +32,8 @@ impl Block {
         }
     }
 
+    /// Esta funcion se encargar de restaurar un bloque, recibe un path al archivo que contiene al bloque, lo lee y lo parsea
+    /// Devuelve CustomError si no puede abrir o leer el archivo
     pub fn restore(path: String) -> Result<Self, CustomError> {
         let mut block_file = open_new_file(path, true)?;
         let mut block_buffer = Vec::new();
@@ -36,12 +41,14 @@ impl Block {
         Self::parse(block_buffer)
     }
 
+    /// Esta funcion se encarga de guardar un bloque, recibe un path al archivo donde se va a guardar el bloque serializado en bytes
     pub fn save(&self, path: String) -> Result<(), CustomError> {
         let mut block_file = open_new_file(path, true)?;
         block_file.write_all(&self.serialize())?;
         Ok(())
     }
 
+    /// Esta funcion se encarga de crear el merkle tree del bloque, recorre las transacciones del bloque y calcula el hash de cada una, luego que el merkle tree es generado a partir de los hashes de las transacciones, se lo devuelve.
     fn create_merkle_tree(&self) -> Vec<Vec<Vec<u8>>> {
         let mut hashes = vec![];
         for transaction in &self.transactions {
@@ -53,6 +60,8 @@ impl Block {
         merkle_tree
     }
 
+    /// Esta funcion se encarga de validar la proof of inclusion del bloque, creando el merkle tree y comparando el merkle root del BlockHeader con el merkle root calculado
+    /// Devuelve CustomError si el merkle root del BlockHeader no coincide con el merkle root calculado, significando que el bloque no es valido
     pub fn create_merkle_root(&self) -> Result<(), CustomError> {
         let merkle_tree = self.create_merkle_tree();
 
@@ -67,6 +76,8 @@ impl Block {
         Ok(())
     }
 
+    /// Esta funcion se encarga de encontrar el indice de una transaccion dado un bloque y el hash de la transaccion
+    /// Devuelve CustomError si no puede encontrar la transaccion en el bloque
     fn find_transaction_index(&self, transaction_hash: &Vec<u8>) -> Result<usize, CustomError> {
         for i in 0..self.transactions.len() {
             if self.transactions[i].hash() == *transaction_hash {
@@ -76,6 +87,9 @@ impl Block {
         Err(CustomError::InvalidMerkleRoot)
     }
 
+    /// Esta funcion se encarga de generar el merkle path de una transaccion, recibe el hash de la transaccion y el bloque a la que esta pertence para generar el merkle path
+    /// Retorna un vector de bytes con los flags y un vector de vectores de bytes con los hashes de las transacciones necesarias para reconstruir el merkle path
+    /// Devuelve CustomError si no puede encontrar la transaccion en el bloque
     pub fn generate_merkle_path(
         &self,
         transaction_hash: Vec<u8>,
@@ -109,6 +123,7 @@ impl Block {
     }
 }
 
+/// Esta funcion se encarga de mergear dos hashes, recibe dos hashes y los mergea en un solo hash
 fn merge_hashes(mut left: Vec<u8>, mut right: Vec<u8>) -> Vec<u8> {
     left.append(&mut right);
     let hash = sha256::Hash::hash(sha256::Hash::hash(left.as_slice()).as_byte_array())
@@ -117,6 +132,7 @@ fn merge_hashes(mut left: Vec<u8>, mut right: Vec<u8>) -> Vec<u8> {
     hash
 }
 
+/// Esta funcion se encarga de generar el merkle tree, recibe un vector de hashes y un vector de vectores de vectores de bytes, y va generando el merkle tree recursivamente por niveles
 fn generate_merkle_tree(hashes: Vec<Vec<u8>>, merkle_tree: &mut Vec<Vec<Vec<u8>>>) {
     if hashes.len() == 1 {
         return;
@@ -137,6 +153,8 @@ fn generate_merkle_tree(hashes: Vec<Vec<u8>>, merkle_tree: &mut Vec<Vec<Vec<u8>>
     generate_merkle_tree(level, merkle_tree);
 }
 
+/// Implementa el trait Message para bloque
+/// Permite serializar, parsear y obtener el comando
 impl Message for Block {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];

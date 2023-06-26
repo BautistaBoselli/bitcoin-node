@@ -19,20 +19,16 @@ impl Default for VerAck {
 }
 
 /// Implementa el trait Message para el mensaje de verificación de conexión.
+/// Permite serializar, parsear y obtener el comando
 impl Message for VerAck {
-    /// Devuelve el comando del mensaje.
-    /// En este caso, el comando es "verack".
     fn get_command(&self) -> String {
         String::from("verack")
     }
 
-    /// Devuelve un vector vacío.
     fn serialize(&self) -> Vec<u8> {
         vec![]
     }
 
-    /// Parsea un vector de bytes en un mensaje de verificación de conexión.
-    /// Si el vector no está vacío, devuelve un CustomError.
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         if !buffer.is_empty() {
             return Err(CustomError::SerializedBufferIsInvalid);

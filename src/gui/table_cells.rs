@@ -9,6 +9,7 @@ use crate::{
     structs::block_header::hash_as_string,
 };
 
+/// Genera un label formateado para un hash en formato hexadecimal y lo devuelve.
 pub fn tx_hash_label(mut tx_hash: Vec<u8>) -> gtk::Label {
     let tx_hash_label = gtk::Label::new(None);
 
@@ -23,6 +24,8 @@ pub fn tx_hash_label(mut tx_hash: Vec<u8>) -> gtk::Label {
     tx_hash_label
 }
 
+/// Genera un label formateado para una fecha y lo devuelve.
+/// Si la fecha es de hoy, muestra la hora, sino muestra la fecha.
 pub fn time_label(timestamp: u32) -> gtk::Label {
     let time_label = gtk::Label::new(None);
     let current_time = Local::now();
@@ -41,6 +44,8 @@ pub fn time_label(timestamp: u32) -> gtk::Label {
     time_label
 }
 
+/// Genera un label formateado para un valor en satoshis y lo devuelve.
+/// El valor se muestra en BTC.
 pub fn value_label(value: i64) -> gtk::Label {
     let value_string = format!("{:.8} BTC", (value as f64) / 100_000_000.0);
     let value_label = gtk::Label::new(Some(value_string.as_str()));
@@ -50,6 +55,8 @@ pub fn value_label(value: i64) -> gtk::Label {
     value_label
 }
 
+/// Genera un boton para pedir el merkle proof de una transaccion y lo devuelve.
+/// Si el bloque no esta en la base de datos, no se muestra el boton.
 pub fn merkle_proof_button(
     block_hash: Option<Vec<u8>>,
     tx_hash: Vec<u8>,
@@ -89,6 +96,8 @@ pub fn merkle_proof_button(
     button_box
 }
 
+/// Genera un label formateado que indica si se recibe o se envia en la transaccion.
+/// Si el valor es positivo, se recibe, sino se envia
 pub fn side_label(value: i64) -> gtk::Label {
     let side_label = gtk::Label::new(if value > 0 {
         Some("Received")
@@ -101,6 +110,7 @@ pub fn side_label(value: i64) -> gtk::Label {
     side_label
 }
 
+/// Genera un label formateado para un numero y lo devuelve.
 pub fn number_label(value: i64) -> gtk::Label {
     let number_label = gtk::Label::new(Some(value.to_string().as_str()));
 
