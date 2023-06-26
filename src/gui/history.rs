@@ -75,7 +75,7 @@ impl GUIHistory {
                 )
                 .as_str(),
             );
-            side_label.set_width_request(128);
+            side_label.set_width_request(92);
             value_label.set_width_request(128);
             button_box.set_width_request(128);
 
@@ -144,7 +144,7 @@ fn reset_table(list_box: &ListBox) {
     tx_hash_label.set_expand(true);
     tx_hash_label.set_markup("<b>Tx Hash</b>");
 
-    side_label.set_width_request(128);
+    side_label.set_width_request(92);
     side_label.set_markup("<b>Side</b>");
 
     value_label.set_width_request(128);
