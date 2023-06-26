@@ -5,6 +5,6 @@ pub mod headers;
 pub mod inv;
 pub mod ping_pong;
 pub mod send_headers;
+pub mod transaction;
 pub mod ver_ack;
 pub mod version;
-pub mod transaction;
