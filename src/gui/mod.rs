@@ -1,6 +1,5 @@
 pub mod balance;
 pub mod blocks;
-pub mod debug;
 pub mod history;
 pub mod init;
 pub mod logs;

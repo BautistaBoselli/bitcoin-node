@@ -8,7 +8,7 @@ use gtk::{
 use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
 
 use super::{
-    balance::GUIBalance, blocks::GUIBlocks, debug::GUIDebug, history::GUIHistory, logs::GUILogs,
+    balance::GUIBalance, blocks::GUIBlocks, history::GUIHistory, logs::GUILogs,
     transfer::GUITransfer, utxo::GUIUtxo, wallet::GUIWallet, window::GUIWindow,
 };
 
@@ -28,7 +28,6 @@ pub struct GUI {
     wallet: GUIWallet,
     balance: GUIBalance,
     logs: GUILogs,
-    debug: GUIDebug,
     history: GUIHistory,
     utxo: GUIUtxo,
     blocks: GUIBlocks,
@@ -69,11 +68,6 @@ impl GUI {
             logger_sender: logger_sender.clone(),
         };
 
-        let debug = GUIDebug {
-            builder: builder.clone(),
-            node_state_ref: node_state_ref.clone(),
-        };
-
         let history = GUIHistory {
             builder: builder.clone(),
             logger_sender: logger_sender.clone(),
@@ -108,7 +102,6 @@ impl GUI {
             wallet,
             balance,
             logs,
-            debug,
             history,
             utxo,
             blocks,
@@ -132,7 +125,6 @@ impl GUI {
 
         // interactivity
         self.wallet.handle_interactivity()?;
-        self.debug.handle_interactivity(&self.node_action_sender)?;
         self.transfer
             .handle_interactivity(&self.node_action_sender)?;
 
