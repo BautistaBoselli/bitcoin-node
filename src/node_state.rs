@@ -11,10 +11,13 @@ use crate::{
     logger::{send_log, Log},
     messages::{block::Block, headers::Headers, transaction::Transaction},
     states::{
-        headers_state::HeadersState, pending_blocks_state::PendingBlocks,
-        pending_txs_state::PendingTxs, utxo_state::UTXO, wallets_state::Wallets,
+        headers_state::HeadersState,
+        pending_blocks_state::PendingBlocks,
+        pending_txs_state::PendingTxs,
+        utxo_state::{UTXOValue, UTXO},
+        wallets_state::Wallets,
     },
-    structs::{movement::Movement, outpoint::OutPoint, tx_output::TransactionOutput},
+    structs::{movement::Movement, outpoint::OutPoint},
     wallet::Wallet,
 };
 
@@ -169,9 +172,7 @@ impl NodeState {
         self.utxo.wallet_balance(active_wallet)
     }
 
-    pub fn get_active_wallet_utxo(
-        &self,
-    ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
+    pub fn get_active_wallet_utxo(&self) -> Result<Vec<(OutPoint, UTXOValue)>, CustomError> {
         let Some(active_wallet) = self.wallets.get_active() else { return Err(CustomError::WalletNotFound) };
         self.utxo.generate_wallet_utxo(active_wallet)
     }
@@ -243,7 +244,7 @@ impl NodeState {
         let total_value = self.calculate_total_value(fee, &outputs)?;
         let mut active_wallet_utxo = self.get_active_wallet_utxo()?;
 
-        active_wallet_utxo.sort_by(|a, b| b.1.value.cmp(&a.1.value));
+        active_wallet_utxo.sort_by(|a, b| b.1.tx_out.value.cmp(&a.1.tx_out.value));
         let (inputs, total_input_value) = calculate_inputs(&active_wallet_utxo, total_value);
 
         let change = total_input_value - total_value;
@@ -265,12 +266,6 @@ impl NodeState {
         }
         let wallet_balance = self.get_active_wallet_balance()?;
         if total_value > wallet_balance {
-            send_log(
-                &self.logger_sender,
-                Log::Error(CustomError::Validation(
-                    "Insufficient funds to make transaction".to_string(),
-                )),
-            );
             return Err(CustomError::InsufficientFunds);
         }
         Ok(total_value)
@@ -278,14 +273,14 @@ impl NodeState {
 }
 
 fn calculate_inputs(
-    active_wallet_utxo: &[(OutPoint, TransactionOutput)],
+    active_wallet_utxo: &[(OutPoint, UTXOValue)],
     total_value: u64,
 ) -> (Vec<OutPoint>, u64) {
     let mut inputs = vec![];
     let mut total_input_value = 0;
     for (out_point, tx_out) in active_wallet_utxo.iter() {
         inputs.push(out_point.clone());
-        total_input_value += tx_out.value;
+        total_input_value += tx_out.tx_out.value;
         if total_input_value >= total_value {
             break;
         }

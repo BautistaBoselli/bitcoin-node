@@ -19,10 +19,11 @@ use std::{
 
 const START_DATE_IBD: u32 = 1681095630;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct UTXOValue {
     pub tx_out: TransactionOutput,
     pub block_hash: Vec<u8>,
+    pub block_timestamp: u32,
 }
 
 #[derive(PartialEq)]
@@ -56,13 +57,13 @@ impl UTXO {
     pub fn generate_wallet_utxo(
         &self,
         wallet: &Wallet,
-    ) -> Result<Vec<(OutPoint, TransactionOutput)>, CustomError> {
+    ) -> Result<Vec<(OutPoint, UTXOValue)>, CustomError> {
         let pubkey_hash = wallet.get_pubkey_hash()?;
 
         let mut active_wallet_utxo = vec![];
         for (out_point, value) in &self.tx_set {
             if value.tx_out.is_sent_to_key(&pubkey_hash)? {
-                active_wallet_utxo.push((out_point.clone(), value.tx_out.clone()));
+                active_wallet_utxo.push((out_point.clone(), value.clone()));
             }
         }
 
@@ -155,6 +156,7 @@ impl UTXO {
             buffer.extend(out_point.serialize());
             buffer.extend(value.tx_out.serialize());
             buffer.extend(value.block_hash.clone());
+            buffer.extend(value.block_timestamp.to_le_bytes());
         }
         buffer
     }
@@ -172,6 +174,7 @@ impl UTXO {
             let value = UTXOValue {
                 tx_out: TransactionOutput::parse(&mut parser)?,
                 block_hash: parser.extract_buffer(32)?.to_vec(),
+                block_timestamp: parser.extract_u32()?,
             };
             tx_set.insert(out_point, value);
         }
@@ -192,6 +195,7 @@ impl UTXO {
                 let value = UTXOValue {
                     tx_out: tx_out.clone(),
                     block_hash: block.header.hash(),
+                    block_timestamp: block.header.timestamp,
                 };
                 self.tx_set.insert(out_point.clone(), value);
             }
@@ -265,6 +269,7 @@ mod tests {
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32,
             ],
+            block_timestamp: 1680000000,
         };
         let key2 = OutPoint {
             hash: vec![
@@ -285,6 +290,7 @@ mod tests {
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32,
             ],
+            block_timestamp: 1680000001,
         };
         let key3 = OutPoint {
             hash: vec![
@@ -305,6 +311,7 @@ mod tests {
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32,
             ],
+            block_timestamp: 1680000002,
         };
         utxo_set.tx_set.insert(key1, value1);
         utxo_set.tx_set.insert(key2, value2);
@@ -394,6 +401,7 @@ mod tests {
                 240, 23, 75, 32, 175, 14, 221, 106, 150, 247, 21, 243, 205, 109,
             ]
             .to_vec(),
+            block_timestamp: 1680000000,
         };
         utxo_set.tx_set.insert(key, value);
 
@@ -450,6 +458,7 @@ mod tests {
         let value1 = UTXOValue {
             tx_out: tx_out1.clone(),
             block_hash: vec![],
+            block_timestamp: 1680000000,
         };
         let key2 = OutPoint {
             hash: vec![],
@@ -463,6 +472,7 @@ mod tests {
         let value2 = UTXOValue {
             tx_out: tx_out2.clone(),
             block_hash: vec![],
+            block_timestamp: 1680000001,
         };
         let tx_out3 = TransactionOutput {
             value: 100,
@@ -476,21 +486,21 @@ mod tests {
         };
         let value3 = UTXOValue {
             tx_out: tx_out3.clone(),
-
             block_hash: vec![],
+            block_timestamp: 1680000002,
         };
-        utxo_set.tx_set.insert(key1.clone(), value1);
-        utxo_set.tx_set.insert(key2.clone(), value2);
+        utxo_set.tx_set.insert(key1.clone(), value1.clone());
+        utxo_set.tx_set.insert(key2.clone(), value2.clone());
         utxo_set.tx_set.insert(key3.clone(), value3);
         assert!(utxo_set.generate_wallet_utxo(&wallet).unwrap().len() == 2);
         assert!(utxo_set
             .generate_wallet_utxo(&wallet)
             .unwrap()
-            .contains(&(key1, tx_out1)));
+            .contains(&(key1, value1)));
         assert!(utxo_set
             .generate_wallet_utxo(&wallet)
             .unwrap()
-            .contains(&(key2, tx_out2)));
+            .contains(&(key2, value2)));
     }
 
     #[test]
@@ -517,6 +527,7 @@ mod tests {
                 .unwrap(),
             },
             block_hash: vec![],
+            block_timestamp: 1680000000,
         };
         let key2 = OutPoint {
             hash: vec![],
@@ -531,6 +542,7 @@ mod tests {
                 .unwrap(),
             },
             block_hash: vec![],
+            block_timestamp: 1680000001,
         };
         let key3 = OutPoint {
             hash: vec![],
@@ -545,6 +557,7 @@ mod tests {
                 .unwrap(),
             },
             block_hash: vec![],
+            block_timestamp: 1680000002,
         };
         utxo_set.tx_set.insert(key1, value1);
         utxo_set.tx_set.insert(key2, value2);

@@ -88,7 +88,7 @@ impl CustomError {
             Self::CannotReadStream => "cannot read stream",
             Self::CannotSendToStream => "cannot send message to stream",
             Self::MissingGUIElement => "missing GUI element",
-            Self::InsufficientFunds => "insufficient funds",
+            Self::InsufficientFunds => "Insufficient funds to make transaction",
             Self::CannotStartEventLoop => "cannot start event loop",
             Self::InvalidValue => "invalid value",
             Self::CannotSignTx => "cannot sign transaction",
