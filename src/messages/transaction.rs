@@ -130,11 +130,17 @@ impl Transaction {
             transaction.outputs.push(output);
         }
 
+        let mut script_sigs = vec![];
         let script_pubkey = sender_wallet.get_script_pubkey()?;
         for i in 0..transaction.inputs.len() {
             transaction.inputs[i].script_sig = script_pubkey.clone();
             transaction.get_script_sig(i, sender_wallet)?;
-            println!("input {} signed", i);
+            script_sigs.push(transaction.inputs[i].script_sig.clone());
+            transaction.inputs[i].script_sig = vec![];
+        }
+
+        for i in 0..transaction.inputs.len() {
+            transaction.inputs[i].script_sig = script_sigs[i].clone();
         }
 
         Ok(transaction)
