@@ -9,8 +9,8 @@ use crate::{
     parser::{BufferParser, VarIntSerialize},
     states::utxo_state::UTXO,
     structs::{
-        block_header::hash_as_string, movement::Movement, outpoint::OutPoint,
-        tx_input::TransactionInput, tx_output::TransactionOutput,
+        movement::Movement, outpoint::OutPoint, tx_input::TransactionInput,
+        tx_output::TransactionOutput,
     },
     wallet::{get_script_pubkey, Wallet},
 };
@@ -139,18 +139,23 @@ impl Transaction {
             transaction.inputs[i].script_sig = vec![];
         }
 
-        for i in 0..transaction.inputs.len() {
-            transaction.inputs[i].script_sig = script_sigs[i].clone();
+        for (index, script_sig) in script_sigs.iter().enumerate() {
+            transaction.inputs[index].script_sig = script_sig.clone();
         }
 
         Ok(transaction)
     }
 
+    /// Esta funcion se encarga de mandar a firmar una transacción.
+    /// Recibe por parametro el indice del input que se quiere firmar y la wallet con la cual se quiere firmar.
+    /// Devuelve CustomError si:
+    /// - No se puede obtener el hash del private key de la wallet.
+    /// - No se pudo firmar la transacción.
     fn get_script_sig(&mut self, index: usize, wallet: &Wallet) -> Result<(), CustomError> {
         let privkey_hash = wallet.get_privkey_hash()?;
         let serialized_unsigned_tx = self.serialize();
         let script_sig = sign(serialized_unsigned_tx, &privkey_hash)?;
-        self.inputs[index].script_sig = script_sig.clone();
+        self.inputs[index].script_sig = script_sig;
         Ok(())
     }
 }
@@ -187,8 +192,6 @@ impl Message for Transaction {
 /// Recibe un buffer que contiene la transacción a firmar y el hash del private key de la wallet con la cual se quiere firmar la transacción.
 fn sign(mut buffer: Vec<u8>, privkey: &[u8]) -> Result<Vec<u8>, CustomError> {
     buffer.extend(SIGHASH_ALL.to_le_bytes());
-
-    println!("buffer: {:?}", hash_as_string(buffer.clone()));
 
     let z = sha256d::Hash::hash(&buffer);
 
@@ -303,7 +306,6 @@ mod tests {
         ];
         let mut parser = BufferParser::new(buffer);
         let mut tx = Transaction::parse_from_parser(&mut parser).unwrap();
-        // let signed_tx = tx.sign(&wallet);
-        // assert!(signed_tx.is_ok());
+        assert!(tx.get_script_sig(0, &wallet).is_ok());
     }
 }

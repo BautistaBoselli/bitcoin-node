@@ -10,7 +10,7 @@ use crate::{
     message::Message,
     messages::{get_data::GetData, transaction::Transaction},
     peer::{request_headers, NodeAction, PeerAction},
-    structs::{block_header::hash_as_string, inventory::Inventory},
+    structs::inventory::Inventory,
 };
 
 /// PeerActionLoop es una estructura que contiene los elementos necesarios para manejar los las acciones a enviar al peer asociado.
@@ -75,12 +75,7 @@ impl PeerActionLoop {
     }
 
     fn handle_send_transaction(&mut self, transaction: &Transaction) -> Result<(), CustomError> {
-        println!("transaction: {:?}", transaction);
-        println!(
-            "serialized: {:?}",
-            hash_as_string(transaction.serialize()).to_ascii_lowercase()
-        );
-        // transaction.send(&mut self.stream)?;
+        transaction.send(&mut self.stream)?;
         send_log(
             &self.logger_sender,
             Log::Message("Sending transaction".to_string()),

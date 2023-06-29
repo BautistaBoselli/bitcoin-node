@@ -98,10 +98,10 @@ impl NodeActionLoop {
             }
         };
 
-        // for _i in 0..self.npeers {
-        self.peer_action_sender
-            .send(PeerAction::SendTransaction(transaction.clone()))?;
-        // }
+        for _i in 0..self.npeers {
+            self.peer_action_sender
+                .send(PeerAction::SendTransaction(transaction.clone()))?;
+        }
 
         node_state.append_pending_tx(transaction)?;
         self.gui_sender.send(GUIEvents::TransactionSent)?;
