@@ -130,32 +130,34 @@ impl Transaction {
             transaction.outputs.push(output);
         }
 
-        let mut script_sigs = vec![];
-        let script_pubkey = sender_wallet.get_script_pubkey()?;
-        for i in 0..transaction.inputs.len() {
-            transaction.inputs[i].script_sig = script_pubkey.clone();
-            transaction.get_script_sig(i, sender_wallet)?;
-            script_sigs.push(transaction.inputs[i].script_sig.clone());
-            transaction.inputs[i].script_sig = vec![];
-        }
-
-        for (index, script_sig) in script_sigs.iter().enumerate() {
-            transaction.inputs[index].script_sig = script_sig.clone();
-        }
+        transaction.get_script_sigs(sender_wallet)?;
 
         Ok(transaction)
     }
 
     /// Esta funcion se encarga de mandar a firmar una transacción.
-    /// Recibe por parametro el indice del input que se quiere firmar y la wallet con la cual se quiere firmar.
+    /// Recibe por parametro la wallet con la cual se quiere firmar.
     /// Devuelve CustomError si:
+    /// - No se puede obtener la script pub key de la wallet.
     /// - No se puede obtener el hash del private key de la wallet.
     /// - No se pudo firmar la transacción.
-    fn get_script_sig(&mut self, index: usize, wallet: &Wallet) -> Result<(), CustomError> {
+    fn get_script_sigs(&mut self, wallet: &Wallet) -> Result<(), CustomError> {
+        let mut script_sigs = vec![];
+        let script_pubkey = wallet.get_script_pubkey()?;
         let privkey_hash = wallet.get_privkey_hash()?;
-        let serialized_unsigned_tx = self.serialize();
-        let script_sig = sign(serialized_unsigned_tx, &privkey_hash)?;
-        self.inputs[index].script_sig = script_sig;
+
+        for i in 0..self.inputs.len() {
+            self.inputs[i].script_sig = script_pubkey.clone();
+            let serialized_unsigned_tx = self.serialize();
+            let script_sig = sign(serialized_unsigned_tx, &privkey_hash)?;
+            script_sigs.push(script_sig);
+            self.inputs[i].script_sig = vec![];
+        }
+
+        for (index, script_sig) in script_sigs.iter().enumerate() {
+            self.inputs[index].script_sig = script_sig.clone();
+        }
+
         Ok(())
     }
 }
@@ -306,6 +308,6 @@ mod tests {
         ];
         let mut parser = BufferParser::new(buffer);
         let mut tx = Transaction::parse_from_parser(&mut parser).unwrap();
-        assert!(tx.get_script_sig(0, &wallet).is_ok());
+        assert!(tx.get_script_sigs(&wallet).is_ok());
     }
 }
