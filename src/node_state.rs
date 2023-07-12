@@ -10,6 +10,7 @@ use crate::{
     gui::init::GUIEvents,
     logger::{send_log, Log},
     messages::{block::Block, headers::Headers, transaction::Transaction},
+    peer::Peer,
     states::{
         headers_state::HeadersState,
         pending_blocks_state::PendingBlocks,
@@ -31,10 +32,12 @@ use crate::{
 /// - utxo: UTXO.
 /// - pending_txs: PendingTxs.
 /// - blocks_sync: Indica si los bloques estan sincronizados.
+/// - Peers: Vector de peers.
 pub struct NodeState {
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIEvents>,
     headers: HeadersState,
+    peers: Vec<Peer>,
     wallets: Wallets,
     pending_blocks_ref: Arc<Mutex<PendingBlocks>>,
     utxo: UTXO,
@@ -52,6 +55,7 @@ impl NodeState {
             logger_sender: logger_sender.clone(),
             gui_sender,
             headers: HeadersState::new(String::from("store/headers.bin"), logger_sender)?,
+            peers: vec![],
             wallets: Wallets::new(String::from("store/wallets.bin"))?,
             pending_blocks_ref: PendingBlocks::new(),
             utxo: UTXO::new(String::from("store/utxo.bin"))?,
@@ -82,6 +86,18 @@ impl NodeState {
         }
 
         Ok(())
+    }
+
+    /********************     PEERS     ********************/
+
+    /// devuelve referencia a los peers del nodo
+    pub fn get_peers(&mut self) -> &mut Vec<Peer> {
+        &mut self.peers
+    }
+
+    /// agrega varios peers nuevos al nodo
+    pub fn append_peers(&mut self, peers: Vec<Peer>) {
+        self.peers.extend(peers);
     }
 
     /********************     HEADERS     ********************/

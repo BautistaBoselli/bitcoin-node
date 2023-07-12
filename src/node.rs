@@ -40,7 +40,6 @@ pub struct Node {
     pub node_action_sender: mpsc::Sender<NodeAction>,
     node_action_receiver: Option<mpsc::Receiver<NodeAction>>,
     node_state_ref: Arc<Mutex<NodeState>>,
-    peers: Vec<Peer>,
     npeers: u8,
 }
 
@@ -66,7 +65,6 @@ impl Node {
             peer_action_receiver,
             node_action_sender,
             node_action_receiver: Some(node_action_receiver),
-            peers: vec![],
             npeers: config.npeers,
             node_state_ref,
         };
@@ -82,8 +80,9 @@ impl Node {
         self.initialize_pending_blocks_loop();
 
         thread::spawn(move || -> Result<(), CustomError> {
-            self.connect(addresses, self.npeers);
-
+            if let Err(error) = self.connect(addresses, self.npeers) {
+                send_log(&self.logger_sender, Log::Error(error));
+            }
             if let Err(error) = self.initialize_ibd() {
                 send_log(&self.logger_sender, Log::Error(error));
             }
@@ -94,7 +93,11 @@ impl Node {
         });
     }
 
-    fn connect(&mut self, addresses: IntoIter<SocketAddr>, mut number_of_peers: u8) {
+    fn connect(
+        &mut self,
+        addresses: IntoIter<SocketAddr>,
+        mut number_of_peers: u8,
+    ) -> Result<(), CustomError> {
         send_log(
             &self.logger_sender,
             Log::Message(format!(
@@ -103,6 +106,8 @@ impl Node {
                 addresses.len()
             )),
         );
+
+        let mut peers = vec![];
 
         for address in addresses {
             if number_of_peers == 0 {
@@ -119,7 +124,7 @@ impl Node {
                 self.node_action_sender.clone(),
             ) {
                 Ok(peer) => {
-                    self.peers.push(peer);
+                    peers.push(peer);
                     number_of_peers -= 1;
                 }
                 Err(error) => {
@@ -130,6 +135,10 @@ impl Node {
                 }
             };
         }
+
+        let mut node_state = self.node_state_ref.lock()?;
+        node_state.append_peers(peers);
+        Ok(())
     }
 
     fn initialize_pending_blocks_loop(&self) {
@@ -163,7 +172,6 @@ impl Node {
                 self.peer_action_sender.clone(),
                 self.logger_sender.clone(),
                 self.node_state_ref.clone(),
-                self.npeers,
             );
             return Ok(());
         }
@@ -173,17 +181,17 @@ impl Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        for worker in &mut self.peers {
-            if let Some(thread) = worker.peer_action_thread.take() {
-                if let Err(error) = thread.join() {
-                    println!("Error joining thread: {:?}", error);
-                }
-            }
-            if let Some(thread) = worker.peer_stream_thread.take() {
-                if let Err(error) = thread.join() {
-                    println!("Error joining thread: {:?}", error);
-                }
-            }
-        }
+        // for worker in &mut self.peers {
+        //     if let Some(thread) = worker.peer_action_thread.take() {
+        //         if let Err(error) = thread.join() {
+        //             println!("Error joining thread: {:?}", error);
+        //         }
+        //     }
+        //     if let Some(thread) = worker.peer_stream_thread.take() {
+        //         if let Err(error) = thread.join() {
+        //             println!("Error joining thread: {:?}", error);
+        //         }
+        //     }
+        // }
     }
 }
