@@ -9,6 +9,7 @@ use crate::{
     error::CustomError,
     gui::init::GUIEvents,
     logger::{send_log, Log},
+    message::Message,
     messages::{block::Block, headers::Headers, transaction::Transaction},
     node_state::NodeState,
     peer::{NodeAction, PeerAction},
@@ -28,14 +29,12 @@ const START_DATE_IBD: u32 = 1681095630;
 /// - peer_action_sender: Sender para enviar acciones al los peers.
 /// - logger_sender: Sender para enviar logs al logger.
 /// - node_state_ref: Referencia al estado del nodo.
-/// - npeers: Cantidad de peers.
 pub struct NodeActionLoop {
     gui_sender: glib::Sender<GUIEvents>,
     node_action_receiver: mpsc::Receiver<NodeAction>,
     peer_action_sender: mpsc::Sender<PeerAction>,
     logger_sender: mpsc::Sender<Log>,
     node_state_ref: Arc<Mutex<NodeState>>,
-    npeers: u8,
 }
 
 impl NodeActionLoop {
@@ -46,7 +45,6 @@ impl NodeActionLoop {
         peer_action_sender: mpsc::Sender<PeerAction>,
         logger_sender: mpsc::Sender<Log>,
         node_state_ref: Arc<Mutex<NodeState>>,
-        npeers: u8,
     ) {
         let mut node_thread = Self {
             gui_sender,
@@ -54,7 +52,6 @@ impl NodeActionLoop {
             peer_action_sender,
             logger_sender,
             node_state_ref,
-            npeers,
         };
         node_thread.event_loop();
     }
@@ -89,7 +86,6 @@ impl NodeActionLoop {
         fee: u64,
     ) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
-
         let transaction = match node_state.make_transaction(outputs, fee) {
             Ok(transaction) => transaction,
             Err(error) => {
@@ -97,16 +93,23 @@ impl NodeActionLoop {
                 return Ok(());
             }
         };
+        drop(node_state);
 
-        for _i in 0..self.npeers {
-            self.peer_action_sender
-                .send(PeerAction::SendTransaction(transaction.clone()))?;
-        }
+        // for _i in 0..self.npeers {
+        //     self.peer_action_sender
+        //         .send(PeerAction::SendTransaction(transaction.clone()))?;
+        // }
 
+        self.broadcast(transaction.clone())?;
+
+        send_log(
+            &self.logger_sender,
+            Log::Message("Transaction broadcasted!".to_string()),
+        );
+
+        let mut node_state = self.node_state_ref.lock()?;
         node_state.append_pending_tx(transaction)?;
         self.gui_sender.send(GUIEvents::TransactionSent)?;
-
-        drop(node_state);
 
         Ok(())
     }
@@ -197,6 +200,22 @@ impl NodeActionLoop {
 
         node_state.append_pending_tx(transaction)?;
         drop(node_state);
+        Ok(())
+    }
+
+    fn broadcast(&mut self, message: impl Message) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+
+        let peers = node_state.get_peers();
+        for peer in peers {
+            if let Err(error) = message.send(&mut peer.stream) {
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!("Error sending message: {:?}", error)),
+                );
+            }
+        }
+
         Ok(())
     }
 }

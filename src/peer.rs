@@ -173,6 +173,10 @@ impl Peer {
         ));
         Ok(())
     }
+
+    pub fn send(&mut self, message: impl Message) -> Result<(), CustomError> {
+        message.send(&mut self.stream)
+    }
 }
 
 pub fn request_headers(
