@@ -1,4 +1,5 @@
 use std::{
+    env::args,
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -12,7 +13,10 @@ use crate::{
     error::CustomError,
     gui::init::GUIEvents,
     logger::{send_log, Log, Logger},
-    loops::{node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop},
+    loops::{
+        node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop,
+        tcp_listener_loop::TcpListenerLoop,
+    },
     node_state::NodeState,
     peer::{NodeAction, Peer, PeerAction},
 };
@@ -39,6 +43,7 @@ pub struct Node {
     peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
     pub node_action_sender: mpsc::Sender<NodeAction>,
     node_action_receiver: Option<mpsc::Receiver<NodeAction>>,
+    tcp_listener_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
     node_state_ref: Arc<Mutex<NodeState>>,
     npeers: u8,
 }
@@ -65,6 +70,7 @@ impl Node {
             peer_action_receiver,
             node_action_sender,
             node_action_receiver: Some(node_action_receiver),
+            tcp_listener_thread: None,
             npeers: config.npeers,
             node_state_ref,
         };
@@ -78,6 +84,7 @@ impl Node {
     /// Comienza el thread de node_action_loop.
     pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIEvents>) {
         self.initialize_pending_blocks_loop();
+        self.initialize_tcp_listener_loop();
 
         thread::spawn(move || -> Result<(), CustomError> {
             if let Err(error) = self.connect(addresses, self.npeers) {
@@ -114,6 +121,8 @@ impl Node {
                 break;
             }
 
+            println!("Connecting to peer: {:?}", address);
+
             match Peer::new(
                 address,
                 self.address,
@@ -147,6 +156,19 @@ impl Node {
             self.peer_action_sender.clone(),
             self.logger_sender.clone(),
         );
+    }
+
+    fn initialize_tcp_listener_loop(&mut self) {
+        let argv = args().collect::<Vec<String>>();
+        if argv.contains(&String::from("--client-only")) {
+            return;
+        }
+
+        self.tcp_listener_thread = Some(TcpListenerLoop::spawn(
+            self.logger_sender.clone(),
+            self.node_state_ref.clone(),
+            self.address,
+        ));
     }
 
     fn initialize_ibd(&self) -> Result<(), CustomError> {

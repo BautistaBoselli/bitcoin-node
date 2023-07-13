@@ -13,7 +13,7 @@ const CANT_ARGS: usize = 2;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != CANT_ARGS {
+    if args.len() < CANT_ARGS {
         println!("ERROR: config file path missing");
         return;
     }
