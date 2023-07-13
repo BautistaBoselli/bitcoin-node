@@ -87,6 +87,7 @@ impl Peer {
         node_action_sender: mpsc::Sender<NodeAction>,
     ) -> Result<Self, CustomError> {
         let stream = open_stream(address)?;
+
         let mut peer = Self {
             address: get_address_v6(address),
             peer_action_thread: None,

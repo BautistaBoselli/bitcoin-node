@@ -1,0 +1,2 @@
+[2023-07-12 21:30:14] Handshaking with 1 nodes (1 available)
+[2023-07-12 21:30:14] Error connecting to peer: CannotReadMessageHeader
