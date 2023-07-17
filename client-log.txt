@@ -1,2 +1,2 @@
-[2023-07-12 21:30:14] Handshaking with 1 nodes (1 available)
-[2023-07-12 21:30:14] Error connecting to peer: CannotReadMessageHeader
+[2023-07-17 17:33:16] Handshaking with 1 nodes (1 available)
+[2023-07-17 17:33:16] Successful handshake with ::ffff:127.0.0.1

@@ -50,6 +50,7 @@ pub enum NodeAction {
     GetDataError(Vec<Inventory>),
     PendingTransaction(Transaction),
     MakeTransaction((HashMap<String, u64>, u64)),
+    SendHeaders(SocketAddrV6),
 }
 
 /// Peer es una representacion de los Peers a los que nos conectamos, contiene los elementos necesarios para manejar la conexion con el peer.
@@ -69,6 +70,7 @@ pub struct Peer {
     pub address: SocketAddrV6,
     pub services: u64,
     pub version: i32,
+    pub send_headers: bool,
     pub stream: TcpStream,
     pub peer_action_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
     pub peer_stream_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
@@ -77,7 +79,7 @@ pub struct Peer {
 impl Peer {
     /// Inicializa el peer.
     /// Realiza el handshake con el peer y crea los threads asociados.
-    pub fn new(
+    pub fn call(
         address: SocketAddr,
         sender_address: SocketAddrV6,
         services: u64,
@@ -95,21 +97,59 @@ impl Peer {
             services,
             version,
             stream,
+            send_headers: false,
         };
 
-        peer.handshake(sender_address, &mut logger_sender)?;
+        peer.call_handshake(sender_address, &mut logger_sender)?;
+        peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
+        Ok(peer)
+    }
+
+    pub fn answer(
+        stream: TcpStream,
+        sender_address: SocketAddrV6,
+        services: u64,
+        version: i32,
+        peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+        mut logger_sender: mpsc::Sender<Log>,
+        node_action_sender: mpsc::Sender<NodeAction>,
+    ) -> Result<Self, CustomError> {
+        let mut peer = Self {
+            address: get_address_v6(stream.peer_addr()?),
+            peer_action_thread: None,
+            peer_stream_thread: None,
+            services,
+            version,
+            stream,
+            send_headers: false,
+        };
+
+        println!("hola3");
+        peer.answer_handshake(sender_address, &mut logger_sender)?;
         peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
     }
 
     /// Realiza el handshake de Node con el Peer.
-    fn handshake(
+    fn call_handshake(
         &mut self,
         sender_address: SocketAddrV6,
         logger_sender: &mut mpsc::Sender<Log>,
     ) -> Result<(), CustomError> {
-        self.share_versions(sender_address)?;
-        self.share_veracks()?;
+        Version::new(self.address, sender_address, self.version, self.services)
+            .send(&mut self.stream)?;
+
+        let response_header = MessageHeader::read(&mut self.stream)?;
+        let version_response = Version::read(&mut self.stream, response_header.payload_size)
+            .map_err(|_| CustomError::CannotHandshakeNode)?;
+        self.version = version_response.version;
+        self.services = version_response.services;
+
+        let response_header = MessageHeader::read(&mut self.stream)?;
+        VerAck::read(&mut self.stream, response_header.payload_size)
+            .map_err(|_| CustomError::CannotHandshakeNode)?;
+
+        VerAck::new().send(&mut self.stream)?;
         SendHeaders::new().send(&mut self.stream)?;
 
         send_log(
@@ -120,33 +160,31 @@ impl Peer {
         Ok(())
     }
 
-    fn share_versions(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
-        let version_message =
-            Version::new(self.address, sender_address, self.version, self.services);
-        version_message.send(&mut self.stream)?;
-
+    fn answer_handshake(
+        &mut self,
+        sender_address: SocketAddrV6,
+        logger_sender: &mut mpsc::Sender<Log>,
+    ) -> Result<(), CustomError> {
+        println!("hola");
         let response_header = MessageHeader::read(&mut self.stream)?;
-        if response_header.command.as_str() != "version" {
-            return Err(CustomError::CannotHandshakeNode);
-        }
-
-        let version_response = Version::read(&mut self.stream, response_header.payload_size)?;
-
+        let version_response = Version::read(&mut self.stream, response_header.payload_size)
+            .map_err(|_| CustomError::CannotHandshakeNode)?;
         self.version = version_response.version;
         self.services = version_response.services;
 
-        Ok(())
-    }
+        Version::new(self.address, sender_address, self.version, self.services)
+            .send(&mut self.stream)?;
+        VerAck::new().send(&mut self.stream)?;
 
-    fn share_veracks(&mut self) -> Result<(), CustomError> {
         let response_header = MessageHeader::read(&mut self.stream)?;
-        if response_header.command.as_str() != "verack" {
-            return Err(CustomError::CannotHandshakeNode);
-        }
+        VerAck::read(&mut self.stream, response_header.payload_size)
+            .map_err(|_| CustomError::CannotHandshakeNode)?;
 
-        VerAck::read(&mut self.stream, response_header.payload_size)?;
-        let verack_message = VerAck::new();
-        verack_message.send(&mut self.stream)?;
+        send_log(
+            logger_sender,
+            Log::Message(format!("Successful handshake with {}", self.address.ip())),
+        );
+
         Ok(())
     }
 
@@ -168,6 +206,7 @@ impl Peer {
         //Thread que escucha el stream
         self.peer_stream_thread = Some(PeerStreamLoop::spawn(
             self.version,
+            self.address,
             self.stream.try_clone()?,
             logger_sender,
             node_action_sender,

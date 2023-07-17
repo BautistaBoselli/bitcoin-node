@@ -46,7 +46,7 @@ mod tests {
         let logger = Logger::new(&String::from("tests/test_log2.txt"), gui_sender.clone()).unwrap();
         let logger_sender = logger.get_sender();
 
-        let peer = Peer::new(
+        let peer = Peer::call(
             addresses.next().unwrap(),
             SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 18333, 0, 0),
             0,
@@ -59,7 +59,7 @@ mod tests {
         assert!(peer.is_ok());
         peer.unwrap();
 
-        let peer2 = Peer::new(
+        let peer2 = Peer::call(
             addresses.next().unwrap(),
             SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 18333, 0, 0),
             0,

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    net::SocketAddrV6,
     sync::{mpsc, Arc, Mutex},
 };
 
@@ -98,6 +99,13 @@ impl NodeState {
     /// agrega varios peers nuevos al nodo
     pub fn append_peers(&mut self, peers: Vec<Peer>) {
         self.peers.extend(peers);
+    }
+
+    pub fn peer_send_headers(&mut self, address: SocketAddrV6) {
+        let peer = self.peers.iter_mut().find(|p| p.address == address);
+        if let Some(peer) = peer {
+            peer.send_headers = true;
+        }
     }
 
     /********************     HEADERS     ********************/
