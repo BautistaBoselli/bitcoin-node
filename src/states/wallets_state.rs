@@ -297,6 +297,7 @@ mod tests {
                 timestamp: 1686626483,
                 bits: 421617023,
                 nonce: 3878826733,
+                hash: vec![],
             },
             transactions: vec![Transaction {
                 version: 1,

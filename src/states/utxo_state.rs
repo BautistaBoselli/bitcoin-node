@@ -371,6 +371,7 @@ mod tests {
             timestamp: 1,
             bits: 486604799,
             nonce: 409655068,
+            hash: vec![],
         };
 
         let header2 = BlockHeader {
@@ -388,6 +389,7 @@ mod tests {
             timestamp: 3,
             bits: 486604799,
             nonce: 409655068,
+            hash: vec![],
         };
 
         assert_eq!(

@@ -52,10 +52,8 @@ impl Message for Headers {
 
         let mut headers = vec![];
         while parser.len() >= 81 {
-            headers.push(BlockHeader::parse(
-                parser.extract_buffer(81)?.to_vec(),
-                true,
-            )?);
+            headers.push(BlockHeader::parse(parser.extract_buffer(80)?.to_vec())?);
+            parser.extract_buffer(1)?;
         }
 
         if header_count != headers.len() as u64 {

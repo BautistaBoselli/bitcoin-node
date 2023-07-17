@@ -47,12 +47,12 @@ impl HeadersState {
         file.read_to_end(&mut buffer)?;
 
         let mut parser = BufferParser::new(buffer);
-        if parser.len() % 80 != 0 {
+        if parser.len() % 112 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
         while !parser.is_empty() {
-            let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec(), false)?;
+            let header = BlockHeader::parse_with_hash(parser.extract_buffer(112)?.to_vec())?;
             self.headers.push(header);
         }
         Ok(())
@@ -80,7 +80,7 @@ impl HeadersState {
 
         let mut buffer = vec![];
         for header in &headers.headers {
-            let header_buffer: Vec<u8> = header.serialize();
+            let header_buffer: Vec<u8> = header.serialize_with_hash();
             buffer.extend(header_buffer);
         }
 
@@ -204,6 +204,7 @@ mod tests {
             timestamp: 0,
             bits: 0,
             nonce: 0,
+            hash: vec![],
         });
 
         headers.append_headers(&mut new_headers).unwrap();

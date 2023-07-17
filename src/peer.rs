@@ -124,7 +124,6 @@ impl Peer {
             send_headers: false,
         };
 
-        println!("hola3");
         peer.answer_handshake(sender_address, &mut logger_sender)?;
         peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
@@ -165,7 +164,6 @@ impl Peer {
         sender_address: SocketAddrV6,
         logger_sender: &mut mpsc::Sender<Log>,
     ) -> Result<(), CustomError> {
-        println!("hola");
         let response_header = MessageHeader::read(&mut self.stream)?;
         let version_response = Version::read(&mut self.stream, response_header.payload_size)
             .map_err(|_| CustomError::CannotHandshakeNode)?;

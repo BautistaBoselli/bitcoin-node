@@ -1,5 +1,5 @@
 use std::{
-    net::{SocketAddr, SocketAddrV6, TcpListener},
+    net::{SocketAddrV6, TcpListener},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
@@ -8,7 +8,7 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     node_state::NodeState,
-    peer::{self, NodeAction, Peer, PeerAction},
+    peer::{NodeAction, Peer, PeerAction},
 };
 
 pub struct TcpListenerLoop {

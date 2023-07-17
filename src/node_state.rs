@@ -52,6 +52,10 @@ impl NodeState {
         logger_sender: mpsc::Sender<Log>,
         gui_sender: Sender<GUIEvents>,
     ) -> Result<Arc<Mutex<Self>>, CustomError> {
+        send_log(
+            &logger_sender,
+            Log::Message(String::from("Initializing node state...")),
+        );
         let node_state_ref = Arc::new(Mutex::new(Self {
             logger_sender: logger_sender.clone(),
             gui_sender,

@@ -1,6 +1,6 @@
 use std::{
     io::Read,
-    net::{SocketAddr, SocketAddrV6, TcpStream},
+    net::{SocketAddrV6, TcpStream},
     sync::mpsc,
     thread::{self, JoinHandle},
 };
@@ -12,6 +12,7 @@ use crate::{
     messages::{
         block::Block,
         get_data::GetData,
+        get_headers::GetHeaders,
         headers::Headers,
         inv::Inv,
         ping_pong::{Ping, Pong},
@@ -74,6 +75,7 @@ impl PeerStreamLoop {
                 "tx" => self.handle_tx(&response_header),
                 "notfound" => self.handle_notfound(&response_header),
                 "sendheaders" => self.handle_sendheaders(&response_header),
+                "getheaders" => self.handle_getheaders(&response_header),
                 _ => self.ignore_message(&response_header),
             };
 
@@ -169,6 +171,13 @@ impl PeerStreamLoop {
         let _ = SendHeaders::read(&mut self.stream, response_header.payload_size)?;
         self.node_action_sender
             .send(NodeAction::SendHeaders(self.address))?;
+        Ok(())
+    }
+
+    fn handle_getheaders(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        let getheaders = GetHeaders::read(&mut self.stream, response_header.payload_size)?;
+        // self.node_action_sender
+        //     .send(NodeAction::GetHeaders(getheaders))?;
         Ok(())
     }
 
