@@ -1,6 +1,6 @@
 use std::{
     io::Read,
-    net::TcpStream,
+    net::{SocketAddr, SocketAddrV6, TcpStream},
     sync::mpsc,
     thread::{self, JoinHandle},
 };
@@ -15,6 +15,7 @@ use crate::{
         headers::Headers,
         inv::Inv,
         ping_pong::{Ping, Pong},
+        send_headers::SendHeaders,
         transaction::Transaction,
     },
     peer::{request_headers, NodeAction},
@@ -32,6 +33,7 @@ use crate::{
 /// - version: Version del nodo.
 /// - logger_sender: Sender para enviar logs al logger.
 pub struct PeerStreamLoop {
+    pub address: SocketAddrV6,
     pub stream: TcpStream,
     pub node_action_sender: mpsc::Sender<NodeAction>,
     pub version: i32,
@@ -43,12 +45,14 @@ impl PeerStreamLoop {
     /// Inicializa el loop de eventos en un thread.
     pub fn spawn(
         version: i32,
+        address: SocketAddrV6,
         stream: TcpStream,
         logger_sender: mpsc::Sender<Log>,
         node_action_sender: mpsc::Sender<NodeAction>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut peer_action_thread = Self {
+                address,
                 stream,
                 node_action_sender,
                 version,
@@ -69,6 +73,7 @@ impl PeerStreamLoop {
                 "inv" => self.handle_inv(&response_header),
                 "tx" => self.handle_tx(&response_header),
                 "notfound" => self.handle_notfound(&response_header),
+                "sendheaders" => self.handle_sendheaders(&response_header),
                 _ => self.ignore_message(&response_header),
             };
 
@@ -160,9 +165,16 @@ impl PeerStreamLoop {
         Ok(())
     }
 
+    fn handle_sendheaders(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        let _ = SendHeaders::read(&mut self.stream, response_header.payload_size)?;
+        self.node_action_sender
+            .send(NodeAction::SendHeaders(self.address))?;
+        Ok(())
+    }
+
     fn ignore_message(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let cmd = response_header.command.as_str();
-        if cmd != "alert" && cmd != "addr" && cmd != "sendheaders" {
+        if cmd != "alert" && cmd != "addr" {
             send_log(
                 &self.logger_sender,
                 Log::Message(format!(

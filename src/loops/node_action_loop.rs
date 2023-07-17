@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    net::SocketAddrV6,
     sync::{mpsc, Arc, Mutex},
 };
 
@@ -69,6 +70,7 @@ impl NodeActionLoop {
                 NodeAction::PendingTransaction(transaction) => {
                     self.handle_pending_transaction(transaction)
                 }
+                NodeAction::SendHeaders(address) => self.handle_send_headers(address),
             };
 
             if let Err(error) = response {
@@ -200,6 +202,14 @@ impl NodeActionLoop {
 
         node_state.append_pending_tx(transaction)?;
         drop(node_state);
+        Ok(())
+    }
+
+    fn handle_send_headers(&mut self, address: SocketAddrV6) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        node_state.peer_send_headers(address);
+        drop(node_state);
+
         Ok(())
     }
 

@@ -121,9 +121,7 @@ impl Node {
                 break;
             }
 
-            println!("Connecting to peer: {:?}", address);
-
-            match Peer::new(
+            match Peer::call(
                 address,
                 self.address,
                 self.services,
@@ -168,6 +166,10 @@ impl Node {
             self.logger_sender.clone(),
             self.node_state_ref.clone(),
             self.address,
+            self.services,
+            self.version,
+            self.peer_action_receiver.clone(),
+            self.node_action_sender.clone(),
         ));
     }
 

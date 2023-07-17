@@ -1,5 +1,5 @@
 use std::{
-    net::{SocketAddrV6, TcpListener},
+    net::{SocketAddr, SocketAddrV6, TcpListener},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
@@ -8,12 +8,17 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     node_state::NodeState,
+    peer::{self, NodeAction, Peer, PeerAction},
 };
 
 pub struct TcpListenerLoop {
     logger_sender: mpsc::Sender<Log>,
     node_state_ref: Arc<Mutex<NodeState>>,
     address: SocketAddrV6,
+    services: u64,
+    version: i32,
+    peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+    node_action_sender: mpsc::Sender<NodeAction>,
 }
 
 impl TcpListenerLoop {
@@ -23,12 +28,20 @@ impl TcpListenerLoop {
         logger_sender: mpsc::Sender<Log>,
         node_state_ref: Arc<Mutex<NodeState>>,
         address: SocketAddrV6,
+        services: u64,
+        version: i32,
+        peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
+        node_action_sender: mpsc::Sender<NodeAction>,
     ) -> JoinHandle<Result<(), CustomError>> {
         thread::spawn(move || -> Result<(), CustomError> {
             let mut thread = Self {
                 logger_sender,
                 node_state_ref,
                 address,
+                services,
+                version,
+                peer_action_receiver,
+                node_action_sender,
             };
             thread.event_loop()
         })
@@ -45,25 +58,25 @@ impl TcpListenerLoop {
 
         for stream in listener.incoming() {
             let stream = stream?;
+            let peer_address = stream.peer_addr()?;
             send_log(
                 &self.logger_sender,
-                Log::Message(format!("New connection: {:?}", stream.peer_addr())),
+                Log::Message(format!("New connection: {:?}", peer_address)),
             );
 
-            // let a = MessageHeader::read(&mut stream)?;
-            // let version = Version::read(&mut stream, a.payload_size)?;
-            // println!("version: {:?}", version);
+            let new_peer = Peer::answer(
+                stream,
+                self.address,
+                self.services,
+                self.version,
+                self.peer_action_receiver.clone(),
+                self.logger_sender.clone(),
+                self.node_action_sender.clone(),
+            )?;
 
-            // version.send(&mut stream)?;
-            // println!("version enviado");
-
-            // let verack = VerAck::new();
-            // verack.send(&mut stream)?;
-            // println!("verack enviado");
-
-            // let a = MessageHeader::read(&mut stream)?;
-            // let verack = VerAck::read(&mut stream, a.payload_size)?;
-            // println!("verack recibido: {:?}", verack);
+            let mut node_state = self.node_state_ref.lock()?;
+            node_state.append_peers(vec![new_peer]);
+            drop(node_state);
         }
 
         println!("Terminado");
