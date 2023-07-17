@@ -176,8 +176,8 @@ impl PeerStreamLoop {
 
     fn handle_getheaders(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let getheaders = GetHeaders::read(&mut self.stream, response_header.payload_size)?;
-        // self.node_action_sender
-        //     .send(NodeAction::GetHeaders(getheaders))?;
+        self.node_action_sender
+            .send(NodeAction::GetHeaders(self.address, getheaders))?;
         Ok(())
     }
 

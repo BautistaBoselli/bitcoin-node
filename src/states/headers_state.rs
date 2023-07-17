@@ -6,8 +6,9 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::headers::Headers,
+    messages::{get_headers::GetHeaders, headers::Headers},
     parser::BufferParser,
+    peer::GENESIS,
     structs::block_header::BlockHeader,
     utils::open_new_file,
 };
@@ -121,6 +122,43 @@ impl HeadersState {
     /// Devuelve si los headers del nodo estan sincronizados con la red.
     pub fn is_synced(&self) -> bool {
         self.sync
+    }
+
+    pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
+        let mut headers = vec![];
+        let mut found = false;
+        let peer_last_header = get_headers
+            .block_locator_hashes
+            .last()
+            .unwrap_or(&GENESIS.to_vec())
+            .clone();
+        if peer_last_header == GENESIS.to_vec() {
+            println!("hola genesis");
+            found = true;
+        }
+        println!("hola last header: {:?}", peer_last_header);
+        println!("GENESIS: {:?}", GENESIS.to_vec());
+        for header in &self.headers {
+            if found {
+                println!("hola push");
+                headers.push(header.clone());
+            } else if header.hash() == peer_last_header {
+                println!("hola encontrado");
+                found = true;
+            }
+            if headers.len() == 2000 || header.hash() == get_headers.hash_stop {
+                println!("hola 2000");
+                break;
+            }
+        }
+        if !found {
+            println!("hola take");
+            self.headers
+                .iter()
+                .take(2000)
+                .for_each(|header| headers.push(header.clone()));
+        }
+        headers
     }
 }
 

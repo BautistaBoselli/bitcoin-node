@@ -51,6 +51,7 @@ pub enum NodeAction {
     PendingTransaction(Transaction),
     MakeTransaction((HashMap<String, u64>, u64)),
     SendHeaders(SocketAddrV6),
+    GetHeaders(SocketAddrV6, GetHeaders),
 }
 
 /// Peer es una representacion de los Peers a los que nos conectamos, contiene los elementos necesarios para manejar la conexion con el peer.

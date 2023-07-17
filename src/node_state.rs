@@ -10,7 +10,7 @@ use crate::{
     error::CustomError,
     gui::init::GUIEvents,
     logger::{send_log, Log},
-    messages::{block::Block, headers::Headers, transaction::Transaction},
+    messages::{block::Block, get_headers::GetHeaders, headers::Headers, transaction::Transaction},
     peer::Peer,
     states::{
         headers_state::HeadersState,
@@ -100,6 +100,10 @@ impl NodeState {
         &mut self.peers
     }
 
+    pub fn get_peer(&mut self, address: &SocketAddrV6) -> Option<&mut Peer> {
+        self.peers.iter_mut().find(|p| &p.address == address)
+    }
+
     /// agrega varios peers nuevos al nodo
     pub fn append_peers(&mut self, peers: Vec<Peer>) {
         self.peers.extend(peers);
@@ -129,6 +133,10 @@ impl NodeState {
     /// Devuelve los ultimos count headers del HeaderState
     pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
         self.headers.get_last_headers(count)
+    }
+
+    pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
+        self.headers.get_headers(get_headers)
     }
 
     /********************     SYNC     ********************/
