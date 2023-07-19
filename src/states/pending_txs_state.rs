@@ -67,6 +67,10 @@ impl PendingTxs {
         }
         Ok(pending_movements)
     }
+
+    pub fn get_pending_tx(&self, tx_hash: &Vec<u8>) -> Option<Transaction> {
+        self.tx_set.get(tx_hash).cloned()
+    }
 }
 
 #[cfg(test)]

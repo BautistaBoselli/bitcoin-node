@@ -1,8 +1,10 @@
-[2023-07-19 17:56:17] Initializing node state...
-[2023-07-19 17:56:21] Handshaking with 1 nodes (1 available)
-[2023-07-19 17:56:21] Successful handshake with ::ffff:127.0.0.1
-[2023-07-19 17:56:21] There are 2442731 headers, new 0
-[2023-07-19 17:56:21] headers sync completed
-[2023-07-19 17:56:21] blocks sync completed
-[2023-07-19 17:56:21] Utxo generation is starting (14467 new blocks)
-[2023-07-19 17:56:21] Error on NodeActionLoop: Error: serialized buffer is invalid
+[2023-07-19 19:54:09] Initializing node state...
+[2023-07-19 19:54:12] Handshaking with 1 nodes (1 available)
+[2023-07-19 19:54:12] Successful handshake with ::ffff:127.0.0.1
+[2023-07-19 19:54:13] There are 2442754 headers, new 1
+[2023-07-19 19:54:13] headers sync completed
+[2023-07-19 19:54:13] New block received
+[2023-07-19 19:54:13] blocks sync completed
+[2023-07-19 19:54:14] Utxo generation is starting (1 new blocks)
+[2023-07-19 19:54:15] Utxo generation is (100%) completed...
+[2023-07-19 19:54:15] Utxo generation is finished

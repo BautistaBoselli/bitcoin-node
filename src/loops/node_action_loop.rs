@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::SocketAddrV6,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV6, ToSocketAddrs},
     sync::{mpsc, Arc, Mutex},
 };
 
@@ -11,14 +11,38 @@ use crate::{
     gui::init::GUIEvents,
     logger::{send_log, Log},
     message::Message,
-    messages::{block::Block, get_headers::GetHeaders, headers::Headers, transaction::Transaction},
+    messages::{
+        block::Block, get_data::GetData, get_headers::GetHeaders, headers::Headers, inv::Inv,
+        transaction::Transaction,
+    },
     node_state::NodeState,
-    peer::{NodeAction, PeerAction},
+    peer::PeerAction,
     structs::{
-        block_header::BlockHeader,
+        block_header::{hash_as_string, BlockHeader},
         inventory::{Inventory, InventoryType},
     },
 };
+
+/// NodeAction es una enumeracion de las acciones que puede realizar el nodo.
+/// Las acciones son:
+/// - NewHeaders: Recibe nuevos headers.
+/// - GetHeadersError: Error al solicitar headers.
+/// - Block: Recibe un bloque.
+/// - GetDataError: Error al solicitar data.
+/// - PendingTransaction: Recibe una transaccion.
+/// - MakeTransaction: Solicitar una transaccion.
+pub enum NodeAction {
+    NewHeaders(Headers),
+    GetHeadersError,
+    Block((Vec<u8>, Block)),
+    GetDataError(Vec<Inventory>),
+    PendingTransaction(Transaction),
+    MakeTransaction((HashMap<String, u64>, u64)),
+    SendHeaders(SocketAddrV6),
+    GetHeaders(SocketAddrV6, GetHeaders),
+    GetData(SocketAddrV6, GetData),
+    TestInv(Inv),
+}
 
 const START_DATE_IBD: u32 = 1681095630;
 
@@ -74,6 +98,8 @@ impl NodeActionLoop {
                 NodeAction::GetHeaders(address, getheaders) => {
                     self.handle_get_headers(address, getheaders)
                 }
+                NodeAction::GetData(address, getdata) => self.handle_get_data(address, getdata),
+                NodeAction::TestInv(inv) => self.handle_test_inv(inv),
             };
 
             if let Err(error) = response {
@@ -229,6 +255,55 @@ impl NodeActionLoop {
         if let Some(peer) = peer {
             peer.send(message)?;
         }
+        drop(node_state);
+
+        Ok(())
+    }
+
+    fn handle_get_data(
+        &mut self,
+        address: SocketAddrV6,
+        getdata: GetData,
+    ) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        for inventory in getdata.get_inventories() {
+            match inventory.inventory_type {
+                InventoryType::Block => {
+                    let block = node_state.get_block(hash_as_string(inventory.hash.clone()))?;
+                    let peer = node_state.get_peer(&address);
+
+                    if let Some(peer) = peer {
+                        peer.send(block)?;
+                    }
+                }
+                InventoryType::Tx => {
+                    let transaction = match node_state.get_pending_tx(&inventory.hash) {
+                        Some(tx) => tx,
+                        None => continue,
+                    };
+                    let peer = node_state.get_peer(&address);
+
+                    if let Some(peer) = peer {
+                        peer.send(transaction)?;
+                        println!("Transaction sent to {}", address);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        drop(node_state);
+
+        Ok(())
+    }
+
+    fn handle_test_inv(&mut self, inv: Inv) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        // let peer = node_state.get_peer(&local_address);
+
+        // if let Some(peer) = peer {
+        //     peer.send(inv)?;
+        // }
         drop(node_state);
 
         Ok(())

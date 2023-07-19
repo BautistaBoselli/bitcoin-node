@@ -5,7 +5,9 @@ use gtk::{
     prelude::{BuilderExtManual, IsA},
 };
 
-use crate::{error::CustomError, logger::Log, node_state::NodeState, peer::NodeAction};
+use crate::{
+    error::CustomError, logger::Log, loops::node_action_loop::NodeAction, node_state::NodeState,
+};
 
 use super::{
     balance::GUIBalance, blocks::GUIBlocks, history::GUIHistory, logs::GUILogs,

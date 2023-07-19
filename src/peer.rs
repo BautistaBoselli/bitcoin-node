@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     net::{SocketAddr, SocketAddrV6, TcpStream},
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -8,11 +7,14 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    loops::{peer_action_loop::PeerActionLoop, peer_stream_loop::PeerStreamLoop},
+    loops::{
+        node_action_loop::NodeAction, peer_action_loop::PeerActionLoop,
+        peer_stream_loop::PeerStreamLoop,
+    },
     message::{Message, MessageHeader},
     messages::{
-        block::Block, get_headers::GetHeaders, headers::Headers, send_headers::SendHeaders,
-        transaction::Transaction, ver_ack::VerAck, version::Version,
+        get_headers::GetHeaders, send_headers::SendHeaders, transaction::Transaction,
+        ver_ack::VerAck, version::Version,
     },
     structs::inventory::Inventory,
     utils::{get_address_v6, open_stream},
@@ -33,25 +35,6 @@ pub enum PeerAction {
     GetHeaders(Option<Vec<u8>>),
     GetData(Vec<Inventory>),
     SendTransaction(Transaction),
-}
-
-/// NodeAction es una enumeracion de las acciones que puede realizar el nodo.
-/// Las acciones son:
-/// - NewHeaders: Recibe nuevos headers.
-/// - GetHeadersError: Error al solicitar headers.
-/// - Block: Recibe un bloque.
-/// - GetDataError: Error al solicitar data.
-/// - PendingTransaction: Recibe una transaccion.
-/// - MakeTransaction: Solicitar una transaccion.
-pub enum NodeAction {
-    NewHeaders(Headers),
-    GetHeadersError,
-    Block((Vec<u8>, Block)),
-    GetDataError(Vec<Inventory>),
-    PendingTransaction(Transaction),
-    MakeTransaction((HashMap<String, u64>, u64)),
-    SendHeaders(SocketAddrV6),
-    GetHeaders(SocketAddrV6, GetHeaders),
 }
 
 /// Peer es una representacion de los Peers a los que nos conectamos, contiene los elementos necesarios para manejar la conexion con el peer.
