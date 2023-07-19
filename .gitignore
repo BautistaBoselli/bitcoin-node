@@ -1,8 +1,6 @@
 /target
-config.txt
+*config.txt
+!example-config.txt
 log.txt
 /store/*
-!/store/.gitkeep
-!/store/blocks
-/store/blocks/*
-!/store/blocks/.gitkeep
+/*store/*

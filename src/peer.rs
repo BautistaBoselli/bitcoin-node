@@ -20,8 +20,8 @@ use crate::{
 
 /// GENESIS es el hash del bloque genesis de la blockchain de Bitcoin.
 pub const GENESIS: [u8; 32] = [
-    111, 226, 140, 10, 182, 241, 179, 114, 193, 166, 162, 70, 174, 99, 247, 79, 147, 30, 131, 101,
-    225, 90, 8, 156, 104, 214, 25, 0, 0, 0, 0, 0,
+    67, 73, 127, 215, 248, 38, 149, 113, 8, 244, 163, 15, 217, 206, 195, 174, 186, 121, 151, 32,
+    132, 233, 14, 173, 1, 234, 51, 9, 0, 0, 0, 0,
 ];
 
 /// PeerAction es una enumeracion de las acciones que puede realizar un peer.
@@ -51,6 +51,7 @@ pub enum NodeAction {
     PendingTransaction(Transaction),
     MakeTransaction((HashMap<String, u64>, u64)),
     SendHeaders(SocketAddrV6),
+    GetHeaders(SocketAddrV6, GetHeaders),
 }
 
 /// Peer es una representacion de los Peers a los que nos conectamos, contiene los elementos necesarios para manejar la conexion con el peer.
@@ -124,7 +125,6 @@ impl Peer {
             send_headers: false,
         };
 
-        println!("hola3");
         peer.answer_handshake(sender_address, &mut logger_sender)?;
         peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
@@ -165,7 +165,6 @@ impl Peer {
         sender_address: SocketAddrV6,
         logger_sender: &mut mpsc::Sender<Log>,
     ) -> Result<(), CustomError> {
-        println!("hola");
         let response_header = MessageHeader::read(&mut self.stream)?;
         let version_response = Version::read(&mut self.stream, response_header.payload_size)
             .map_err(|_| CustomError::CannotHandshakeNode)?;

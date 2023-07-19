@@ -27,6 +27,7 @@ pub struct GUIBlocks {
     pub logger_sender: Sender<Log>,
     pub builder: gtk::Builder,
     pub node_state_ref: Arc<Mutex<NodeState>>,
+    pub node_state_ready: bool,
 }
 
 impl GUIBlocks {
@@ -34,6 +35,7 @@ impl GUIBlocks {
     /// Para NewHeaders: Actualiza la lista de bloques.
     pub fn handle_events(&mut self, message: &GUIEvents) {
         let result = match message {
+            GUIEvents::NodeStateReady => self.initialize(),
             GUIEvents::NewHeaders => self.update_blocks(),
             _ => Ok(()),
         };
@@ -44,11 +46,15 @@ impl GUIBlocks {
     }
 
     /// Inicializa la lista de bloques.
-    pub fn initialize(&self) -> Result<(), CustomError> {
+    fn initialize(&mut self) -> Result<(), CustomError> {
+        self.node_state_ready = true;
         self.update_blocks()
     }
 
     fn update_blocks(&self) -> Result<(), CustomError> {
+        if !self.node_state_ready {
+            return Ok(());
+        }
         let blocks_list_box: gtk::ListBox = get_gui_element(&self.builder, "blocks-list")?;
         let node_state_ref_clone = self.node_state_ref.clone();
         let node_state = node_state_ref_clone.lock()?;

@@ -172,7 +172,7 @@ impl Message for Block {
 
     fn parse(buffer: Vec<u8>) -> Result<Self, crate::error::CustomError> {
         let mut parser = BufferParser::new(buffer);
-        let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec(), false)?;
+        let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec())?;
         let tx_count = parser.extract_varint()? as usize;
         let mut transactions = vec![];
         for _ in 0..tx_count {
@@ -264,7 +264,7 @@ mod tests {
             14, 219, 74, 174, 208, 207, 59, 18, 12, 170, 7, 195, 79, 255, 255, 0, 29, 14, 171, 58,
             61,
         ];
-        let block_header = BlockHeader::parse(buffer, true).unwrap();
+        let block_header = BlockHeader::parse(buffer).unwrap();
         let block = Block::new(block_header, vec![]);
         assert_eq!(block.get_command(), "block");
     }

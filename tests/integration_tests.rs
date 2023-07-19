@@ -27,7 +27,9 @@ mod tests {
         let logger = Logger::new(&String::from("tests/test_log.txt"), gui_sender.clone()).unwrap();
         let logger_sender = logger.get_sender();
 
-        let node_state_ref = NodeState::new(logger_sender.clone(), gui_sender).unwrap();
+        let store_path = String::from("tests/store");
+        let node_state_ref =
+            NodeState::new(logger_sender.clone(), gui_sender, &store_path).unwrap();
 
         let config = Config::from_file("example-config.txt").unwrap();
         let node = Node::new(&config, &logger, node_state_ref.clone());
@@ -96,7 +98,9 @@ mod tests {
         let (peer_action_sender, receiver) = mpsc::channel();
         let peer_action_receiver = Arc::new(Mutex::new(receiver));
 
-        let node_state_ref = NodeState::new(logger_sender.clone(), gui_sender).unwrap();
+        let store_path = String::from("tests");
+        let node_state_ref =
+            NodeState::new(logger_sender.clone(), gui_sender, &store_path).unwrap();
         let node_state = node_state_ref.clone();
         let mut node_state = node_state.lock().unwrap();
         node_state.append_pending_block(vec![1, 2, 3]).unwrap();

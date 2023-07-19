@@ -1,11 +1,11 @@
-use std::sync::mpsc::Sender;
+use std::sync::{mpsc::Sender, Arc, Mutex};
 
 use chrono::{DateTime, Local, NaiveDateTime};
 use gtk::traits::{ButtonExt, ContainerExt, LabelExt, WidgetExt};
 
 use crate::{
     logger::{send_log, Log},
-    messages::block::Block,
+    node_state::NodeState,
     structs::block_header::hash_as_string,
 };
 
@@ -61,6 +61,7 @@ pub fn merkle_proof_button(
     block_hash: Option<Vec<u8>>,
     tx_hash: Vec<u8>,
     logger_sender: Sender<Log>,
+    node_state_ref: Arc<Mutex<NodeState>>,
 ) -> gtk::Box {
     let button_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
@@ -70,8 +71,8 @@ pub fn merkle_proof_button(
         button.set_label("Merkle Proof");
         let block_hash_string = hash_as_string(block_hash);
         button.connect_clicked(move |_| {
-            let path = format!("store/blocks/{}.bin", block_hash_string);
-            let block = match Block::restore(path) {
+            let node_state = node_state_ref.lock().unwrap();
+            let block = match node_state.get_block(block_hash_string.clone()) {
                 Ok(block) => block,
                 Err(error) => {
                     send_log(&logger_sender, Log::Error(error));

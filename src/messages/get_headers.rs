@@ -53,7 +53,6 @@ impl Message for GetHeaders {
 
         let mut block_locator_hashes: Vec<Vec<u8>> = vec![];
 
-        println!("hash count: {}", hash_count);
         while parser.len() > 32 {
             let hash = parser.extract_buffer(32)?.to_vec();
             block_locator_hashes.push(hash);
@@ -65,7 +64,6 @@ impl Message for GetHeaders {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
-        println!("hash count: {}", hash_count);
         Ok(GetHeaders {
             version,
             block_locator_hashes,

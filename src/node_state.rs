@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
+    fs,
     net::SocketAddrV6,
+    path::Path,
     sync::{mpsc, Arc, Mutex},
 };
 
@@ -10,7 +12,7 @@ use crate::{
     error::CustomError,
     gui::init::GUIEvents,
     logger::{send_log, Log},
-    messages::{block::Block, headers::Headers, transaction::Transaction},
+    messages::{block::Block, get_headers::GetHeaders, headers::Headers, transaction::Transaction},
     peer::Peer,
     states::{
         headers_state::HeadersState,
@@ -35,6 +37,7 @@ use crate::{
 /// - blocks_sync: Indica si los bloques estan sincronizados.
 /// - Peers: Vector de peers.
 pub struct NodeState {
+    store_path: String,
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIEvents>,
     headers: HeadersState,
@@ -51,15 +54,23 @@ impl NodeState {
     pub fn new(
         logger_sender: mpsc::Sender<Log>,
         gui_sender: Sender<GUIEvents>,
+        store_path: &String,
     ) -> Result<Arc<Mutex<Self>>, CustomError> {
+        send_log(
+            &logger_sender,
+            Log::Message(String::from("Initializing node state...")),
+        );
+        create_store_dir(store_path)?;
+
         let node_state_ref = Arc::new(Mutex::new(Self {
+            store_path: store_path.clone(),
             logger_sender: logger_sender.clone(),
             gui_sender,
-            headers: HeadersState::new(String::from("store/headers.bin"), logger_sender)?,
+            headers: HeadersState::new(format!("{}/headers.bin", store_path), logger_sender)?,
             peers: vec![],
-            wallets: Wallets::new(String::from("store/wallets.bin"))?,
+            wallets: Wallets::new(format!("{}/wallets.bin", store_path))?,
             pending_blocks_ref: PendingBlocks::new(),
-            utxo: UTXO::new(String::from("store/utxo.bin"))?,
+            utxo: UTXO::new(store_path.clone(), "/utxo.bin".to_string())?,
             pending_txs: PendingTxs::new(),
             blocks_sync: false,
         }));
@@ -70,7 +81,11 @@ impl NodeState {
     /// Agrega un bloque nuevo, lo guarda en su archivo y actualiza los pending_blocks, wallets, pending_txs y utxo.
     /// Tambien verifica si ahora el nodo esta actualizado con la red
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
-        let path = format!("store/blocks/{}.bin", block.header.hash_as_string());
+        let path = format!(
+            "{}/blocks/{}.bin",
+            self.store_path,
+            block.header.hash_as_string()
+        );
         block.save(path)?;
 
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
@@ -89,11 +104,20 @@ impl NodeState {
         Ok(())
     }
 
+    pub fn get_block(&self, block_string_hash: String) -> Result<Block, CustomError> {
+        let path = format!("{}/blocks/{}.bin", self.store_path, block_string_hash);
+        Block::restore(path)
+    }
+
     /********************     PEERS     ********************/
 
     /// devuelve referencia a los peers del nodo
     pub fn get_peers(&mut self) -> &mut Vec<Peer> {
         &mut self.peers
+    }
+
+    pub fn get_peer(&mut self, address: &SocketAddrV6) -> Option<&mut Peer> {
+        self.peers.iter_mut().find(|p| &p.address == address)
     }
 
     /// agrega varios peers nuevos al nodo
@@ -125,6 +149,10 @@ impl NodeState {
     /// Devuelve los ultimos count headers del HeaderState
     pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
         self.headers.get_last_headers(count)
+    }
+
+    pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
+        self.headers.get_headers(get_headers)
     }
 
     /********************     SYNC     ********************/
@@ -365,4 +393,16 @@ fn calculate_inputs(
         }
     }
     (inputs, total_input_value)
+}
+
+fn create_store_dir(path: &String) -> Result<(), CustomError> {
+    let path = Path::new(path);
+    if !path.exists() {
+        fs::create_dir(path)?;
+    }
+    let blocks_path = path.join("blocks");
+    if !blocks_path.exists() {
+        fs::create_dir(blocks_path)?;
+    }
+    Ok(())
 }

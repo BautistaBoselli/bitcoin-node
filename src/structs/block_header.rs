@@ -17,6 +17,7 @@ pub struct BlockHeader {
     pub timestamp: u32,
     pub bits: u32,
     pub nonce: u32,
+    pub hash: Vec<u8>,
 }
 
 impl BlockHeader {
@@ -29,12 +30,28 @@ impl BlockHeader {
         buffer.extend(&self.timestamp.to_le_bytes());
         buffer.extend(&self.bits.to_le_bytes());
         buffer.extend(&self.nonce.to_le_bytes());
+
+        buffer
+    }
+
+    pub fn serialize_with_hash(&self) -> Vec<u8> {
+        let mut buffer: Vec<u8> = vec![];
+        buffer.extend(&self.version.to_le_bytes());
+        buffer.extend(&self.prev_block_hash);
+        buffer.extend(&self.merkle_root);
+        buffer.extend(&self.timestamp.to_le_bytes());
+        buffer.extend(&self.bits.to_le_bytes());
+        buffer.extend(&self.nonce.to_le_bytes());
+        buffer.extend(&self.hash);
+
         buffer
     }
 
     ///Esta funcion se encarga de dado un vector de bytes, parsearlo a un BlockHeader con todos sus campos correspondientes
     /// Tambien se encarga de validar que el header sea valido, es decir, que cumpla con la proof of work, esto solo lo hace si el parametro validate es true.
-    pub fn parse(buffer: Vec<u8>, validate: bool) -> Result<Self, CustomError> {
+    pub fn parse(buffer: Vec<u8>) -> Result<Self, CustomError> {
+        let hash = sha256d::Hash::hash(&buffer).to_byte_array().to_vec();
+
         let mut parser = BufferParser::new(buffer);
         if parser.len() < 80 {
             return Err(CustomError::SerializedBufferIsInvalid);
@@ -47,9 +64,33 @@ impl BlockHeader {
             timestamp: parser.extract_u32()?,
             bits: parser.extract_u32()?,
             nonce: parser.extract_u32()?,
+            hash,
         };
 
-        if validate && !(block_header.validate()) {
+        if !(block_header.validate()) {
+            return Err(CustomError::HeaderInvalidPoW);
+        }
+
+        Ok(block_header)
+    }
+
+    pub fn parse_with_hash(buffer: Vec<u8>) -> Result<Self, CustomError> {
+        let mut parser = BufferParser::new(buffer);
+        if parser.len() < 112 {
+            return Err(CustomError::SerializedBufferIsInvalid);
+        }
+
+        let block_header = BlockHeader {
+            version: parser.extract_i32()?,
+            prev_block_hash: parser.extract_buffer(32)?.to_vec(),
+            merkle_root: parser.extract_buffer(32)?.to_vec(),
+            timestamp: parser.extract_u32()?,
+            bits: parser.extract_u32()?,
+            nonce: parser.extract_u32()?,
+            hash: parser.extract_buffer(32)?.to_vec(),
+        };
+
+        if !(block_header.validate()) {
             return Err(CustomError::HeaderInvalidPoW);
         }
 
@@ -83,9 +124,7 @@ impl BlockHeader {
 
     /// Esta funcion se encarga de calcular el hash del header de un bloque
     pub fn hash(&self) -> Vec<u8> {
-        sha256d::Hash::hash(&self.serialize())
-            .to_byte_array()
-            .to_vec()
+        self.hash.clone()
     }
 
     /// Esta funcion se encarga de calcular el hash del header de un bloque y devolverlo como un string
@@ -119,7 +158,7 @@ mod tests {
 
         let buffer_clone = buffer.clone();
 
-        let block_header = BlockHeader::parse(buffer, true).unwrap();
+        let block_header = BlockHeader::parse(buffer).unwrap();
         let serialized_block_header = block_header.serialize();
 
         assert_eq!(buffer_clone, serialized_block_header);
@@ -129,7 +168,7 @@ mod tests {
     fn blockheader_too_short_buffer() {
         let buffer = vec![1, 0];
 
-        let block_header = BlockHeader::parse(buffer, true);
+        let block_header = BlockHeader::parse(buffer);
 
         assert!(block_header.is_err());
     }
@@ -143,7 +182,7 @@ mod tests {
             14, 219,
         ];
 
-        let block_header = BlockHeader::parse(buffer, true);
+        let block_header = BlockHeader::parse(buffer);
 
         assert!(block_header.is_err());
     }
@@ -163,8 +202,15 @@ mod tests {
             timestamp: 1347149007,
             bits: 476726600,
             nonce: 240236131,
+            hash: vec![
+                10, 110, 89, 244, 38, 172, 240, 48, 75, 251, 139, 33, 16, 164, 179, 154, 22, 123,
+                120, 81, 209, 213, 111, 183, 7, 9, 162, 49, 0, 0, 0, 0,
+            ],
         };
 
+        valid_header.serialize();
+        let parsed = BlockHeader::parse(valid_header.serialize()).unwrap();
+        println!("{:?}", parsed.hash);
         assert!(valid_header.validate());
     }
 
@@ -183,6 +229,10 @@ mod tests {
             timestamp: 1347149007,
             bits: 476726600,
             nonce: 123123,
+            hash: vec![
+                116, 18, 66, 212, 76, 145, 158, 131, 46, 212, 244, 136, 96, 84, 11, 220, 121, 121,
+                78, 50, 3, 197, 235, 49, 172, 32, 11, 104, 118, 114, 161, 104,
+            ],
         };
 
         assert!(!valid_header.validate());

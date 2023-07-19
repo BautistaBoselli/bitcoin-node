@@ -6,8 +6,9 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::headers::Headers,
+    messages::{get_headers::GetHeaders, headers::Headers},
     parser::BufferParser,
+    peer::GENESIS,
     structs::block_header::BlockHeader,
     utils::open_new_file,
 };
@@ -47,12 +48,12 @@ impl HeadersState {
         file.read_to_end(&mut buffer)?;
 
         let mut parser = BufferParser::new(buffer);
-        if parser.len() % 80 != 0 {
+        if parser.len() % 112 != 0 {
             return Err(CustomError::SerializedBufferIsInvalid);
         }
 
         while !parser.is_empty() {
-            let header = BlockHeader::parse(parser.extract_buffer(80)?.to_vec(), false)?;
+            let header = BlockHeader::parse_with_hash(parser.extract_buffer(112)?.to_vec())?;
             self.headers.push(header);
         }
         Ok(())
@@ -80,7 +81,7 @@ impl HeadersState {
 
         let mut buffer = vec![];
         for header in &headers.headers {
-            let header_buffer: Vec<u8> = header.serialize();
+            let header_buffer: Vec<u8> = header.serialize_with_hash();
             buffer.extend(header_buffer);
         }
 
@@ -121,6 +122,44 @@ impl HeadersState {
     /// Devuelve si los headers del nodo estan sincronizados con la red.
     pub fn is_synced(&self) -> bool {
         self.sync
+    }
+
+    pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
+        let mut headers = vec![];
+        let mut found = false;
+        let peer_last_header = get_headers
+            .block_locator_hashes
+            .last()
+            .unwrap_or(&GENESIS.to_vec())
+            .clone();
+        if let Some(last_header) = self.headers.last() {
+            if peer_last_header == last_header.hash() {
+                return vec![];
+            }
+        }
+
+        if peer_last_header == GENESIS.to_vec() {
+            found = true;
+        }
+        for header in &self.headers {
+            if header.prev_block_hash == peer_last_header {
+                found = true;
+            }
+            if found {
+                headers.push(header.clone());
+            }
+            if headers.len() == 2000 || header.hash() == get_headers.hash_stop {
+                break;
+            }
+        }
+
+        if !found {
+            self.headers
+                .iter()
+                .take(2000)
+                .for_each(|header| headers.push(header.clone()));
+        }
+        headers
     }
 }
 
@@ -204,6 +243,7 @@ mod tests {
             timestamp: 0,
             bits: 0,
             nonce: 0,
+            hash: vec![],
         });
 
         headers.append_headers(&mut new_headers).unwrap();

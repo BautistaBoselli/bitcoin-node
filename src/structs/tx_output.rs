@@ -88,7 +88,7 @@ mod tests {
             String::from("test"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
             String::from("test"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+            &UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap(),
         )
         .unwrap();
         let buffer = vec![

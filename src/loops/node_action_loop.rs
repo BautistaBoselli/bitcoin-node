@@ -11,7 +11,7 @@ use crate::{
     gui::init::GUIEvents,
     logger::{send_log, Log},
     message::Message,
-    messages::{block::Block, headers::Headers, transaction::Transaction},
+    messages::{block::Block, get_headers::GetHeaders, headers::Headers, transaction::Transaction},
     node_state::NodeState,
     peer::{NodeAction, PeerAction},
     structs::{
@@ -71,6 +71,9 @@ impl NodeActionLoop {
                     self.handle_pending_transaction(transaction)
                 }
                 NodeAction::SendHeaders(address) => self.handle_send_headers(address),
+                NodeAction::GetHeaders(address, getheaders) => {
+                    self.handle_get_headers(address, getheaders)
+                }
             };
 
             if let Err(error) = response {
@@ -208,6 +211,24 @@ impl NodeActionLoop {
     fn handle_send_headers(&mut self, address: SocketAddrV6) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
         node_state.peer_send_headers(address);
+        drop(node_state);
+
+        Ok(())
+    }
+
+    fn handle_get_headers(
+        &mut self,
+        address: SocketAddrV6,
+        getheaders: GetHeaders,
+    ) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        let headers = node_state.get_headers(getheaders);
+        let peer = node_state.get_peer(&address);
+
+        let message = Headers { headers };
+        if let Some(peer) = peer {
+            peer.send(message)?;
+        }
         drop(node_state);
 
         Ok(())

@@ -140,7 +140,9 @@ mod tests {
                 timestamp: 1686626483,
                 bits: 421617023,
                 nonce: 3878826733,
+                hash: vec![],
             },
+
             transactions: vec![tx.clone()],
         };
 
@@ -178,7 +180,7 @@ mod tests {
         let pendings_from_wallet = pending_txs
             .from_wallet(
                 &wallets.get_active().unwrap(),
-                &UTXO::new("tests/test_utxo.bin".to_string()).unwrap(),
+                &UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap(),
             )
             .unwrap();
         assert_eq!(pendings_from_wallet.len(), 1);
