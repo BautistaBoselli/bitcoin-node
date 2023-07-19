@@ -132,27 +132,28 @@ impl HeadersState {
             .last()
             .unwrap_or(&GENESIS.to_vec())
             .clone();
+        if let Some(last_header) = self.headers.last() {
+            if peer_last_header == last_header.hash() {
+                return vec![];
+            }
+        }
+
         if peer_last_header == GENESIS.to_vec() {
-            println!("hola genesis");
             found = true;
         }
-        println!("hola last header: {:?}", peer_last_header);
-        println!("GENESIS: {:?}", GENESIS.to_vec());
         for header in &self.headers {
-            if found {
-                println!("hola push");
-                headers.push(header.clone());
-            } else if header.hash() == peer_last_header {
-                println!("hola encontrado");
+            if header.prev_block_hash == peer_last_header {
                 found = true;
             }
+            if found {
+                headers.push(header.clone());
+            }
             if headers.len() == 2000 || header.hash() == get_headers.hash_stop {
-                println!("hola 2000");
                 break;
             }
         }
+
         if !found {
-            println!("hola take");
             self.headers
                 .iter()
                 .take(2000)

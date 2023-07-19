@@ -64,6 +64,7 @@ impl GUIHistory {
                 movement.block_hash.clone(),
                 movement.tx_hash.clone(),
                 self.logger_sender.clone(),
+                self.node_state_ref.clone(),
             ));
 
             history_row.add(&history_box);

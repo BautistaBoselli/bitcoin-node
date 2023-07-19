@@ -43,16 +43,18 @@ pub struct UTXOValue {
 pub struct UTXO {
     pub tx_set: HashMap<OutPoint, UTXOValue>,
     sync: bool,
+    store_path: String,
     path: String,
 }
 
 impl UTXO {
     /// Inicializa las UTXO con el path del archivo donde se almacena.
     /// El utxo comienza desincronizado y vacio.
-    pub fn new(path: String) -> Result<Self, CustomError> {
+    pub fn new(store_path: String, path: String) -> Result<Self, CustomError> {
         Ok(Self {
             tx_set: HashMap::new(),
             sync: false,
+            store_path,
             path,
         })
     }
@@ -126,7 +128,8 @@ impl UTXO {
     }
 
     fn restore_utxo(&mut self) -> Result<u32, CustomError> {
-        let mut file = open_new_file(self.path.clone(), false)?;
+        let path = format!("{}/{}", self.store_path, self.path);
+        let mut file = open_new_file(path, false)?;
 
         let mut saved_utxo_buffer = vec![];
         file.read_to_end(&mut saved_utxo_buffer)?;
@@ -161,7 +164,7 @@ impl UTXO {
                 );
                 i = 0;
             }
-            let path = format!("store/blocks/{}.bin", header.hash_as_string());
+            let path = format!("{}/blocks/{}.bin", self.store_path, header.hash_as_string());
             let block = Block::restore(path)?;
             self.update_from_block(&block, false)?;
             new_timestamp = header.timestamp;
@@ -235,10 +238,11 @@ impl UTXO {
     fn save(&mut self, last_timestamp: u32) -> Result<(), CustomError> {
         let buffer = self.serialize(last_timestamp);
 
-        if Path::new(&self.path).exists() {
-            remove_file(self.path.clone())?;
+        let path = format!("{}/{}", self.store_path, self.path);
+        if Path::new(&path).exists() {
+            remove_file(path.clone())?;
         }
-        let mut file = open_new_file(self.path.clone(), false)?;
+        let mut file = open_new_file(path, false)?;
 
         file.write_all(&buffer)?;
         Ok(())
@@ -271,8 +275,9 @@ mod tests {
 
     #[test]
     fn test_save_restore() {
-        let filename = format!("tests/{}", Local::now());
-        let mut utxo_set = UTXO::new(filename.clone()).unwrap();
+        let filename = format!("{}", Local::now());
+        let store_path = String::from("tests");
+        let mut utxo_set = UTXO::new(store_path.clone(), filename.clone()).unwrap();
 
         let key1 = OutPoint {
             hash: vec![
@@ -346,12 +351,13 @@ mod tests {
         let last_timestamp = 1687623163;
         utxo_set.save(last_timestamp).unwrap();
 
-        let mut utxo_set2 = UTXO::new(filename.clone()).unwrap();
+        let mut utxo_set2 = UTXO::new(store_path.clone(), filename.clone()).unwrap();
         utxo_set2.restore_utxo().unwrap();
 
         assert_eq!(utxo_set2.tx_set.len(), 3);
         assert_eq!(utxo_set2.tx_set, utxo_set.tx_set);
-        fs::remove_file(filename).unwrap();
+
+        fs::remove_file(format!("{}/{}", store_path, filename)).unwrap();
     }
 
     #[test]
@@ -405,7 +411,10 @@ mod tests {
 
     #[test]
     fn utxo_serialization_and_parsing() {
-        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let filename = String::from("test_utxo.bin");
+        let store_path = String::from("tests");
+        let mut utxo_set = UTXO::new(store_path, filename.clone()).unwrap();
+
         let key: OutPoint = OutPoint {
             hash: [
                 252, 47, 239, 163, 175, 36, 146, 56, 212, 168, 146, 23, 101, 29, 205, 186, 7, 67,
@@ -449,7 +458,9 @@ mod tests {
         let block = Block::restore(path).unwrap();
 
         println!("hash: {}", block.header.hash_as_string());
-        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let filename = String::from("test_utxo.bin");
+        let store_path = String::from("tests");
+        let mut utxo_set = UTXO::new(store_path, filename.clone()).unwrap();
 
         let headers = vec![block.header.clone()];
         utxo_set
@@ -463,7 +474,9 @@ mod tests {
 
     #[test]
     fn wallet_utxo_generation() {
-        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let filename = String::from("test_utxo.bin");
+        let store_path = String::from("tests");
+        let mut utxo_set = UTXO::new(store_path, filename.clone()).unwrap();
         let wallet = Wallet::new(
             String::from("test_wallet"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
@@ -531,7 +544,10 @@ mod tests {
 
     #[test]
     fn correct_wallet_balance() {
-        let mut utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let filename = String::from("test_utxo.bin");
+        let store_path = String::from("tests");
+        let mut utxo_set = UTXO::new(store_path, filename.clone()).unwrap();
+
         let wallet = Wallet::new(
             String::from("test_wallet"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),

@@ -65,6 +65,7 @@ impl GUIUtxo {
                 Some(utxo_value.block_hash.clone()),
                 out_point.hash.clone(),
                 self.logger_sender.clone(),
+                self.node_state_ref.clone(),
             ));
 
             utxo_row.add(&utxo_box);

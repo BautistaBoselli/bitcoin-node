@@ -3,3 +3,4 @@ PROTOCOL_VERSION=70012
 PORT=18333
 LOG=client-log.txt
 NPEERS=1
+STORE_PATH=client-store

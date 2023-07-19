@@ -224,13 +224,12 @@ impl NodeActionLoop {
         let mut node_state = self.node_state_ref.lock()?;
         let headers = node_state.get_headers(getheaders);
         let peer = node_state.get_peer(&address);
-        println!("peer: {:?}", peer.unwrap().address);
-        println!("headers: {:?}", headers);
-        drop(node_state);
 
-        // if let Some(peer) = peer {
-        //     peer.send(headers)?;
-        // }
+        let message = Headers { headers };
+        if let Some(peer) = peer {
+            peer.send(message)?;
+        }
+        drop(node_state);
 
         Ok(())
     }

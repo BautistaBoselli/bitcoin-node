@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn wallet_creation() {
-        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let utxo_set = UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test"),
             String::from("mscatccDgq7azndWHFTzvEuZuywCsUvTRu"),
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn wallet_creation_with_invalid_pubkey() {
-        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let utxo_set = UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test"),
             String::from("invalid_pubkey"),
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn wallet_creation_with_no_name() {
-        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let utxo_set = UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from(""),
             String::from("pubkey"),
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn wallet_creation_with_no_pubkey() {
-        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let utxo_set = UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test"),
             String::from(""),
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn wallet_creation_with_no_privkey() {
-        let utxo_set = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let utxo_set = UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap();
         let wallet = Wallet::new(
             String::from("test"),
             String::from("pubkey"),

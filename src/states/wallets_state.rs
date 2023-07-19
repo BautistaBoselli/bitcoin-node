@@ -168,7 +168,7 @@ mod tests {
             String::from("wallet 2"),
             String::from("mxz3drZtkg4R3u1RDL7zRPLsizvhmGWfr3"),
             String::from("private key 2"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+            &UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap(),
         )
         .unwrap();
 
@@ -194,7 +194,7 @@ mod tests {
             String::from("wallet 2"),
             String::from("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm"),
             String::from("private key 2"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+            &UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap(),
         )
         .unwrap();
 
@@ -213,7 +213,7 @@ mod tests {
             String::from("wallet 2"),
             String::from("mxz3drZtkg4R3u1RDL7zRPLsizvhmGWfr3"),
             String::from("private key 2"),
-            &UTXO::new(String::from("tests/test_utxo.bin")).unwrap(),
+            &UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap(),
         )
         .unwrap();
 
@@ -320,7 +320,7 @@ mod tests {
             }],
         };
 
-        let utxo = UTXO::new(String::from("tests/test_utxo.bin")).unwrap();
+        let utxo = UTXO::new(String::from("tests"), String::from("test_utxo.bin")).unwrap();
 
         let updated = wallets.update(&block, &utxo).unwrap();
 

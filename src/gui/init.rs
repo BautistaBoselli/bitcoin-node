@@ -109,6 +109,7 @@ impl GUI {
             builder: builder.clone(),
             logger_sender: logger_sender.clone(),
             node_state_ref: node_state_ref.clone(),
+            node_state_ready: false,
         };
 
         let transfer = GUITransfer {
@@ -148,7 +149,6 @@ impl GUI {
         // initialize
         self.wallet.initialize()?;
         self.window.initialize()?;
-        self.blocks.initialize()?;
 
         // interactivity
         self.wallet.handle_interactivity()?;
