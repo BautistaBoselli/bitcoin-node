@@ -14,11 +14,12 @@ use crate::{
     gui::init::GUIEvents,
     logger::{send_log, Log, Logger},
     loops::{
-        node_action_loop::NodeActionLoop, pending_blocks_loop::pending_blocks_loop,
+        node_action_loop::{NodeAction, NodeActionLoop},
+        pending_blocks_loop::pending_blocks_loop,
         tcp_listener_loop::TcpListenerLoop,
     },
     node_state::NodeState,
-    peer::{NodeAction, Peer, PeerAction},
+    peer::{Peer, PeerAction},
 };
 
 /// Node es la estructura que representa nuestro nodo.

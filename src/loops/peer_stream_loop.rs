@@ -19,12 +19,14 @@ use crate::{
         send_headers::SendHeaders,
         transaction::Transaction,
     },
-    peer::{request_headers, NodeAction},
+    peer::request_headers,
     structs::{
         block_header::BlockHeader,
         inventory::{Inventory, InventoryType},
     },
 };
+
+use super::node_action_loop::NodeAction;
 
 /// PeerStreamLoop es una estructura que contiene los elementos necesarios para manejar los mensajes recibidos del peer asociado.
 /// Genera el loop de eventos alrededor de los mensajes recibidos por el TcpStream.
@@ -76,6 +78,7 @@ impl PeerStreamLoop {
                 "notfound" => self.handle_notfound(&response_header),
                 "sendheaders" => self.handle_sendheaders(&response_header),
                 "getheaders" => self.handle_getheaders(&response_header),
+                "getdata" => self.handle_getdata(&response_header),
                 _ => self.ignore_message(&response_header),
             };
 
@@ -142,7 +145,10 @@ impl PeerStreamLoop {
     }
 
     fn handle_inv(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        println!("inv recibido");
         let inv = Inv::read(&mut self.stream, response_header.payload_size)?;
+        // self.node_action_sender
+        //     .send(NodeAction::TestInv(inv.clone()))?;
         for inventory in inv.inventories {
             if inventory.inventory_type == InventoryType::Tx {
                 let message = GetData::new(vec![inventory]);
@@ -178,6 +184,13 @@ impl PeerStreamLoop {
         let getheaders = GetHeaders::read(&mut self.stream, response_header.payload_size)?;
         self.node_action_sender
             .send(NodeAction::GetHeaders(self.address, getheaders))?;
+        Ok(())
+    }
+
+    fn handle_getdata(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        let getdata = GetData::read(&mut self.stream, response_header.payload_size)?;
+        self.node_action_sender
+            .send(NodeAction::GetData(self.address, getdata))?;
         Ok(())
     }
 

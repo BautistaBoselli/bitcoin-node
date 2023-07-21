@@ -298,6 +298,10 @@ impl NodeState {
         Ok(())
     }
 
+    pub fn get_pending_tx(&self, tx_hash: &Vec<u8>) -> Option<Transaction> {
+        self.pending_txs.get_pending_tx(tx_hash)
+    }
+
     /********************     PENDING BLOCKS     ********************/
 
     /// Agrega un pending block nuevo a PendingBlocks

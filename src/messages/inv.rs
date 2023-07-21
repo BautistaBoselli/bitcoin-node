@@ -3,7 +3,7 @@ use crate::{
     structs::inventory::Inventory,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 /// Esta es la estructura de un mensaje inv, la cual contiene un vector de inventories
 pub struct Inv {
     pub inventories: Vec<Inventory>,

@@ -9,9 +9,11 @@ use crate::{
     logger::{send_log, Log},
     message::Message,
     messages::{get_data::GetData, transaction::Transaction},
-    peer::{request_headers, NodeAction, PeerAction},
+    peer::{request_headers, PeerAction},
     structs::inventory::Inventory,
 };
+
+use super::node_action_loop::NodeAction;
 
 /// PeerActionLoop es una estructura que contiene los elementos necesarios para manejar los las acciones a enviar al peer asociado.
 /// Genera el loop de eventos alrededor de los PeerAction recibido por peer_action_receiver.

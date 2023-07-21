@@ -8,8 +8,8 @@ use gtk::traits::{ButtonExt, DialogExt, EntryExt, LabelExt, WidgetExt};
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
+    loops::node_action_loop::NodeAction,
     node_state::NodeState,
-    peer::NodeAction,
 };
 
 use super::init::{get_gui_element, GUIEvents};
