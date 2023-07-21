@@ -77,8 +77,15 @@ impl HeadersState {
     /// Agrega los headers al nodo y los almacena.
     /// Tambien verifica si con los nuevos queda sincronizado con la red
     pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
-        let mut file = open_new_file(self.path.clone(), true)?;
+        if let Some(first_header) = headers.headers.first() {
+            if let Some(last_header) = self.headers.last() {
+                if last_header.hash() != first_header.prev_block_hash {
+                    return Err(CustomError::InvalidHeader);
+                }
+            }
+        }
 
+        let mut file = open_new_file(self.path.clone(), true)?;
         let mut buffer = vec![];
         for header in &headers.headers {
             let header_buffer: Vec<u8> = header.serialize_with_hash();
@@ -234,10 +241,14 @@ mod tests {
         fs::copy("tests/test_headers.bin", "tests/test_headers_append.bin").unwrap();
         let mut headers =
             HeadersState::new("tests/test_headers_append.bin".to_string(), logger_sender).unwrap();
+        println!("headers: {:?}", headers.headers.last().unwrap());
 
         let mut new_headers = Headers::new();
         new_headers.headers.push(BlockHeader {
-            prev_block_hash: vec![],
+            prev_block_hash: vec![
+                32, 120, 42, 0, 82, 85, 182, 87, 105, 110, 160, 87, 213, 185, 143, 52, 222, 252,
+                247, 81, 150, 246, 79, 110, 234, 200, 2, 108, 0, 0, 0, 0,
+            ],
             merkle_root: vec![],
             version: 0,
             timestamp: 0,

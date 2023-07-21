@@ -1,9 +1,18 @@
-[2023-07-21 19:25:06] Initializing node state...
-[2023-07-21 19:25:10] Handshaking with 1 nodes (1 available)
-[2023-07-21 19:25:10] Successful handshake with ::ffff:127.0.0.1
-[2023-07-21 19:25:10] There are 2443117 headers, new 0
-[2023-07-21 19:25:10] headers sync completed
-[2023-07-21 19:25:10] blocks sync completed
-[2023-07-21 19:25:11] Utxo generation is starting (0 new blocks)
-[2023-07-21 19:25:12] Utxo generation is (100%) completed...
-[2023-07-21 19:25:12] Utxo generation is finished
+[2023-07-21 20:37:48] Initializing node state...
+[2023-07-21 20:37:51] Handshaking with 1 nodes (1 available)
+[2023-07-21 20:37:51] Successful handshake with ::ffff:127.0.0.1
+[2023-07-21 20:37:52] There are 2443122 headers, new 5
+[2023-07-21 20:37:52] headers sync completed
+[2023-07-21 20:37:52] New block received
+[2023-07-21 20:37:52] New block received
+[2023-07-21 20:37:52] New block received
+[2023-07-21 20:37:52] New block received
+[2023-07-21 20:37:52] New block received
+[2023-07-21 20:37:52] blocks sync completed
+[2023-07-21 20:37:53] Utxo generation is starting (5 new blocks)
+[2023-07-21 20:37:53] Utxo generation is (10%) completed...
+[2023-07-21 20:37:53] Utxo generation is (20%) completed...
+[2023-07-21 20:37:53] Utxo generation is (30%) completed...
+[2023-07-21 20:37:53] Utxo generation is (40%) completed...
+[2023-07-21 20:37:55] Utxo generation is (100%) completed...
+[2023-07-21 20:37:55] Utxo generation is finished

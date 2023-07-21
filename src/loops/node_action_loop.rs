@@ -171,7 +171,7 @@ impl NodeActionLoop {
     }
 
     fn handle_new_headers(&mut self, mut new_headers: Headers) -> Result<(), CustomError> {
-        let headers_after_timestamp = new_headers
+        let headers_after_timestamp = &new_headers
             .headers
             .iter()
             .filter(|header| header.timestamp > START_DATE_IBD)
@@ -184,6 +184,9 @@ impl NodeActionLoop {
         let mut node_state = self.node_state_ref.lock()?;
         node_state.append_headers(&mut new_headers)?;
 
+        if node_state.is_synced() {
+            broadcast_new_headers(node_state, new_headers)?;
+        }
         Ok(())
     }
 
@@ -200,7 +203,6 @@ impl NodeActionLoop {
 
         self.peer_action_sender
             .send(PeerAction::GetData(inventories))?;
-
         Ok(())
     }
 
@@ -217,8 +219,6 @@ impl NodeActionLoop {
         );
 
         node_state.append_block(block_hash, block)?;
-        drop(node_state);
-
         Ok(())
     }
 
@@ -239,8 +239,6 @@ impl NodeActionLoop {
     fn handle_send_headers(&mut self, address: SocketAddrV6) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
         node_state.peer_send_headers(address);
-        drop(node_state);
-
         Ok(())
     }
 
@@ -257,8 +255,6 @@ impl NodeActionLoop {
         if let Some(peer) = peer {
             peer.send(message)?;
         }
-        drop(node_state);
-
         Ok(())
     }
 
@@ -294,7 +290,6 @@ impl NodeActionLoop {
                 }
             }
         }
-        drop(node_state);
         Ok(())
     }
 
@@ -325,6 +320,17 @@ impl NodeActionLoop {
 
         Ok(())
     }
+}
+
+fn broadcast_new_headers(
+    mut node_state: std::sync::MutexGuard<'_, NodeState>,
+    new_headers: Headers,
+) -> Result<(), CustomError> {
+    Ok(for peer in node_state.get_peers() {
+        if peer.send_headers {
+            peer.send(new_headers.clone())?;
+        }
+    })
 }
 
 fn send_message(

@@ -5,7 +5,7 @@ use crate::{
     structs::block_header::BlockHeader,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 ///Esta estructura es la que se encarga de almacenar los headers de los bloques, esto lo hace en un vector de 'BlockHeaders'
 pub struct Headers {
