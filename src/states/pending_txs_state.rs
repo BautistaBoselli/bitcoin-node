@@ -33,7 +33,7 @@ impl PendingTxs {
         }
     }
 
-    /// Agrega una transaccion a la lista de transacciones pendientes, devuelte true si es una transaccion que no teniamos.
+    /// Agrega una transaccion a la lista de transacciones pendientes, devuelve true si es una transaccion que no teniamos.
     pub fn append_pending_tx(&mut self, transaction: Transaction) -> bool {
         let tx_hash = transaction.hash();
 

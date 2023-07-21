@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV6, ToSocketAddrs},
+    net::SocketAddrV6,
     sync::{mpsc, Arc, Mutex},
 };
 
@@ -12,8 +12,8 @@ use crate::{
     logger::{send_log, Log},
     message::Message,
     messages::{
-        block::Block, get_data::GetData, get_headers::GetHeaders, headers::Headers, inv::Inv,
-        transaction::Transaction,
+        block::Block, get_data::GetData, get_headers::GetHeaders, headers::Headers,
+        not_found::NotFound, transaction::Transaction,
     },
     node_state::NodeState,
     peer::PeerAction,
@@ -41,7 +41,7 @@ pub enum NodeAction {
     SendHeaders(SocketAddrV6),
     GetHeaders(SocketAddrV6, GetHeaders),
     GetData(SocketAddrV6, GetData),
-    TestInv(Inv),
+    // TestInv(Inv),
 }
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -99,7 +99,7 @@ impl NodeActionLoop {
                     self.handle_get_headers(address, getheaders)
                 }
                 NodeAction::GetData(address, getdata) => self.handle_get_data(address, getdata),
-                NodeAction::TestInv(inv) => self.handle_test_inv(inv),
+                // NodeAction::TestInv(inv) => self.handle_test_inv(inv),
             };
 
             if let Err(error) = response {
@@ -229,8 +229,10 @@ impl NodeActionLoop {
             return Ok(());
         }
 
-        node_state.append_pending_tx(transaction)?;
+        node_state.append_pending_tx(transaction.clone())?;
         drop(node_state);
+
+        self.broadcast(transaction)?;
         Ok(())
     }
 
@@ -269,45 +271,44 @@ impl NodeActionLoop {
         for inventory in getdata.get_inventories() {
             match inventory.inventory_type {
                 InventoryType::Block => {
-                    let block = node_state.get_block(hash_as_string(inventory.hash.clone()))?;
-                    let peer = node_state.get_peer(&address);
-
-                    if let Some(peer) = peer {
-                        peer.send(block)?;
+                    match node_state.get_block(hash_as_string(inventory.hash.clone())) {
+                        Ok(block) => send_message(&mut node_state, address, block)?,
+                        Err(_) => {
+                            let not_found = NotFound::new(vec![inventory.clone()]);
+                            send_message(&mut node_state, address, not_found)?;
+                        }
                     }
                 }
                 InventoryType::Tx => {
-                    let transaction = match node_state.get_pending_tx(&inventory.hash) {
-                        Some(tx) => tx,
-                        None => continue,
+                    match node_state.get_pending_tx(&inventory.hash) {
+                        Some(tx) => send_message(&mut node_state, address, tx)?,
+                        None => {
+                            let not_found = NotFound::new(vec![inventory.clone()]);
+                            send_message(&mut node_state, address, not_found)?;
+                        }
                     };
-                    let peer = node_state.get_peer(&address);
-
-                    if let Some(peer) = peer {
-                        peer.send(transaction)?;
-                        println!("Transaction sent to {}", address);
-                    }
                 }
-                _ => {}
+                _ => {
+                    let not_found = NotFound::new(vec![inventory.clone()]);
+                    send_message(&mut node_state, address, not_found)?;
+                }
             }
         }
-
         drop(node_state);
-
         Ok(())
     }
 
-    fn handle_test_inv(&mut self, inv: Inv) -> Result<(), CustomError> {
-        let mut node_state = self.node_state_ref.lock()?;
-        // let peer = node_state.get_peer(&local_address);
+    // fn handle_test_inv(&mut self, inv: Inv) -> Result<(), CustomError> {
+    //     let mut node_state = self.node_state_ref.lock()?;
+    //     // let peer = node_state.get_peer(&local_address);
 
-        // if let Some(peer) = peer {
-        //     peer.send(inv)?;
-        // }
-        drop(node_state);
+    //     // if let Some(peer) = peer {
+    //     //     peer.send(inv)?;
+    //     // }
+    //     drop(node_state);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn broadcast(&mut self, message: impl Message) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
@@ -324,4 +325,15 @@ impl NodeActionLoop {
 
         Ok(())
     }
+}
+
+fn send_message(
+    node_state: &mut std::sync::MutexGuard<'_, NodeState>,
+    address: SocketAddrV6,
+    message: impl Message,
+) -> Result<(), CustomError> {
+    let peer = node_state.get_peer(&address);
+    Ok(if let Some(peer) = peer {
+        peer.send(message)?;
+    })
 }

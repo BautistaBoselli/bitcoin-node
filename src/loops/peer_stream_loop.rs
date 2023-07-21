@@ -147,8 +147,8 @@ impl PeerStreamLoop {
     fn handle_inv(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         println!("inv recibido");
         let inv = Inv::read(&mut self.stream, response_header.payload_size)?;
-        self.node_action_sender
-            .send(NodeAction::TestInv(inv.clone()))?;
+        // self.node_action_sender
+        //     .send(NodeAction::TestInv(inv.clone()))?;
         for inventory in inv.inventories {
             if inventory.inventory_type == InventoryType::Tx {
                 let message = GetData::new(vec![inventory]);
