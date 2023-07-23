@@ -169,7 +169,7 @@ mod tests {
             bits: 0,
             nonce: 0,
             prev_block_hash: vec![],
-            timestamp: 0,
+            timestamp: START_DATE_IBD + 1,
             version: 0,
             hash: vec![
                 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7,

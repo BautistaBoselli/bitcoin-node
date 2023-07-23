@@ -43,6 +43,7 @@ pub struct Peer {
     pub services: u64,
     pub version: i32,
     pub send_headers: bool,
+    pub requested_headers: bool,
     pub stream: TcpStream,
     pub peer_action_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
     pub peer_stream_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
@@ -70,6 +71,7 @@ impl Peer {
             version,
             stream,
             send_headers: false,
+            requested_headers: false,
         };
 
         peer.call_handshake(sender_address, &mut logger_sender)?;
@@ -94,6 +96,7 @@ impl Peer {
             version,
             stream,
             send_headers: false,
+            requested_headers: false,
         };
 
         peer.answer_handshake(sender_address, &mut logger_sender)?;

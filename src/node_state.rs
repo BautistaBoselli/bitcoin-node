@@ -146,6 +146,13 @@ impl NodeState {
         }
     }
 
+    pub fn peer_requested_headers(&mut self, address: SocketAddrV6) {
+        let peer = self.peers.iter_mut().find(|p| p.address == address);
+        if let Some(peer) = peer {
+            peer.requested_headers = true;
+        }
+    }
+
     /********************     HEADERS     ********************/
 
     /// devuelve el hash del ultimo header guardado
@@ -161,7 +168,7 @@ impl NodeState {
     }
 
     /// Devuelve los ultimos count headers del HeaderState
-    pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
+    pub fn get_last_headers(&self, count: usize) -> Vec<(usize, BlockHeader)> {
         self.headers.get_last_headers(count)
     }
 

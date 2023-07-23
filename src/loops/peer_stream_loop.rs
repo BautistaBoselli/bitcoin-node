@@ -31,6 +31,7 @@ use super::node_action_loop::NodeAction;
 /// PeerStreamLoop es una estructura que contiene los elementos necesarios para manejar los mensajes recibidos del peer asociado.
 /// Genera el loop de eventos alrededor de los mensajes recibidos por el TcpStream.
 /// Los elementos son:
+/// - address: Direccion del peer.
 /// - stream: Stream del peer.
 /// - node_action_sender: Sender para enviar acciones al nodo.
 /// - version: Version del nodo.
@@ -97,6 +98,7 @@ impl PeerStreamLoop {
     }
 
     fn handle_headers(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        println!("hola new headers from {}", self.address);
         let response = match Headers::read(&mut self.stream, response_header.payload_size) {
             Ok(response) => response,
             Err(error) => {
@@ -171,6 +173,7 @@ impl PeerStreamLoop {
     }
 
     fn handle_notfound(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        println!("hola notfound");
         let notfound = GetData::read(&mut self.stream, response_header.payload_size)?;
         let inventories = notfound.get_inventories().clone();
         self.node_action_sender

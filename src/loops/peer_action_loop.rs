@@ -105,9 +105,11 @@ impl PeerActionLoop {
     fn handle_getdata(&mut self, inventories: Vec<Inventory>) -> Result<(), CustomError> {
         let inventories_clone = inventories.clone();
         let request = GetData::new(inventories).send(&mut self.stream);
-        if request.is_err() {
+        if let Err(error) = request {
+            println!("Error sending getdata to stream");
             self.node_action_sender
                 .send(NodeAction::GetDataError(inventories_clone))?;
+            return Err(error);
         };
         Ok(())
     }

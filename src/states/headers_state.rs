@@ -91,9 +91,18 @@ impl HeadersState {
         self.headers.last().map(|header| header.hash())
     }
 
-    /// Devuelve los ultimos count headers del nodo.
-    pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
-        self.headers.iter().rev().take(count).cloned().collect()
+    /// Devuelve los ultimos count headers del nodo junto a su height.
+    pub fn get_last_headers(&self, count: usize) -> Vec<(usize, BlockHeader)> {
+        let mut last_headers = vec![];
+
+        self.headers
+            .iter()
+            .enumerate()
+            .rev()
+            .take(count)
+            .for_each(|(index, header)| last_headers.push((index + 1, header.clone())));
+
+        last_headers
     }
 
     /// Agrega los headers al nodo y los almacena.
@@ -106,7 +115,7 @@ impl HeadersState {
                 .unwrap_or(GENESIS.to_vec());
 
             if last_header_hash != first_header.prev_block_hash {
-                return Err(CustomError::InvalidHeader);
+                return Err(CustomError::BlockChainBroken);
             }
         }
 

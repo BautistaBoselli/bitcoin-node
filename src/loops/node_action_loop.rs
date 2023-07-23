@@ -177,6 +177,10 @@ impl NodeActionLoop {
     }
 
     fn handle_new_headers(&mut self, new_headers: Headers) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        node_state.append_headers(&new_headers)?;
+        drop(node_state);
+
         let headers_after_timestamp = &new_headers
             .headers
             .iter()
@@ -186,9 +190,6 @@ impl NodeActionLoop {
         for chunk in chunks {
             self.request_block(chunk)?;
         }
-
-        let mut node_state = self.node_state_ref.lock()?;
-        node_state.append_headers(&new_headers)?;
 
         Ok(())
     }
@@ -225,9 +226,9 @@ impl NodeActionLoop {
         let is_synced = node_state.is_synced();
         drop(node_state);
 
-        // if is_synced {
-        //     self.broadcast_new_header(block.header)?;
-        // }
+        if is_synced {
+            self.broadcast_new_header(block.header)?;
+        }
         Ok(())
     }
 
@@ -259,6 +260,7 @@ impl NodeActionLoop {
         getheaders: GetHeaders,
     ) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        node_state.peer_requested_headers(address);
         let headers = node_state.get_headers(getheaders);
 
         let message = Headers { headers };
@@ -330,6 +332,9 @@ impl NodeActionLoop {
         let mut node_state = self.node_state_ref.lock()?;
         let mut peers_to_remove = vec![];
         for peer in node_state.get_peers() {
+            if !peer.requested_headers {
+                continue;
+            }
             let sent = if peer.send_headers {
                 println!("mandando header a peers via send_header {}", peer.address);
                 let headers_msg = Headers {
