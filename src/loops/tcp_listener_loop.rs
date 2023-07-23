@@ -8,10 +8,10 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     node_state::NodeState,
-    peer::{Peer, PeerAction},
+    peer::Peer,
 };
 
-use super::node_action_loop::NodeAction;
+use super::{node_action_loop::NodeAction, peer_action_loop::PeerAction};
 
 pub struct TcpListenerLoop {
     logger_sender: mpsc::Sender<Log>,

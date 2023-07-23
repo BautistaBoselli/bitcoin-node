@@ -1,5 +1,4 @@
 use std::{
-    env::args,
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -15,11 +14,12 @@ use crate::{
     logger::{send_log, Log, Logger},
     loops::{
         node_action_loop::{NodeAction, NodeActionLoop},
+        peer_action_loop::PeerAction,
         pending_blocks_loop::pending_blocks_loop,
         tcp_listener_loop::TcpListenerLoop,
     },
     node_state::NodeState,
-    peer::{Peer, PeerAction},
+    peer::Peer,
 };
 
 /// Node es la estructura que representa nuestro nodo.
@@ -39,6 +39,7 @@ pub struct Node {
     pub address: SocketAddrV6,
     pub services: u64,
     pub version: i32,
+    client_only: bool,
     logger_sender: mpsc::Sender<Log>,
     peer_action_sender: mpsc::Sender<PeerAction>,
     peer_action_receiver: Arc<Mutex<mpsc::Receiver<PeerAction>>>,
@@ -66,6 +67,7 @@ impl Node {
             address: SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), config.port, 0, 0),
             services: 0x00,
             version: config.protocol_version,
+            client_only: config.client_only,
             logger_sender,
             peer_action_sender,
             peer_action_receiver,
@@ -158,20 +160,17 @@ impl Node {
     }
 
     fn initialize_tcp_listener_loop(&mut self) {
-        let argv = args().collect::<Vec<String>>();
-        if argv.contains(&String::from("--client-only")) {
-            return;
+        if !self.client_only {
+            self.tcp_listener_thread = Some(TcpListenerLoop::spawn(
+                self.logger_sender.clone(),
+                self.node_state_ref.clone(),
+                self.address,
+                self.services,
+                self.version,
+                self.peer_action_receiver.clone(),
+                self.node_action_sender.clone(),
+            ));
         }
-
-        self.tcp_listener_thread = Some(TcpListenerLoop::spawn(
-            self.logger_sender.clone(),
-            self.node_state_ref.clone(),
-            self.address,
-            self.services,
-            self.version,
-            self.peer_action_receiver.clone(),
-            self.node_action_sender.clone(),
-        ));
     }
 
     fn initialize_ibd(&self) -> Result<(), CustomError> {

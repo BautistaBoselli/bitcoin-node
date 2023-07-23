@@ -62,14 +62,18 @@ impl NodeState {
         );
         create_store_dir(store_path)?;
 
+        let headers =
+            HeadersState::new(format!("{}/headers.bin", store_path), logger_sender.clone())?;
+        let pending_blocks_ref = PendingBlocks::new(&store_path, headers.get_all());
+
         let node_state_ref = Arc::new(Mutex::new(Self {
             store_path: store_path.clone(),
-            logger_sender: logger_sender.clone(),
+            logger_sender: logger_sender,
             gui_sender,
-            headers: HeadersState::new(format!("{}/headers.bin", store_path), logger_sender)?,
+            headers,
             peers: vec![],
             wallets: Wallets::new(format!("{}/wallets.bin", store_path))?,
-            pending_blocks_ref: PendingBlocks::new(),
+            pending_blocks_ref,
             utxo: UTXO::new(store_path.clone(), "/utxo.bin".to_string())?,
             pending_txs: PendingTxs::new(),
             blocks_sync: false,
@@ -80,7 +84,7 @@ impl NodeState {
 
     /// Agrega un bloque nuevo, lo guarda en su archivo y actualiza los pending_blocks, wallets, pending_txs y utxo.
     /// Tambien verifica si ahora el nodo esta actualizado con la red
-    pub fn append_block(&mut self, block_hash: Vec<u8>, block: Block) -> Result<(), CustomError> {
+    pub fn append_block(&mut self, block_hash: Vec<u8>, block: &Block) -> Result<(), CustomError> {
         let path = format!(
             "{}/blocks/{}.bin",
             self.store_path,
@@ -94,11 +98,11 @@ impl NodeState {
 
         self.verify_sync()?;
 
-        self.update_wallets(&block)?;
-        self.update_pending_tx(&block)?;
+        self.update_wallets(block)?;
+        self.update_pending_tx(block)?;
 
         if self.is_synced() {
-            self.utxo.update_from_block(&block, true)?;
+            self.utxo.update_from_block(block, true)?;
         }
 
         Ok(())
@@ -125,7 +129,18 @@ impl NodeState {
         self.peers.extend(peers);
     }
 
+    pub fn remove_peer(&mut self, address: SocketAddrV6) {
+        let index = self
+            .peers
+            .iter()
+            .position(|p| p.address == address)
+            .unwrap();
+
+        self.peers.remove(index);
+    }
+
     pub fn peer_send_headers(&mut self, address: SocketAddrV6) {
+        println!("hola recibimos esto? address: {}", address);
         let peer = self.peers.iter_mut().find(|p| p.address == address);
         if let Some(peer) = peer {
             peer.send_headers = true;
@@ -140,7 +155,7 @@ impl NodeState {
     }
 
     /// agrega un header nuevo en HeadersState
-    pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
+    pub fn append_headers(&mut self, headers: &Headers) -> Result<(), CustomError> {
         self.headers.append_headers(headers)?;
         self.gui_sender.send(GUIEvents::NewHeaders)?;
         self.verify_sync()
@@ -282,7 +297,7 @@ impl NodeState {
     }
 
     /// Agrega una pending tx nueva a PendingTxs
-    pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<(), CustomError> {
+    pub fn append_pending_tx(&mut self, transaction: Transaction) -> Result<bool, CustomError> {
         let updated = self.pending_txs.append_pending_tx(transaction);
 
         if updated {
@@ -295,7 +310,7 @@ impl NodeState {
             );
         }
 
-        Ok(())
+        Ok(updated)
     }
 
     pub fn get_pending_tx(&self, tx_hash: &Vec<u8>) -> Option<Transaction> {

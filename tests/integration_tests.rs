@@ -12,10 +12,10 @@ mod tests {
     use bitcoin::{
         config::Config,
         logger::Logger,
-        loops::pending_blocks_loop::pending_blocks_loop,
+        loops::{peer_action_loop::PeerAction, pending_blocks_loop::pending_blocks_loop},
         node::Node,
         node_state::NodeState,
-        peer::{Peer, PeerAction},
+        peer::Peer,
         utils::get_addresses,
     };
     use gtk::glib::{self, Priority};

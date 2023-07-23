@@ -5,7 +5,7 @@ use crate::{
     parser::BufferParser,
     structs::tx_output::TransactionOutput,
     structs::{block_header::BlockHeader, outpoint::OutPoint},
-    utils::open_new_file,
+    utils::{calculate_starting_index, open_new_file},
     wallet::Wallet,
 };
 use std::{
@@ -17,7 +17,7 @@ use std::{
     vec,
 };
 
-const START_DATE_IBD: u32 = 1681095630;
+pub const START_DATE_IBD: u32 = 1681095630;
 
 #[derive(Debug, PartialEq, Clone)]
 /// UTXOValue es una estructura que contiene los valores que necesitamos guardar de las UTXO.
@@ -246,18 +246,6 @@ impl UTXO {
 
         file.write_all(&buffer)?;
         Ok(())
-    }
-}
-
-fn calculate_starting_index(headers: &Vec<BlockHeader>, last_timestamp: u32) -> usize {
-    let new_headers_len = headers
-        .iter()
-        .rev()
-        .position(|header| header.timestamp <= last_timestamp);
-
-    match new_headers_len {
-        Some(new_headers_len) => headers.len() - new_headers_len,
-        None => 0,
     }
 }
 

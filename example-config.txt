@@ -4,3 +4,4 @@ PORT=18333
 LOG=log.txt
 NPEERS=10
 STORE_PATH=store
+CLIENT_ONLY=false

@@ -34,15 +34,15 @@ pub trait Message {
 
         stream
             .write(&header.serialize())
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
+            .map_err(|_| CustomError::CannotSendMessageToChannel)?;
 
         stream
             .write(&self.serialize())
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
+            .map_err(|_| CustomError::CannotSendMessageToChannel)?;
 
         stream
             .flush()
-            .map_err(|_| CustomError::CannotHandshakeNode)?;
+            .map_err(|_| CustomError::CannotSendMessageToChannel)?;
 
         Ok(())
     }
@@ -128,13 +128,13 @@ impl MessageHeader {
     /// - El comando no se puede parsear a String.
     pub fn parse(buffer: [u8; 24]) -> Result<Self, CustomError> {
         if buffer.len() != 24 {
-            return Err(CustomError::InvalidHeader);
+            return Err(CustomError::CannotReadMessageHeader);
         }
         let magic = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         let mut command = match String::from_utf8(buffer[4..16].to_vec()) {
             Ok(command) => command,
             Err(_) => {
-                return Err(CustomError::InvalidHeader);
+                return Err(CustomError::CannotReadMessageHeader);
             }
         };
         command = command.replace('\0', "");

@@ -8,15 +8,14 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     loops::{
-        node_action_loop::NodeAction, peer_action_loop::PeerActionLoop,
+        node_action_loop::NodeAction,
+        peer_action_loop::{PeerAction, PeerActionLoop},
         peer_stream_loop::PeerStreamLoop,
     },
     message::{Message, MessageHeader},
     messages::{
-        get_headers::GetHeaders, send_headers::SendHeaders, transaction::Transaction,
-        ver_ack::VerAck, version::Version,
+        get_headers::GetHeaders, send_headers::SendHeaders, ver_ack::VerAck, version::Version,
     },
-    structs::inventory::Inventory,
     utils::{get_address_v6, open_stream},
 };
 
@@ -25,17 +24,6 @@ pub const GENESIS: [u8; 32] = [
     67, 73, 127, 215, 248, 38, 149, 113, 8, 244, 163, 15, 217, 206, 195, 174, 186, 121, 151, 32,
     132, 233, 14, 173, 1, 234, 51, 9, 0, 0, 0, 0,
 ];
-
-/// PeerAction es una enumeracion de las acciones que puede realizar un peer.
-/// Las acciones son:
-/// - GetHeaders: Solicita headers al peer.
-/// - GetData: Solicita data al peer.
-/// - SendTransaction: Envia una transaccion al peer.
-pub enum PeerAction {
-    GetHeaders(Option<Vec<u8>>),
-    GetData(Vec<Inventory>),
-    SendTransaction(Transaction),
-}
 
 /// Peer es una representacion de los Peers a los que nos conectamos, contiene los elementos necesarios para manejar la conexion con el peer.
 /// Cada peer tiene dos threads asociados:
@@ -161,6 +149,7 @@ impl Peer {
         let response_header = MessageHeader::read(&mut self.stream)?;
         VerAck::read(&mut self.stream, response_header.payload_size)
             .map_err(|_| CustomError::CannotHandshakeNode)?;
+        SendHeaders::new().send(&mut self.stream)?;
 
         send_log(
             logger_sender,
@@ -178,10 +167,11 @@ impl Peer {
     ) -> Result<(), CustomError> {
         //thread que escucha al nodo
         self.peer_action_thread = Some(PeerActionLoop::spawn(
-            peer_action_receiver,
+            self.address,
             self.version,
             self.stream.try_clone()?,
             logger_sender.clone(),
+            peer_action_receiver,
             node_action_sender.clone(),
         ));
 
@@ -194,6 +184,25 @@ impl Peer {
             node_action_sender,
         ));
         Ok(())
+    }
+
+    pub fn stop(&mut self) {
+        if let Err(error) = self.stream.shutdown(std::net::Shutdown::Both) {
+            if error.kind() != std::io::ErrorKind::NotConnected {
+                println!("Error shutting down peer stream: {:?}", error)
+            }
+        }
+        if let Some(peer_action_thread) = self.peer_action_thread.take() {
+            if let Err(error) = peer_action_thread.join() {
+                println!("Error joining peer action thread: {:?}", error)
+            }
+        }
+
+        if let Some(peer_stream_thread) = self.peer_stream_thread.take() {
+            if let Err(error) = peer_stream_thread.join() {
+                println!("Error joining peer stream thread: {:?}", error)
+            }
+        }
     }
 
     pub fn send(&mut self, message: impl Message) -> Result<(), CustomError> {

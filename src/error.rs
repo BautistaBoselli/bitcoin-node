@@ -50,6 +50,7 @@ pub enum CustomError {
     CannotSignTx,
     InvalidFee,
     InvalidTransferFields,
+    PeerNotSynced,
 }
 
 impl CustomError {
@@ -94,6 +95,7 @@ impl CustomError {
             Self::CannotSignTx => "cannot sign transaction",
             Self::InvalidFee => "invalid fee",
             Self::InvalidTransferFields => "invalid transfer fields",
+            Self::PeerNotSynced => "peer not synced",
         }
     }
 }
