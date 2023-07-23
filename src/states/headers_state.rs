@@ -33,12 +33,17 @@ impl HeadersState {
     pub fn new(path: String, logger_sender: Sender<Log>) -> Result<Self, CustomError> {
         let mut headers = Self {
             headers: Vec::new(),
-            logger_sender,
+            logger_sender: logger_sender.clone(),
             path,
             sync: false,
         };
 
         headers.restore()?;
+
+        send_log(
+            &logger_sender,
+            Log::Message(format!("Total headers restored: {}", headers.len())),
+        );
         Ok(headers)
     }
 
@@ -70,6 +75,10 @@ impl HeadersState {
 
         file.write_all(buffer.as_slice())?;
         Ok(())
+    }
+
+    fn len(&self) -> usize {
+        self.headers.len()
     }
 
     /// Devuelve todos los headers del nodo.

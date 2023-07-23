@@ -225,9 +225,9 @@ impl NodeActionLoop {
         let is_synced = node_state.is_synced();
         drop(node_state);
 
-        if is_synced {
-            self.broadcast_new_header(block.header)?;
-        }
+        // if is_synced {
+        //     self.broadcast_new_header(block.header)?;
+        // }
         Ok(())
     }
 

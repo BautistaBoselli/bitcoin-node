@@ -140,7 +140,6 @@ impl NodeState {
     }
 
     pub fn peer_send_headers(&mut self, address: SocketAddrV6) {
-        println!("hola recibimos esto? address: {}", address);
         let peer = self.peers.iter_mut().find(|p| p.address == address);
         if let Some(peer) = peer {
             peer.send_headers = true;
