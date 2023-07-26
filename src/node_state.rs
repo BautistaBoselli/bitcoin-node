@@ -64,11 +64,11 @@ impl NodeState {
 
         let headers =
             HeadersState::new(format!("{}/headers.bin", store_path), logger_sender.clone())?;
-        let pending_blocks_ref = PendingBlocks::new(&store_path, headers.get_all());
+        let pending_blocks_ref = PendingBlocks::new(store_path, headers.get_all());
 
         let node_state_ref = Arc::new(Mutex::new(Self {
             store_path: store_path.clone(),
-            logger_sender: logger_sender,
+            logger_sender,
             gui_sender,
             headers,
             peers: vec![],
@@ -91,6 +91,7 @@ impl NodeState {
             block.header.hash_as_string()
         );
         block.save(path)?;
+        self.headers.set_downloaded(&block_hash);
 
         let mut pending_blocks = self.pending_blocks_ref.lock()?;
         pending_blocks.remove_block(&block_hash)?;
@@ -130,13 +131,11 @@ impl NodeState {
     }
 
     pub fn remove_peer(&mut self, address: SocketAddrV6) {
-        let index = self
-            .peers
-            .iter()
-            .position(|p| p.address == address)
-            .unwrap();
+        let index = self.peers.iter().position(|p| p.address == address);
 
-        self.peers.remove(index);
+        if let Some(index) = index {
+            self.peers.remove(index);
+        }
     }
 
     pub fn peer_send_headers(&mut self, address: SocketAddrV6) {
@@ -162,9 +161,19 @@ impl NodeState {
 
     /// agrega un header nuevo en HeadersState
     pub fn append_headers(&mut self, headers: &Headers) -> Result<(), CustomError> {
-        self.headers.append_headers(headers)?;
+        let mut new_headers = vec![];
+
+        for header in headers.headers.iter() {
+            let mut header = header.clone();
+            if !self.is_synced() {
+                header.broadcasted = true;
+            }
+            new_headers.push(header);
+        }
+
+        self.headers.append_headers(new_headers)?;
         self.gui_sender.send(GUIEvents::NewHeaders)?;
-        self.verify_sync()
+        Ok(())
     }
 
     /// Devuelve los ultimos count headers del HeaderState
@@ -174,6 +183,10 @@ impl NodeState {
 
     pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
         self.headers.get_headers(get_headers)
+    }
+
+    pub fn get_headers_to_send(&mut self, block_hash: &Vec<u8>) -> Vec<BlockHeader> {
+        self.headers.get_headers_to_send(block_hash)
     }
 
     /********************     SYNC     ********************/

@@ -68,7 +68,7 @@ impl GUIBlocks {
             utxo_box.set_margin_bottom(8);
 
             utxo_box.add(&time_label(header.timestamp));
-            utxo_box.add(&tx_hash_label(header.hash()));
+            utxo_box.add(&tx_hash_label(header.hash().clone()));
             utxo_box.add(&number_label(height as i64));
             utxo_box.add(&number_label(header.bits as i64));
 

@@ -1,4 +1,5 @@
 use std::{
+    fs::remove_file,
     io::{Read, Write},
     vec,
 };
@@ -35,10 +36,18 @@ impl Block {
     /// Esta funcion se encargar de restaurar un bloque, recibe un path al archivo que contiene al bloque, lo lee y lo parsea
     /// Devuelve CustomError si no puede abrir o leer el archivo
     pub fn restore(path: String) -> Result<Self, CustomError> {
-        let mut block_file = open_new_file(path, true)?;
+        let mut block_file = open_new_file(path.clone(), true)?;
         let mut block_buffer = Vec::new();
         block_file.read_to_end(&mut block_buffer)?;
-        Self::parse(block_buffer)
+        let block = match Self::parse(block_buffer) {
+            Ok(block) => Ok(block),
+            Err(e) => {
+                remove_file(path)?;
+                Err(e)
+            }
+        };
+        drop(block_file);
+        block
     }
 
     /// Esta funcion se encarga de guardar un bloque, recibe un path al archivo donde se va a guardar el bloque serializado en bytes

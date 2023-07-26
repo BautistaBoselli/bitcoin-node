@@ -28,10 +28,10 @@ pub fn pending_blocks_loop(
             thread::sleep(Duration::from_secs(5));
             let mut node_state = node_state_ref.lock()?;
 
-            if node_state.is_blocks_sync() {
-                drop(node_state);
-                continue;
-            }
+            // if node_state.is_blocks_sync() {
+            //     drop(node_state);
+            //     continue;
+            // }
 
             let blocks_to_refetch = node_state.get_stale_requests()?;
 

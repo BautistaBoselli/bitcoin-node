@@ -114,10 +114,12 @@ impl NodeActionLoop {
     }
 
     fn handle_peer_error(&mut self, address: SocketAddrV6) -> Result<(), CustomError> {
-        println!("hola Peer a eliminar: {:?}", address);
         let mut node_state = self.node_state_ref.lock()?;
+        send_log(
+            &self.logger_sender,
+            Log::Message(format!("Deleting Peer {} from list...", address)),
+        );
         node_state.remove_peer(address);
-        println!("hola Borrado");
         Ok(())
     }
 
@@ -191,6 +193,9 @@ impl NodeActionLoop {
             self.request_block(chunk)?;
         }
 
+        let mut node_state = self.node_state_ref.lock()?;
+        node_state.verify_sync()?;
+
         Ok(())
     }
 
@@ -199,8 +204,8 @@ impl NodeActionLoop {
 
         let mut inventories = vec![];
         for header in headers {
-            node_state.append_pending_block(header.hash())?;
-            inventories.push(Inventory::new(InventoryType::Block, header.hash()));
+            node_state.append_pending_block(header.hash().clone())?;
+            inventories.push(Inventory::new(InventoryType::Block, header.hash().clone()));
         }
 
         drop(node_state);
@@ -217,16 +222,18 @@ impl NodeActionLoop {
             return Ok(());
         }
 
-        send_log(
-            &self.logger_sender,
-            Log::Message("New block received".to_string()),
-        );
+        // check if the node was synced before receiving the block
+        let is_synced = node_state.is_synced();
 
         node_state.append_block(block_hash, &block)?;
-        let is_synced = node_state.is_synced();
         drop(node_state);
 
+        // if this is a "realtime" block, broadcast it
         if is_synced {
+            send_log(
+                &self.logger_sender,
+                Log::Message("New block received".to_string()),
+            );
             self.broadcast_new_header(block.header)?;
         }
         Ok(())
@@ -330,21 +337,26 @@ impl NodeActionLoop {
 
     fn broadcast_new_header(&self, header: BlockHeader) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        let headers_to_send = node_state.get_headers_to_send(header.hash());
+        if headers_to_send.is_empty() {
+            return Ok(());
+        }
         let mut peers_to_remove = vec![];
         for peer in node_state.get_peers() {
             if !peer.requested_headers {
                 continue;
             }
             let sent = if peer.send_headers {
-                println!("mandando header a peers via send_header {}", peer.address);
                 let headers_msg = Headers {
-                    headers: vec![header.clone()],
+                    headers: headers_to_send.clone(),
                 };
                 headers_msg.send(&mut peer.stream)
             } else {
-                println!("mandando header a peers via inv {}", peer.address);
-                let inventory = Inventory::new(InventoryType::Block, header.hash());
-                let inv_msg = Inv::new(vec![inventory]);
+                let mut inventories = vec![];
+                for header in &headers_to_send {
+                    inventories.push(Inventory::new(InventoryType::Block, header.hash().clone()));
+                }
+                let inv_msg = Inv::new(inventories);
                 inv_msg.send(&mut peer.stream)
             };
             if sent.is_err() {
@@ -365,9 +377,10 @@ fn send_message(
     message: impl Message,
 ) -> Result<(), CustomError> {
     let peer = node_state.get_peer(&address);
-    Ok(if let Some(peer) = peer {
+    if let Some(peer) = peer {
         if peer.send(message).is_err() {
             node_state.remove_peer(address);
         }
-    })
+    }
+    Ok(())
 }

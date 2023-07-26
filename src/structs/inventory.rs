@@ -71,7 +71,6 @@ impl Inventory {
             0x40000002 => InventoryType::WitnessBlock,
             0x40000003 => InventoryType::FilteredWitnessBlock,
             _ => {
-                println!("inventory type: {}", parser.extract_u32()?);
                 return Err(CustomError::SerializedBufferIsInvalid);
             }
         };

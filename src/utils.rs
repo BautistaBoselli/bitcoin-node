@@ -54,14 +54,22 @@ pub fn get_current_timestamp() -> Result<u64, CustomError> {
         .as_secs())
 }
 
-pub fn calculate_starting_index(headers: &Vec<BlockHeader>, last_timestamp: u32) -> usize {
+// header 0: 1
+// header 1: 3
+
+// last_timestamp: 2
+// position = 1
+
+// headers.len() - position  = 5 - 3 + 1 = 3
+
+pub fn calculate_index_from_timestamp(headers: &Vec<BlockHeader>, last_timestamp: u32) -> usize {
     let new_headers_len = headers
         .iter()
         .rev()
         .position(|header| header.timestamp <= last_timestamp);
 
     match new_headers_len {
-        Some(new_headers_len) => headers.len() - new_headers_len,
+        Some(new_headers_len) => headers.len() - new_headers_len - 1,
         None => 0,
     }
 }

@@ -7,7 +7,7 @@ use std::{
 use crate::{
     error::CustomError,
     structs::block_header::BlockHeader,
-    utils::{calculate_starting_index, get_current_timestamp},
+    utils::{calculate_index_from_timestamp, get_current_timestamp},
 };
 
 use super::utxo_state::START_DATE_IBD;
@@ -26,13 +26,13 @@ impl PendingBlocks {
     /// Inicializa la estructura.
     pub fn new(store_path: &String, headers: &Vec<BlockHeader>) -> Arc<Mutex<Self>> {
         let mut blocks = HashMap::new();
-        let starting_index = calculate_starting_index(headers, START_DATE_IBD);
+        let starting_index = calculate_index_from_timestamp(headers, START_DATE_IBD);
 
         for header in headers.iter().skip(starting_index) {
             let path = format!("{}/blocks/{}.bin", store_path, header.hash_as_string());
 
             if !Path::new(&path).exists() {
-                blocks.insert(header.hash(), 0_u64);
+                blocks.insert(header.hash().clone(), 0_u64);
             }
         }
 
@@ -176,6 +176,8 @@ mod tests {
                 8, 9, 1, 2,
             ],
             merkle_root: vec![],
+            block_downloaded: true,
+            broadcasted: true,
         };
 
         let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![lost_header.clone()]);

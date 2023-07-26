@@ -93,12 +93,10 @@ impl PeerStreamLoop {
                 break;
             }
         }
-        println!("PeerStreamLoop ended");
         Ok(())
     }
 
     fn handle_headers(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
-        println!("hola new headers from {}", self.address);
         let response = match Headers::read(&mut self.stream, response_header.payload_size) {
             Ok(response) => response,
             Err(error) => {
@@ -108,7 +106,7 @@ impl PeerStreamLoop {
         };
 
         if response.headers.len() == 2000 {
-            let last_header = response.headers.last().map(BlockHeader::hash);
+            let last_header = response.headers.last().map(BlockHeader::hash).cloned();
             request_headers(
                 last_header,
                 self.version,
@@ -125,7 +123,7 @@ impl PeerStreamLoop {
     fn handle_block(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let block = Block::read(&mut self.stream, response_header.payload_size)?;
         if let Err(error) = block.create_merkle_root() {
-            let inventory = Inventory::new(InventoryType::Block, block.header.hash());
+            let inventory = Inventory::new(InventoryType::Block, block.header.hash().clone());
 
             self.node_action_sender
                 .send(NodeAction::GetDataError(vec![inventory]))?;
@@ -141,7 +139,7 @@ impl PeerStreamLoop {
         };
 
         self.node_action_sender
-            .send(NodeAction::Block((block.header.hash(), block)))?;
+            .send(NodeAction::Block((block.header.hash().clone(), block)))?;
 
         Ok(())
     }
@@ -173,13 +171,12 @@ impl PeerStreamLoop {
     }
 
     fn handle_notfound(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
-        println!("hola notfound");
         let notfound = GetData::read(&mut self.stream, response_header.payload_size)?;
         let inventories = notfound.get_inventories().clone();
         self.node_action_sender
             .send(NodeAction::GetDataError(inventories))?;
 
-        Err(CustomError::PeerNotSynced)
+        Ok(())
     }
 
     fn handle_sendheaders(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
@@ -197,6 +194,7 @@ impl PeerStreamLoop {
     }
 
     fn handle_getdata(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        // thread::sleep(Duration::from_secs(6));
         let getdata = GetData::read(&mut self.stream, response_header.payload_size)?;
         self.node_action_sender
             .send(NodeAction::GetData(self.address, getdata))?;
