@@ -154,6 +154,7 @@ impl HeadersState {
         let downloaded_block = self
             .headers
             .iter_mut()
+            .rev()
             .find(|header| header.hash() == block_hash);
 
         if let Some(header) = downloaded_block {

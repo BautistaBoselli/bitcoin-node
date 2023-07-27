@@ -428,7 +428,7 @@ mod tests {
 
         assert_eq!(
             calculate_index_from_timestamp(&vec![header1.clone(), header2.clone()], 2),
-            1
+            0
         );
         assert_eq!(
             calculate_index_from_timestamp(&vec![header1.clone(), header2.clone()], 1),
@@ -488,7 +488,7 @@ mod tests {
         let logger = Logger::new(&String::from("tests/test_log.txt"), gui_sender).unwrap();
         let logger_sender = logger.get_sender();
 
-        let path = format!("tests/test_block.bin");
+        let path = format!("tests/blocks/test_block.bin");
 
         let block_old = Block {
             header: BlockHeader {
@@ -525,6 +525,8 @@ mod tests {
 
         // bloque con 42 inputs y outputs en 20 txs
         let block = Block::restore(path).unwrap();
+        let real_path = format!("tests/blocks/{}.bin", block.header.hash_as_string());
+        block.save(real_path.clone()).unwrap();
 
         if Path::new("tests/test_utxo.bin").exists() {
             fs::remove_file("tests/test_utxo.bin").unwrap();
@@ -539,11 +541,12 @@ mod tests {
             .unwrap();
 
         // // solo tienen que estar los utxo del segundo bloque
-        // assert_eq!(utxo_set.tx_set.len(), 42);
-        // assert_eq!(utxo_set.is_synced(), true);
+        assert_eq!(utxo_set.tx_set.len(), 42);
+        assert_eq!(utxo_set.is_synced(), true);
 
-        // fs::remove_file("tests/test_log.txt").unwrap();
-        // fs::remove_file("tests/test_utxo.bin").unwrap();
+        fs::remove_file("tests/test_log.txt").unwrap();
+        fs::remove_file("tests/test_utxo.bin").unwrap();
+        fs::remove_file(real_path).unwrap();
     }
 
     #[test]

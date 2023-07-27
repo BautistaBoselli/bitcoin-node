@@ -229,11 +229,11 @@ impl NodeActionLoop {
         drop(node_state);
 
         // if this is a "realtime" block, broadcast it
+        send_log(
+            &self.logger_sender,
+            Log::Message("New block received".to_string()),
+        );
         if is_synced {
-            send_log(
-                &self.logger_sender,
-                Log::Message("New block received".to_string()),
-            );
             self.broadcast_new_header(block.header)?;
         }
         Ok(())
