@@ -1,7 +1,7 @@
 use std::{
     net::{Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::{mpsc, Arc, Mutex},
-    thread,
+    thread::{self, JoinHandle},
     vec::IntoIter,
 };
 
@@ -85,7 +85,11 @@ impl Node {
     /// Comienza el thread de pending_blocks_loop.
     /// Comienza la descarga de headers.
     /// Comienza el thread de node_action_loop.
-    pub fn spawn(mut self, addresses: IntoIter<SocketAddr>, gui_sender: glib::Sender<GUIEvents>) {
+    pub fn spawn(
+        mut self,
+        addresses: IntoIter<SocketAddr>,
+        gui_sender: glib::Sender<GUIEvents>,
+    ) -> JoinHandle<Result<(), CustomError>> {
         self.initialize_pending_blocks_loop();
         self.initialize_tcp_listener_loop();
 
@@ -100,7 +104,7 @@ impl Node {
                 send_log(&self.logger_sender, Log::Error(error));
             }
             Ok(())
-        });
+        })
     }
 
     fn connect(
@@ -205,17 +209,16 @@ impl Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        // for worker in &mut self.peers {
-        //     if let Some(thread) = worker.peer_action_thread.take() {
-        //         if let Err(error) = thread.join() {
-        //             println!("Error joining thread: {:?}", error);
-        //         }
-        //     }
-        //     if let Some(thread) = worker.peer_stream_thread.take() {
-        //         if let Err(error) = thread.join() {
-        //             println!("Error joining thread: {:?}", error);
-        //         }
-        //     }
-        // }
+        if let Ok(mut node_state) = self.node_state_ref.lock() {
+            let peers = node_state.get_peers();
+            for peer in peers {
+                self.peer_action_sender.send(PeerAction::Terminate).unwrap();
+                if let Some(thread) = peer.peer_action_thread.take() {
+                    if let Err(error) = thread.join() {
+                        println!("Error joining thread: {:?}", error);
+                    }
+                }
+            }
+        }
     }
 }

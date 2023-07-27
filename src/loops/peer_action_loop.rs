@@ -24,6 +24,7 @@ pub enum PeerAction {
     GetHeaders(Option<Vec<u8>>),
     GetData(Vec<Inventory>),
     SendTransaction(Transaction),
+    Terminate,
 }
 
 /// PeerActionLoop es una estructura que contiene los elementos necesarios para manejar los las acciones a enviar al peer asociado.
@@ -79,6 +80,7 @@ impl PeerActionLoop {
                 PeerAction::SendTransaction(transaction) => {
                     self.handle_send_transaction(&transaction)
                 }
+                PeerAction::Terminate => break,
             };
 
             if let Err(error) = response {

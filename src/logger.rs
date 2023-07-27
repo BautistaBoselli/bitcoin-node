@@ -21,13 +21,15 @@ use crate::gui::init::GUIEvents;
 pub enum Log {
     Message(String),
     Error(CustomError),
+    Terminate,
 }
 
 /// Logger es una estructura que contiene los elementos necesarios para manejar los logs.
 /// Los elementos son:
 /// - tx: Sender para enviar logs al logger.
 pub struct Logger {
-    tx: Sender<Log>,
+    pub tx: Sender<Log>,
+    pub thread: thread::JoinHandle<Result<(), CustomError>>,
 }
 
 impl Logger {
@@ -52,7 +54,7 @@ impl Logger {
             .append(true)
             .open(filename)?;
 
-        thread::spawn(move || -> Result<(), CustomError> {
+        let thread = thread::spawn(move || -> Result<(), CustomError> {
             while let Ok(message) = rx.recv() {
                 match message {
                     Log::Message(ref string) => {
@@ -73,12 +75,13 @@ impl Logger {
                             println!("Error sending log error to gui: {}", error);
                         }
                     }
+                    Log::Terminate => break,
                 }
             }
             Ok(())
         });
 
-        Ok(Self { tx })
+        Ok(Self { tx, thread })
     }
 
     /// Devuelve el sender para enviar logs al logger.

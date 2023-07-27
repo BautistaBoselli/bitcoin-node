@@ -62,6 +62,7 @@ impl GUILogs {
                 dialog_error.set_text(Some(""));
                 dialog_error.set_secondary_text(Some(""));
             }
+            Log::Terminate => {}
         }
 
         Ok(())

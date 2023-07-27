@@ -43,6 +43,7 @@ pub enum NodeAction {
     SendHeaders(SocketAddrV6),
     GetHeaders(SocketAddrV6, GetHeaders),
     GetData(SocketAddrV6, GetData),
+    Terminate,
 }
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -101,7 +102,7 @@ impl NodeActionLoop {
                     self.handle_get_headers(address, getheaders)
                 }
                 NodeAction::GetData(address, getdata) => self.handle_get_data(address, getdata),
-                // NodeAction::TestInv(inv) => self.handle_test_inv(inv),
+                NodeAction::Terminate => break,
             };
 
             if let Err(error) = response {
