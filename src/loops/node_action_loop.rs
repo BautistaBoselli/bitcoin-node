@@ -12,16 +12,17 @@ use crate::{
     logger::{send_log, Log},
     message::Message,
     messages::{
-        block::Block, get_data::GetData, get_headers::GetHeaders, headers::Headers,
+        block::Block, get_data::GetData, get_headers::GetHeaders, headers::Headers, inv::Inv,
         not_found::NotFound, transaction::Transaction,
     },
     node_state::NodeState,
-    peer::PeerAction,
     structs::{
         block_header::{hash_as_string, BlockHeader},
         inventory::{Inventory, InventoryType},
     },
 };
+
+use super::peer_action_loop::PeerAction;
 
 /// NodeAction es una enumeracion de las acciones que puede realizar el nodo.
 /// Las acciones son:
@@ -32,6 +33,7 @@ use crate::{
 /// - PendingTransaction: Recibe una transaccion.
 /// - MakeTransaction: Solicitar una transaccion.
 pub enum NodeAction {
+    PeerError(SocketAddrV6),
     NewHeaders(Headers),
     GetHeadersError,
     Block((Vec<u8>, Block)),
@@ -41,7 +43,6 @@ pub enum NodeAction {
     SendHeaders(SocketAddrV6),
     GetHeaders(SocketAddrV6, GetHeaders),
     GetData(SocketAddrV6, GetData),
-    // TestInv(Inv),
 }
 
 const START_DATE_IBD: u32 = 1681095630;
@@ -84,6 +85,7 @@ impl NodeActionLoop {
     fn event_loop(&mut self) {
         while let Ok(message) = self.node_action_receiver.recv() {
             let response = match message {
+                NodeAction::PeerError(address) => self.handle_peer_error(address),
                 NodeAction::Block((block_hash, block)) => self.handle_block(block_hash, block),
                 NodeAction::NewHeaders(new_headers) => self.handle_new_headers(new_headers),
                 NodeAction::GetHeadersError => self.handle_get_headers_error(),
@@ -111,6 +113,16 @@ impl NodeActionLoop {
         }
     }
 
+    fn handle_peer_error(&mut self, address: SocketAddrV6) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        send_log(
+            &self.logger_sender,
+            Log::Message(format!("Deleting Peer {} from list...", address)),
+        );
+        node_state.remove_peer(address);
+        Ok(())
+    }
+
     fn handle_make_transaction(
         &mut self,
         outputs: HashMap<String, u64>,
@@ -125,11 +137,6 @@ impl NodeActionLoop {
             }
         };
         drop(node_state);
-
-        // for _i in 0..self.npeers {
-        //     self.peer_action_sender
-        //         .send(PeerAction::SendTransaction(transaction.clone()))?;
-        // }
 
         self.broadcast(transaction.clone())?;
 
@@ -150,6 +157,7 @@ impl NodeActionLoop {
             &self.logger_sender,
             Log::Message("Error requesting data,trying with another peer...".to_string()),
         );
+
         self.peer_action_sender
             .send(PeerAction::GetData(inventory))?;
         Ok(())
@@ -170,8 +178,12 @@ impl NodeActionLoop {
         Ok(())
     }
 
-    fn handle_new_headers(&mut self, mut new_headers: Headers) -> Result<(), CustomError> {
-        let headers_after_timestamp = new_headers
+    fn handle_new_headers(&mut self, new_headers: Headers) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        node_state.append_headers(&new_headers)?;
+        drop(node_state);
+
+        let headers_after_timestamp = &new_headers
             .headers
             .iter()
             .filter(|header| header.timestamp > START_DATE_IBD)
@@ -182,7 +194,7 @@ impl NodeActionLoop {
         }
 
         let mut node_state = self.node_state_ref.lock()?;
-        node_state.append_headers(&mut new_headers)?;
+        node_state.verify_sync()?;
 
         Ok(())
     }
@@ -192,15 +204,14 @@ impl NodeActionLoop {
 
         let mut inventories = vec![];
         for header in headers {
-            node_state.append_pending_block(header.hash())?;
-            inventories.push(Inventory::new(InventoryType::Block, header.hash()));
+            node_state.append_pending_block(header.hash().clone())?;
+            inventories.push(Inventory::new(InventoryType::Block, header.hash().clone()));
         }
 
         drop(node_state);
 
         self.peer_action_sender
             .send(PeerAction::GetData(inventories))?;
-
         Ok(())
     }
 
@@ -211,14 +222,20 @@ impl NodeActionLoop {
             return Ok(());
         }
 
+        // check if the node was synced before receiving the block
+        let is_synced = node_state.is_synced();
+
+        node_state.append_block(block_hash, &block)?;
+        drop(node_state);
+
+        // if this is a "realtime" block, broadcast it
         send_log(
             &self.logger_sender,
             Log::Message("New block received".to_string()),
         );
-
-        node_state.append_block(block_hash, block)?;
-        drop(node_state);
-
+        if is_synced {
+            self.broadcast_new_header(block.header)?;
+        }
         Ok(())
     }
 
@@ -229,18 +246,18 @@ impl NodeActionLoop {
             return Ok(());
         }
 
-        node_state.append_pending_tx(transaction.clone())?;
+        let is_pending_new = node_state.append_pending_tx(transaction.clone())?;
         drop(node_state);
 
-        self.broadcast(transaction)?;
+        if is_pending_new {
+            self.broadcast(transaction)?;
+        }
         Ok(())
     }
 
     fn handle_send_headers(&mut self, address: SocketAddrV6) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
         node_state.peer_send_headers(address);
-        drop(node_state);
-
         Ok(())
     }
 
@@ -250,16 +267,11 @@ impl NodeActionLoop {
         getheaders: GetHeaders,
     ) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
+        node_state.peer_requested_headers(address);
         let headers = node_state.get_headers(getheaders);
-        let peer = node_state.get_peer(&address);
 
         let message = Headers { headers };
-        if let Some(peer) = peer {
-            peer.send(message)?;
-        }
-        drop(node_state);
-
-        Ok(())
+        send_message(&mut node_state, address, message)
     }
 
     fn handle_get_data(
@@ -294,35 +306,67 @@ impl NodeActionLoop {
                 }
             }
         }
-        drop(node_state);
         Ok(())
     }
-
-    // fn handle_test_inv(&mut self, inv: Inv) -> Result<(), CustomError> {
-    //     let mut node_state = self.node_state_ref.lock()?;
-    //     // let peer = node_state.get_peer(&local_address);
-
-    //     // if let Some(peer) = peer {
-    //     //     peer.send(inv)?;
-    //     // }
-    //     drop(node_state);
-
-    //     Ok(())
-    // }
 
     fn broadcast(&mut self, message: impl Message) -> Result<(), CustomError> {
         let mut node_state = self.node_state_ref.lock()?;
 
         let peers = node_state.get_peers();
+        let mut peers_to_remove = vec![];
         for peer in peers {
-            if let Err(error) = message.send(&mut peer.stream) {
-                send_log(
-                    &self.logger_sender,
-                    Log::Message(format!("Error sending message: {:?}", error)),
-                );
+            if message.send(&mut peer.stream).is_err() {
+                peers_to_remove.push(peer.address);
             }
         }
 
+        for address in peers_to_remove {
+            node_state.remove_peer(address);
+            send_log(
+                &self.logger_sender,
+                Log::Message(format!(
+                    "Error sending message {} to peer {}",
+                    message.get_command(),
+                    address,
+                )),
+            );
+        }
+
+        Ok(())
+    }
+
+    fn broadcast_new_header(&self, header: BlockHeader) -> Result<(), CustomError> {
+        let mut node_state = self.node_state_ref.lock()?;
+        let headers_to_send = node_state.get_headers_to_send(header.hash());
+        if headers_to_send.is_empty() {
+            return Ok(());
+        }
+        let mut peers_to_remove = vec![];
+        for peer in node_state.get_peers() {
+            if !peer.requested_headers {
+                continue;
+            }
+            let sent = if peer.send_headers {
+                let headers_msg = Headers {
+                    headers: headers_to_send.clone(),
+                };
+                headers_msg.send(&mut peer.stream)
+            } else {
+                let mut inventories = vec![];
+                for header in &headers_to_send {
+                    inventories.push(Inventory::new(InventoryType::Block, header.hash().clone()));
+                }
+                let inv_msg = Inv::new(inventories);
+                inv_msg.send(&mut peer.stream)
+            };
+            if sent.is_err() {
+                peers_to_remove.push(peer.address);
+            }
+        }
+
+        for address in peers_to_remove {
+            node_state.remove_peer(address);
+        }
         Ok(())
     }
 }
@@ -333,7 +377,10 @@ fn send_message(
     message: impl Message,
 ) -> Result<(), CustomError> {
     let peer = node_state.get_peer(&address);
-    Ok(if let Some(peer) = peer {
-        peer.send(message)?;
-    })
+    if let Some(peer) = peer {
+        if peer.send(message).is_err() {
+            node_state.remove_peer(address);
+        }
+    }
+    Ok(())
 }

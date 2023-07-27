@@ -5,7 +5,7 @@ use crate::{
     parser::BufferParser,
     structs::tx_output::TransactionOutput,
     structs::{block_header::BlockHeader, outpoint::OutPoint},
-    utils::open_new_file,
+    utils::{calculate_index_from_timestamp, open_new_file},
     wallet::Wallet,
 };
 use std::{
@@ -13,11 +13,12 @@ use std::{
     fs::remove_file,
     io::{Read, Write},
     path::Path,
+    process::exit,
     sync::mpsc::Sender,
     vec,
 };
 
-const START_DATE_IBD: u32 = 1681095630;
+pub const START_DATE_IBD: u32 = 1681095630;
 
 #[derive(Debug, PartialEq, Clone)]
 /// UTXOValue es una estructura que contiene los valores que necesitamos guardar de las UTXO.
@@ -101,20 +102,16 @@ impl UTXO {
         headers: &Vec<BlockHeader>,
         logger_sender: &mut Sender<Log>,
     ) -> Result<(), CustomError> {
-        let last_timestamp = self.restore_utxo()?;
-        let starting_index = calculate_starting_index(headers, last_timestamp);
-        send_log(
-            logger_sender,
-            Log::Message(format!(
-                "Utxo generation is starting ({} new blocks)",
-                headers.len() - starting_index
-            )),
-        );
-        let new_last_timestamp =
-            self.update_from_headers(headers, starting_index, logger_sender, last_timestamp)?;
+        let last_block_hash = self.restore_utxo()?.unwrap_or_else(|| {
+            let first_block_index = calculate_index_from_timestamp(headers, START_DATE_IBD);
+            headers[first_block_index].hash().clone()
+        });
+
+        let new_last_block_hash =
+            self.update_from_headers(headers, last_block_hash, logger_sender)?;
 
         self.sync = true;
-        self.save(new_last_timestamp)?;
+        self.save(new_last_block_hash)?;
 
         send_log(
             logger_sender,
@@ -127,33 +124,53 @@ impl UTXO {
         Ok(())
     }
 
-    fn restore_utxo(&mut self) -> Result<u32, CustomError> {
+    fn restore_utxo(&mut self) -> Result<Option<Vec<u8>>, CustomError> {
         let path = format!("{}/{}", self.store_path, self.path);
         let mut file = open_new_file(path, false)?;
 
         let mut saved_utxo_buffer = vec![];
         file.read_to_end(&mut saved_utxo_buffer)?;
 
-        let (last_timestamp, tx_set) = match Self::parse(saved_utxo_buffer) {
-            Ok((last_timestamp, tx_set)) => (last_timestamp, tx_set),
-            Err(_) => (START_DATE_IBD, HashMap::new()),
+        let (last_block_hash, tx_set) = match Self::parse(saved_utxo_buffer) {
+            Ok((last_block_hash, tx_set)) => (Some(last_block_hash), tx_set),
+            Err(_) => (None, HashMap::new()),
         };
 
         self.tx_set = tx_set;
-        Ok(last_timestamp)
+        Ok(last_block_hash)
     }
 
     fn update_from_headers(
         &mut self,
         headers: &Vec<BlockHeader>,
-        starting_index: usize,
+        last_block_hash: Vec<u8>,
         logger_sender: &mut Sender<Log>,
-        last_timestamp: u32,
-    ) -> Result<u32, CustomError> {
+    ) -> Result<Vec<u8>, CustomError> {
         let mut i = 0;
         let mut percentage = 0;
 
-        let mut new_timestamp = last_timestamp;
+        let mut last_block_hash = last_block_hash;
+
+        let block_position = headers
+            .iter()
+            .rev()
+            .position(|h| *h.hash() == last_block_hash);
+
+        println!("block_position: {:?}", block_position);
+        println!("blocks len: {:?}", headers.len());
+
+        let starting_index = match block_position {
+            Some(position) => headers.len() - position,
+            None => calculate_index_from_timestamp(headers, START_DATE_IBD),
+        };
+
+        send_log(
+            logger_sender,
+            Log::Message(format!(
+                "Utxo generation is starting ({} new blocks)",
+                headers.len() - starting_index
+            )),
+        );
 
         for (_index, header) in headers.iter().enumerate().skip(starting_index) {
             if i > (headers.len() - starting_index) / 10 {
@@ -165,17 +182,29 @@ impl UTXO {
                 i = 0;
             }
             let path = format!("{}/blocks/{}.bin", self.store_path, header.hash_as_string());
-            let block = Block::restore(path)?;
+            let block = match Block::restore(path) {
+                Ok(block) => block,
+                Err(_) => {
+                    send_log(
+                        logger_sender,
+                        Log::Message(String::from(
+                            "Error generating UTXO (block file broken), please restart the app.",
+                        )),
+                    );
+                    exit(0);
+                }
+            };
             self.update_from_block(&block, false)?;
-            new_timestamp = header.timestamp;
+            drop(block);
+            last_block_hash = header.hash().clone();
             i += 1;
         }
-        Ok(new_timestamp)
+        Ok(last_block_hash)
     }
 
-    fn serialize(&mut self, last_timestamp: u32) -> Vec<u8> {
+    fn serialize(&mut self, block_hash: Vec<u8>) -> Vec<u8> {
         let mut buffer = vec![];
-        buffer.extend(last_timestamp.to_le_bytes());
+        buffer.extend(block_hash);
         buffer.extend((self.tx_set.len() as u64).to_le_bytes());
 
         for (out_point, value) in &self.tx_set {
@@ -187,10 +216,10 @@ impl UTXO {
         buffer
     }
 
-    pub fn parse(buffer: Vec<u8>) -> Result<(u32, HashMap<OutPoint, UTXOValue>), CustomError> {
+    pub fn parse(buffer: Vec<u8>) -> Result<(Vec<u8>, HashMap<OutPoint, UTXOValue>), CustomError> {
         let mut parser = BufferParser::new(buffer);
 
-        let last_timestamp = parser.extract_u32()?;
+        let last_block_hash = parser.extract_buffer(32)?.to_vec();
         let tx_set_len = parser.extract_u64()? as usize;
         let mut tx_set: HashMap<OutPoint, UTXOValue> = HashMap::new();
 
@@ -205,7 +234,7 @@ impl UTXO {
             tx_set.insert(out_point, value);
         }
 
-        Ok((last_timestamp, tx_set))
+        Ok((last_block_hash, tx_set))
     }
 
     /// Actualiza las UTXO a partir de un bloque, eliminando los outputs gastados y agregando los nuevos outputs.
@@ -221,7 +250,7 @@ impl UTXO {
                 };
                 let value = UTXOValue {
                     tx_out: tx_out.clone(),
-                    block_hash: block.header.hash(),
+                    block_hash: block.header.hash().clone(),
                     block_timestamp: block.header.timestamp,
                 };
                 self.tx_set.insert(out_point.clone(), value);
@@ -229,14 +258,14 @@ impl UTXO {
         }
 
         if save {
-            self.save(block.header.timestamp)?;
+            self.save(block.header.hash().clone())?;
         }
 
         Ok(())
     }
 
-    fn save(&mut self, last_timestamp: u32) -> Result<(), CustomError> {
-        let buffer = self.serialize(last_timestamp);
+    fn save(&mut self, block_hash: Vec<u8>) -> Result<(), CustomError> {
+        let buffer = self.serialize(block_hash);
 
         let path = format!("{}/{}", self.store_path, self.path);
         if Path::new(&path).exists() {
@@ -249,18 +278,6 @@ impl UTXO {
     }
 }
 
-fn calculate_starting_index(headers: &Vec<BlockHeader>, last_timestamp: u32) -> usize {
-    let new_headers_len = headers
-        .iter()
-        .rev()
-        .position(|header| header.timestamp <= last_timestamp);
-
-    match new_headers_len {
-        Some(new_headers_len) => headers.len() - new_headers_len,
-        None => 0,
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -269,7 +286,10 @@ mod tests {
     use chrono::Local;
     use gtk::glib::{self, Priority};
 
-    use crate::{logger::Logger, wallet::get_script_pubkey};
+    use crate::{
+        logger::Logger, messages::transaction::Transaction, structs::tx_input::TransactionInput,
+        wallet::get_script_pubkey,
+    };
 
     use super::*;
 
@@ -348,8 +368,12 @@ mod tests {
 
         assert_eq!(utxo_set.tx_set.len(), 3);
 
-        let last_timestamp = 1687623163;
-        utxo_set.save(last_timestamp).unwrap();
+        utxo_set
+            .save(vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ])
+            .unwrap();
 
         let mut utxo_set2 = UTXO::new(store_path.clone(), filename.clone()).unwrap();
         utxo_set2.restore_utxo().unwrap();
@@ -378,6 +402,8 @@ mod tests {
             bits: 486604799,
             nonce: 409655068,
             hash: vec![],
+            block_downloaded: true,
+            broadcasted: true,
         };
 
         let header2 = BlockHeader {
@@ -396,17 +422,26 @@ mod tests {
             bits: 486604799,
             nonce: 409655068,
             hash: vec![],
+            block_downloaded: true,
+            broadcasted: true,
         };
 
         assert_eq!(
-            calculate_starting_index(&vec![header1.clone(), header2.clone()], 2),
+            calculate_index_from_timestamp(&vec![header1.clone(), header2.clone()], 2),
+            0
+        );
+        assert_eq!(
+            calculate_index_from_timestamp(&vec![header1.clone(), header2.clone()], 1),
+            0
+        );
+        assert_eq!(
+            calculate_index_from_timestamp(&vec![header1.clone(), header2.clone()], 3),
             1
         );
         assert_eq!(
-            calculate_starting_index(&vec![header2.clone(), header1.clone()], 2),
-            2
+            calculate_index_from_timestamp(&vec![header1, header2], 0),
+            0
         );
-        assert_eq!(calculate_starting_index(&vec![header2, header1], 0), 0);
     }
 
     #[test]
@@ -414,6 +449,10 @@ mod tests {
         let filename = String::from("test_utxo.bin");
         let store_path = String::from("tests");
         let mut utxo_set = UTXO::new(store_path, filename.clone()).unwrap();
+        let block_hash = vec![
+            127, 47, 239, 163, 175, 36, 146, 56, 212, 168, 146, 23, 101, 29, 205, 186, 7, 67, 240,
+            23, 75, 32, 175, 14, 221, 106, 150, 247, 21, 243, 205, 109,
+        ];
 
         let key: OutPoint = OutPoint {
             hash: [
@@ -431,18 +470,14 @@ mod tests {
                 ))
                 .unwrap(),
             },
-            block_hash: [
-                127, 47, 239, 163, 175, 36, 146, 56, 212, 168, 146, 23, 101, 29, 205, 186, 7, 67,
-                240, 23, 75, 32, 175, 14, 221, 106, 150, 247, 21, 243, 205, 109,
-            ]
-            .to_vec(),
+            block_hash: block_hash.clone(),
             block_timestamp: 1680000000,
         };
         utxo_set.tx_set.insert(key, value);
 
-        let buffer = utxo_set.serialize(100000);
-        let (last_timestamp, parsed_tx_set) = UTXO::parse(buffer).unwrap();
-        assert_eq!(last_timestamp, 100000);
+        let buffer = utxo_set.serialize(block_hash.clone());
+        let (last_block_hash, parsed_tx_set) = UTXO::parse(buffer).unwrap();
+        assert_eq!(last_block_hash, block_hash);
         assert_eq!(utxo_set.tx_set, parsed_tx_set);
     }
 
@@ -453,23 +488,65 @@ mod tests {
         let logger = Logger::new(&String::from("tests/test_log.txt"), gui_sender).unwrap();
         let logger_sender = logger.get_sender();
 
-        let path = format!("tests/test_block.bin");
+        let path = format!("tests/blocks/test_block.bin");
 
+        let block_old = Block {
+            header: BlockHeader {
+                bits: 486604799,
+                block_downloaded: true,
+                broadcasted: true,
+                hash: vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6,
+                    7, 8, 9, 0, 1, 2,
+                ],
+                merkle_root: vec![],
+                nonce: 409655068,
+                prev_block_hash: vec![],
+                timestamp: 1680000000,
+                version: 21123123,
+            },
+            transactions: vec![Transaction {
+                inputs: vec![TransactionInput {
+                    previous_output: OutPoint {
+                        hash: vec![],
+                        index: 0,
+                    },
+                    script_sig: vec![],
+                    sequence: 0,
+                }],
+                outputs: vec![TransactionOutput {
+                    script_pubkey: vec![1, 2],
+                    value: 100,
+                }],
+                lock_time: 0,
+                version: 0,
+            }],
+        };
+
+        // bloque con 42 inputs y outputs en 20 txs
         let block = Block::restore(path).unwrap();
+        let real_path = format!("tests/blocks/{}.bin", block.header.hash_as_string());
+        block.save(real_path.clone()).unwrap();
 
-        println!("hash: {}", block.header.hash_as_string());
+        if Path::new("tests/test_utxo.bin").exists() {
+            fs::remove_file("tests/test_utxo.bin").unwrap();
+        }
         let filename = String::from("test_utxo.bin");
         let store_path = String::from("tests");
         let mut utxo_set = UTXO::new(store_path, filename.clone()).unwrap();
 
-        let headers = vec![block.header.clone()];
+        let headers = vec![block_old.header.clone(), block.header.clone()];
         utxo_set
             .generate(&headers, &mut logger_sender.clone())
             .unwrap();
+
+        // // solo tienen que estar los utxo del segundo bloque
         assert_eq!(utxo_set.tx_set.len(), 42);
         assert_eq!(utxo_set.is_synced(), true);
 
         fs::remove_file("tests/test_log.txt").unwrap();
+        fs::remove_file("tests/test_utxo.bin").unwrap();
+        fs::remove_file(real_path).unwrap();
     }
 
     #[test]

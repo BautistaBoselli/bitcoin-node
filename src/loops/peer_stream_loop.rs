@@ -31,6 +31,7 @@ use super::node_action_loop::NodeAction;
 /// PeerStreamLoop es una estructura que contiene los elementos necesarios para manejar los mensajes recibidos del peer asociado.
 /// Genera el loop de eventos alrededor de los mensajes recibidos por el TcpStream.
 /// Los elementos son:
+/// - address: Direccion del peer.
 /// - stream: Stream del peer.
 /// - node_action_sender: Sender para enviar acciones al nodo.
 /// - version: Version del nodo.
@@ -87,21 +88,25 @@ impl PeerStreamLoop {
                     &self.logger_sender,
                     Log::Message(format!("Error on PeerStreamLoop: {error}")),
                 );
+                self.node_action_sender
+                    .send(NodeAction::PeerError(self.address))?;
+                break;
             }
         }
+        Ok(())
     }
 
     fn handle_headers(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
-        let response =
-            if let Ok(response) = Headers::read(&mut self.stream, response_header.payload_size) {
-                response
-            } else {
+        let response = match Headers::read(&mut self.stream, response_header.payload_size) {
+            Ok(response) => response,
+            Err(error) => {
                 self.node_action_sender.send(NodeAction::GetHeadersError)?;
-                return Ok(());
-            };
+                return Err(error);
+            }
+        };
 
         if response.headers.len() == 2000 {
-            let last_header = response.headers.last().map(BlockHeader::hash);
+            let last_header = response.headers.last().map(BlockHeader::hash).cloned();
             request_headers(
                 last_header,
                 self.version,
@@ -117,11 +122,8 @@ impl PeerStreamLoop {
 
     fn handle_block(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
         let block = Block::read(&mut self.stream, response_header.payload_size)?;
-        if block.create_merkle_root().is_ok() {
-            self.node_action_sender
-                .send(NodeAction::Block((block.header.hash(), block)))?;
-        } else {
-            let inventory = Inventory::new(InventoryType::Block, block.header.hash());
+        if let Err(error) = block.create_merkle_root() {
+            let inventory = Inventory::new(InventoryType::Block, block.header.hash().clone());
 
             self.node_action_sender
                 .send(NodeAction::GetDataError(vec![inventory]))?;
@@ -133,7 +135,12 @@ impl PeerStreamLoop {
                     block.header.hash()
                 )),
             );
+            return Err(error);
         };
+
+        self.node_action_sender
+            .send(NodeAction::Block((block.header.hash().clone(), block)))?;
+
         Ok(())
     }
 
@@ -145,10 +152,8 @@ impl PeerStreamLoop {
     }
 
     fn handle_inv(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
-        println!("inv recibido");
         let inv = Inv::read(&mut self.stream, response_header.payload_size)?;
-        // self.node_action_sender
-        //     .send(NodeAction::TestInv(inv.clone()))?;
+
         for inventory in inv.inventories {
             if inventory.inventory_type == InventoryType::Tx {
                 let message = GetData::new(vec![inventory]);
@@ -170,6 +175,7 @@ impl PeerStreamLoop {
         let inventories = notfound.get_inventories().clone();
         self.node_action_sender
             .send(NodeAction::GetDataError(inventories))?;
+
         Ok(())
     }
 
@@ -188,6 +194,7 @@ impl PeerStreamLoop {
     }
 
     fn handle_getdata(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
+        // thread::sleep(Duration::from_secs(6));
         let getdata = GetData::read(&mut self.stream, response_header.payload_size)?;
         self.node_action_sender
             .send(NodeAction::GetData(self.address, getdata))?;

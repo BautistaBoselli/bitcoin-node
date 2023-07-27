@@ -8,9 +8,10 @@ use crate::{
     error::CustomError,
     logger::{send_log, Log},
     node_state::NodeState,
-    peer::PeerAction,
     structs::inventory::{Inventory, InventoryType},
 };
+
+use super::peer_action_loop::PeerAction;
 
 /// pending_blocks_loop es una funcion que genera un loop que se encarga de reenviar los bloques que no fueron recibidos por los peers.
 /// Los elementos son:
@@ -27,10 +28,10 @@ pub fn pending_blocks_loop(
             thread::sleep(Duration::from_secs(5));
             let mut node_state = node_state_ref.lock()?;
 
-            if node_state.is_blocks_sync() {
-                drop(node_state);
-                continue;
-            }
+            // if node_state.is_blocks_sync() {
+            //     drop(node_state);
+            //     continue;
+            // }
 
             let blocks_to_refetch = node_state.get_stale_requests()?;
 

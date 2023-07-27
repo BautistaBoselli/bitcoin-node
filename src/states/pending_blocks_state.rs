@@ -1,9 +1,16 @@
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
-use crate::{error::CustomError, utils::get_current_timestamp};
+use crate::{
+    error::CustomError,
+    structs::block_header::BlockHeader,
+    utils::{calculate_index_from_timestamp, get_current_timestamp},
+};
+
+use super::utxo_state::START_DATE_IBD;
 
 /// PendingBlocks es una estructura para manejar los bloques solicitados pendientes de recibir.
 /// Los elementos son:
@@ -17,9 +24,20 @@ pub struct PendingBlocks {
 impl PendingBlocks {
     #[must_use]
     /// Inicializa la estructura.
-    pub fn new() -> Arc<Mutex<Self>> {
+    pub fn new(store_path: &String, headers: &Vec<BlockHeader>) -> Arc<Mutex<Self>> {
+        let mut blocks = HashMap::new();
+        let starting_index = calculate_index_from_timestamp(headers, START_DATE_IBD);
+
+        for header in headers.iter().skip(starting_index) {
+            let path = format!("{}/blocks/{}.bin", store_path, header.hash_as_string());
+
+            if !Path::new(&path).exists() {
+                blocks.insert(header.hash().clone(), 0_u64);
+            }
+        }
+
         Arc::new(Mutex::new(Self {
-            blocks: HashMap::new(),
+            blocks,
             stale_time: 5,
         }))
     }
@@ -79,7 +97,7 @@ mod tests {
 
     #[test]
     fn pending_blocks_creation() {
-        let pending_blocks = PendingBlocks::new();
+        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![]);
         let pending_blocks = pending_blocks.lock().unwrap();
 
         assert_eq!(pending_blocks.is_empty(), true);
@@ -87,7 +105,7 @@ mod tests {
 
     #[test]
     fn append_block() {
-        let pending_blocks = PendingBlocks::new();
+        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![]);
         let mut pending_blocks = pending_blocks.lock().unwrap();
 
         let block_hash = vec![1, 2, 3, 4, 5];
@@ -99,7 +117,7 @@ mod tests {
 
     #[test]
     fn remove_block() {
-        let pending_blocks = PendingBlocks::new();
+        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![]);
         let mut pending_blocks = pending_blocks.lock().unwrap();
 
         let block_hash = vec![1, 2, 3, 4, 5];
@@ -113,7 +131,7 @@ mod tests {
 
     #[test]
     fn drain() {
-        let pending_blocks = PendingBlocks::new();
+        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![]);
         let mut pending_blocks = pending_blocks.lock().unwrap();
 
         let block_hash = vec![1, 2, 3, 4, 5];
@@ -128,7 +146,7 @@ mod tests {
 
     #[test]
     fn get_stale_requests() {
-        let pending_blocks = PendingBlocks::new();
+        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![]);
         let mut pending_blocks = pending_blocks.lock().unwrap();
 
         let block_hash = vec![1, 2, 3, 4, 5];
@@ -143,5 +161,29 @@ mod tests {
         let stale_requests = pending_blocks.get_stale_requests().unwrap();
         assert_eq!(stale_requests.len(), 1);
         assert_eq!(stale_requests[0], block_hash);
+    }
+
+    #[test]
+    fn start_with_lost_blocks() {
+        let lost_header = BlockHeader {
+            bits: 0,
+            nonce: 0,
+            prev_block_hash: vec![],
+            timestamp: START_DATE_IBD + 1,
+            version: 0,
+            hash: vec![
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7,
+                8, 9, 1, 2,
+            ],
+            merkle_root: vec![],
+            block_downloaded: true,
+            broadcasted: true,
+        };
+
+        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![lost_header.clone()]);
+
+        let pending_blocks = pending_blocks.lock().unwrap();
+        assert_eq!(pending_blocks.is_empty(), false);
+        assert_eq!(pending_blocks.is_block_pending(&lost_header.hash), true);
     }
 }

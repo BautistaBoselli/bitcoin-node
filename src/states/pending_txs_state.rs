@@ -145,6 +145,8 @@ mod tests {
                 bits: 421617023,
                 nonce: 3878826733,
                 hash: vec![],
+                block_downloaded: true,
+                broadcasted: true,
             },
 
             transactions: vec![tx.clone()],

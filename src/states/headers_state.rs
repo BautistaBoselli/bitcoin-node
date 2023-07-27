@@ -6,7 +6,7 @@ use std::{
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
-    messages::{get_headers::GetHeaders, headers::Headers},
+    messages::get_headers::GetHeaders,
     parser::BufferParser,
     peer::GENESIS,
     structs::block_header::BlockHeader,
@@ -33,12 +33,17 @@ impl HeadersState {
     pub fn new(path: String, logger_sender: Sender<Log>) -> Result<Self, CustomError> {
         let mut headers = Self {
             headers: Vec::new(),
-            logger_sender,
+            logger_sender: logger_sender.clone(),
             path,
             sync: false,
         };
 
         headers.restore()?;
+
+        send_log(
+            &logger_sender,
+            Log::Message(format!("Total headers restored: {}", headers.len())),
+        );
         Ok(headers)
     }
 
@@ -53,10 +58,27 @@ impl HeadersState {
         }
 
         while !parser.is_empty() {
-            let header = BlockHeader::parse_with_hash(parser.extract_buffer(112)?.to_vec())?;
+            let header = BlockHeader::parse_from_backup(parser.extract_buffer(112)?.to_vec())?;
             self.headers.push(header);
         }
+
         Ok(())
+    }
+
+    fn save(&self, headers: &Vec<BlockHeader>) -> Result<(), CustomError> {
+        let mut file = open_new_file(self.path.clone(), true)?;
+        let mut buffer = vec![];
+        for header in headers {
+            let header_buffer: Vec<u8> = header.serialize_for_backup();
+            buffer.extend(header_buffer);
+        }
+
+        file.write_all(buffer.as_slice())?;
+        Ok(())
+    }
+
+    fn len(&self) -> usize {
+        self.headers.len()
     }
 
     /// Devuelve todos los headers del nodo.
@@ -64,31 +86,56 @@ impl HeadersState {
         &self.headers
     }
 
-    /// Devuelve el hash del ultimo header del nodo.
-    pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
-        self.headers.last().map(|header| header.hash())
+    pub fn get_header_index(&self, block_hash: &Vec<u8>) -> usize {
+        let position_from_end = self
+            .headers
+            .iter()
+            .rev()
+            .position(|header| header.hash() == block_hash);
+
+        if let Some(position_from_end) = position_from_end {
+            return self.headers.len() - position_from_end - 1;
+        }
+
+        0
     }
 
-    /// Devuelve los ultimos count headers del nodo.
-    pub fn get_last_headers(&self, count: usize) -> Vec<BlockHeader> {
-        self.headers.iter().rev().take(count).cloned().collect()
+    /// Devuelve el hash del ultimo header del nodo.
+    pub fn get_last_header_hash(&self) -> Option<Vec<u8>> {
+        self.headers.last().map(|header| header.hash().clone())
+    }
+
+    /// Devuelve los ultimos count headers del nodo junto a su height.
+    pub fn get_last_headers(&self, count: usize) -> Vec<(usize, BlockHeader)> {
+        let mut last_headers = vec![];
+
+        self.headers
+            .iter()
+            .enumerate()
+            .rev()
+            .take(count)
+            .for_each(|(index, header)| last_headers.push((index + 1, header.clone())));
+
+        last_headers
     }
 
     /// Agrega los headers al nodo y los almacena.
     /// Tambien verifica si con los nuevos queda sincronizado con la red
-    pub fn append_headers(&mut self, headers: &mut Headers) -> Result<(), CustomError> {
-        let mut file = open_new_file(self.path.clone(), true)?;
+    pub fn append_headers(&mut self, mut headers: Vec<BlockHeader>) -> Result<(), CustomError> {
+        if let Some(first_header) = headers.first() {
+            let last_header = self.headers.last();
+            let last_header_hash = last_header
+                .map(|header| header.hash().clone())
+                .unwrap_or(GENESIS.to_vec());
 
-        let mut buffer = vec![];
-        for header in &headers.headers {
-            let header_buffer: Vec<u8> = header.serialize_with_hash();
-            buffer.extend(header_buffer);
+            if last_header_hash != first_header.prev_block_hash {
+                return Err(CustomError::BlockChainBroken);
+            }
         }
 
-        file.write_all(buffer.as_slice())?;
-
-        let headers_count = headers.headers.len();
-        self.headers.append(&mut headers.headers);
+        self.save(&headers)?;
+        let headers_count = headers.len();
+        self.headers.append(&mut headers);
 
         send_log(
             &self.logger_sender,
@@ -101,6 +148,43 @@ impl HeadersState {
 
         self.verify_headers_sync(headers_count)?;
         Ok(())
+    }
+
+    pub fn set_downloaded(&mut self, block_hash: &Vec<u8>) {
+        let downloaded_block = self
+            .headers
+            .iter_mut()
+            .rev()
+            .find(|header| header.hash() == block_hash);
+
+        if let Some(header) = downloaded_block {
+            header.block_downloaded = true;
+        }
+    }
+
+    pub fn get_headers_to_send(&mut self, block_hash: &Vec<u8>) -> Vec<BlockHeader> {
+        let downloaded_block_index = self.get_header_index(block_hash);
+
+        if downloaded_block_index == 0 {
+            return vec![];
+        }
+
+        let downloaded_block_prev = self.headers[downloaded_block_index - 1].clone();
+
+        let mut headers_to_send = vec![];
+        if downloaded_block_prev.broadcasted {
+            for header in self.headers.iter_mut().skip(downloaded_block_index) {
+                if header.block_downloaded {
+                    headers_to_send.push(header.clone());
+                    header.broadcasted = true;
+                }
+            }
+        }
+
+        println!("Hola, headers_to_send from: {:?}", downloaded_block_index);
+        println!("Hola, headers_to_send len: {:?}", headers_to_send.len());
+
+        headers_to_send
     }
 
     /// Verifica si con los nuevos headers queda sincronizado con la red
@@ -125,22 +209,31 @@ impl HeadersState {
     }
 
     pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
-        let mut headers = vec![];
-        let mut found = false;
         let peer_last_header = get_headers
             .block_locator_hashes
             .last()
             .unwrap_or(&GENESIS.to_vec())
             .clone();
         if let Some(last_header) = self.headers.last() {
-            if peer_last_header == last_header.hash() {
+            if peer_last_header == *last_header.hash() {
                 return vec![];
             }
         }
 
         if peer_last_header == GENESIS.to_vec() {
-            found = true;
+            return self.first_headers(get_headers.hash_stop);
         }
+
+        self.get_requested_headers(peer_last_header, get_headers.hash_stop)
+    }
+
+    fn get_requested_headers(
+        &self,
+        peer_last_header: Vec<u8>,
+        hash_stop: Vec<u8>,
+    ) -> Vec<BlockHeader> {
+        let mut headers = vec![];
+        let mut found = false;
         for header in &self.headers {
             if header.prev_block_hash == peer_last_header {
                 found = true;
@@ -148,18 +241,24 @@ impl HeadersState {
             if found {
                 headers.push(header.clone());
             }
-            if headers.len() == 2000 || header.hash() == get_headers.hash_stop {
+            if headers.len() == 2000 || *header.hash() == hash_stop {
                 break;
             }
         }
 
         if !found {
-            self.headers
-                .iter()
-                .take(2000)
-                .for_each(|header| headers.push(header.clone()));
+            return self.first_headers(hash_stop);
         }
         headers
+    }
+
+    fn first_headers(&self, hash_stop: Vec<u8>) -> Vec<BlockHeader> {
+        self.headers
+            .iter()
+            .take(2000)
+            .take_while(|block| block.hash != hash_stop)
+            .cloned()
+            .collect()
     }
 }
 
@@ -170,6 +269,8 @@ mod tests {
         fs::{self, remove_file},
         sync::mpsc,
     };
+
+    use crate::messages::headers::Headers;
 
     use super::*;
 
@@ -234,19 +335,25 @@ mod tests {
         fs::copy("tests/test_headers.bin", "tests/test_headers_append.bin").unwrap();
         let mut headers =
             HeadersState::new("tests/test_headers_append.bin".to_string(), logger_sender).unwrap();
+        println!("headers: {:?}", headers.headers.last().unwrap());
 
         let mut new_headers = Headers::new();
         new_headers.headers.push(BlockHeader {
-            prev_block_hash: vec![],
+            prev_block_hash: vec![
+                32, 120, 42, 0, 82, 85, 182, 87, 105, 110, 160, 87, 213, 185, 143, 52, 222, 252,
+                247, 81, 150, 246, 79, 110, 234, 200, 2, 108, 0, 0, 0, 0,
+            ],
             merkle_root: vec![],
             version: 0,
             timestamp: 0,
             bits: 0,
             nonce: 0,
             hash: vec![],
+            block_downloaded: true,
+            broadcasted: true,
         });
 
-        headers.append_headers(&mut new_headers).unwrap();
+        headers.append_headers(new_headers.headers).unwrap();
         assert_eq!(headers.headers.len(), 3);
 
         remove_file("tests/test_headers_append.bin").unwrap();

@@ -5,7 +5,7 @@ use std::{
     vec::IntoIter,
 };
 
-use crate::error::CustomError;
+use crate::{error::CustomError, structs::block_header::BlockHeader};
 
 /// get_addresses resuelve la direccion del seed y devuelve un iterador de direcciones.
 pub fn get_addresses(seed: String, port: u16) -> Result<IntoIter<SocketAddr>, CustomError> {
@@ -52,6 +52,26 @@ pub fn get_current_timestamp() -> Result<u64, CustomError> {
     Ok(SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_secs())
+}
+
+// header 0: 1
+// header 1: 3
+
+// last_timestamp: 2
+// position = 1
+
+// headers.len() - position  = 5 - 3 + 1 = 3
+
+pub fn calculate_index_from_timestamp(headers: &Vec<BlockHeader>, last_timestamp: u32) -> usize {
+    let new_headers_len = headers
+        .iter()
+        .rev()
+        .position(|header| header.timestamp <= last_timestamp);
+
+    match new_headers_len {
+        Some(new_headers_len) => headers.len() - new_headers_len - 1,
+        None => 0,
+    }
 }
 
 #[cfg(test)]

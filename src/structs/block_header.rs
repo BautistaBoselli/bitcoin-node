@@ -18,6 +18,8 @@ pub struct BlockHeader {
     pub bits: u32,
     pub nonce: u32,
     pub hash: Vec<u8>,
+    pub broadcasted: bool,
+    pub block_downloaded: bool,
 }
 
 impl BlockHeader {
@@ -34,7 +36,7 @@ impl BlockHeader {
         buffer
     }
 
-    pub fn serialize_with_hash(&self) -> Vec<u8> {
+    pub fn serialize_for_backup(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = vec![];
         buffer.extend(&self.version.to_le_bytes());
         buffer.extend(&self.prev_block_hash);
@@ -65,6 +67,8 @@ impl BlockHeader {
             bits: parser.extract_u32()?,
             nonce: parser.extract_u32()?,
             hash,
+            block_downloaded: false,
+            broadcasted: false,
         };
 
         if !(block_header.validate()) {
@@ -74,7 +78,7 @@ impl BlockHeader {
         Ok(block_header)
     }
 
-    pub fn parse_with_hash(buffer: Vec<u8>) -> Result<Self, CustomError> {
+    pub fn parse_from_backup(buffer: Vec<u8>) -> Result<Self, CustomError> {
         let mut parser = BufferParser::new(buffer);
         if parser.len() < 112 {
             return Err(CustomError::SerializedBufferIsInvalid);
@@ -88,6 +92,8 @@ impl BlockHeader {
             bits: parser.extract_u32()?,
             nonce: parser.extract_u32()?,
             hash: parser.extract_buffer(32)?.to_vec(),
+            block_downloaded: true,
+            broadcasted: true,
         };
 
         if !(block_header.validate()) {
@@ -123,13 +129,13 @@ impl BlockHeader {
     }
 
     /// Esta funcion se encarga de calcular el hash del header de un bloque
-    pub fn hash(&self) -> Vec<u8> {
-        self.hash.clone()
+    pub fn hash(&self) -> &Vec<u8> {
+        &self.hash
     }
 
     /// Esta funcion se encarga de calcular el hash del header de un bloque y devolverlo como un string
     pub fn hash_as_string(&self) -> String {
-        hash_as_string(self.hash())
+        hash_as_string(self.hash().clone())
     }
 }
 
@@ -206,6 +212,8 @@ mod tests {
                 10, 110, 89, 244, 38, 172, 240, 48, 75, 251, 139, 33, 16, 164, 179, 154, 22, 123,
                 120, 81, 209, 213, 111, 183, 7, 9, 162, 49, 0, 0, 0, 0,
             ],
+            block_downloaded: false,
+            broadcasted: false,
         };
 
         valid_header.serialize();
@@ -233,6 +241,8 @@ mod tests {
                 116, 18, 66, 212, 76, 145, 158, 131, 46, 212, 244, 136, 96, 84, 11, 220, 121, 121,
                 78, 50, 3, 197, 235, 49, 172, 32, 11, 104, 118, 114, 161, 104,
             ],
+            block_downloaded: false,
+            broadcasted: false,
         };
 
         assert!(!valid_header.validate());

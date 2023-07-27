@@ -110,7 +110,7 @@ impl Wallets {
             for wallet in &mut self.wallets {
                 let movement = tx.get_movement(&wallet.get_pubkey_hash()?, utxo)?;
                 if let Some(mut movement) = movement {
-                    movement.block_hash = Some(block.header.hash());
+                    movement.block_hash = Some(block.header.hash().clone());
                     wallet.update_history(movement);
                     wallets_updated = true;
                 }
@@ -298,6 +298,8 @@ mod tests {
                 bits: 421617023,
                 nonce: 3878826733,
                 hash: vec![],
+                block_downloaded: true,
+                broadcasted: true,
             },
             transactions: vec![Transaction {
                 version: 1,

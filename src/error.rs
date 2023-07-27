@@ -23,7 +23,7 @@ pub enum CustomError {
     CannotConnectToNode,
     CannotHandshakeNode,
     SerializedBufferIsInvalid,
-    InvalidHeader,
+    BlockChainBroken,
     CommandNotImplemented,
     Logging,
     CannotReadMessageHeader,
@@ -50,6 +50,7 @@ pub enum CustomError {
     CannotSignTx,
     InvalidFee,
     InvalidTransferFields,
+    PeerNotSynced,
 }
 
 impl CustomError {
@@ -65,7 +66,7 @@ impl CustomError {
             Self::CannotConnectToNode => "cannot connect to node",
             Self::CannotHandshakeNode => "cannot handshake with node",
             Self::SerializedBufferIsInvalid => "serialized buffer is invalid",
-            Self::InvalidHeader => "invalid header",
+            Self::BlockChainBroken => "blockchain is broken",
             Self::CommandNotImplemented => "command not implemented",
             Self::Logging => "couldn't send log",
             Self::CannotReadMessageHeader => "cannot read message header",
@@ -94,6 +95,7 @@ impl CustomError {
             Self::CannotSignTx => "cannot sign transaction",
             Self::InvalidFee => "invalid fee",
             Self::InvalidTransferFields => "invalid transfer fields",
+            Self::PeerNotSynced => "peer not synced",
         }
     }
 }

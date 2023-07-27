@@ -20,6 +20,7 @@ pub struct Config {
     pub port: u16,
     pub log_file: String,
     pub npeers: u8,
+    pub client_only: bool,
     pub store_path: String,
 }
 
@@ -52,6 +53,7 @@ impl Config {
             port: 0,
             log_file: String::new(),
             npeers: 0,
+            client_only: false,
             store_path: String::from("store"),
         };
 
@@ -113,6 +115,7 @@ impl Config {
                     u8::from_str(value).map_err(|_| CustomError::ConfigErrorReadingValue)?
             }
             "STORE_PATH" => self.store_path = String::from(value),
+            "CLIENT_ONLY" => self.client_only = value == "true",
             _ => (),
         }
         Ok(())
@@ -146,6 +149,7 @@ mod tests {
         LOG=log.txt\n\
         NPEERS=5\n\
         PORT=4321\n\
+        CLIENT_ONLY=false\n\
         STORE_PATH=store"
             .as_bytes();
         let config = Config::from_reader(content);
@@ -160,6 +164,7 @@ mod tests {
         LOG=log.txt\n\
         NPEERS=5\n\
         PORT=4321\n\
+        CLIENT_ONLY=true\n\
         STORE_PATH=custom"
             .as_bytes();
         let config = Config::from_reader(content)?;
@@ -168,6 +173,7 @@ mod tests {
         assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
+        assert_eq!(true, config.client_only);
         assert_eq!("custom", config.store_path);
 
         let content = "SEED=seed.test\n\
@@ -182,6 +188,7 @@ mod tests {
         assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
+        assert_eq!(false, config.client_only);
         assert_eq!("store", config.store_path);
 
         Ok(())
@@ -195,6 +202,7 @@ mod tests {
         LOG=log.txt\n\
         NPEERS=5\n\
         PORT=4321\n\
+        CLIENT_ONLY=true\n\
         STORE_PATH=custom"
             .as_bytes();
         let config = Config::from_reader(content)?;
@@ -203,6 +211,7 @@ mod tests {
         assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
+        assert_eq!(true, config.client_only);
         assert_eq!("custom", config.store_path);
 
         let content = "SEED=seed.test\n\
@@ -211,6 +220,7 @@ mod tests {
         LOG=log.txt\n\
         NPEERS=5\n\
         PORT=4321\n\
+        CLIENT_ONLY=true\n\
         STORE_PATH=custom"
             .as_bytes();
         let config = Config::from_reader(content)?;
@@ -219,6 +229,7 @@ mod tests {
         assert_eq!(5, config.npeers);
         assert_eq!("log.txt", config.log_file);
         assert_eq!(4321, config.port);
+        assert_eq!(true, config.client_only);
         assert_eq!("custom", config.store_path);
         Ok(())
     }

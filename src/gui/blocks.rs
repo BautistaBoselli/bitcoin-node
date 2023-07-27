@@ -61,15 +61,15 @@ impl GUIBlocks {
         let headers = node_state.get_last_headers(100);
 
         reset_table(&blocks_list_box);
-        for header in headers.iter() {
+        for (height, header) in headers.into_iter() {
             let utxo_row = gtk::ListBoxRow::new();
             let utxo_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
             utxo_box.set_margin_top(8);
             utxo_box.set_margin_bottom(8);
 
             utxo_box.add(&time_label(header.timestamp));
-            utxo_box.add(&tx_hash_label(header.hash()));
-            utxo_box.add(&number_label(header.version as i64));
+            utxo_box.add(&tx_hash_label(header.hash().clone()));
+            utxo_box.add(&number_label(height as i64));
             utxo_box.add(&number_label(header.bits as i64));
 
             utxo_row.add(&utxo_box);
@@ -89,7 +89,7 @@ fn reset_table(list_box: &ListBox) {
     let tx_hash_label = gtk::Label::new(None);
     let time_label = gtk::Label::new(None);
     let nbits_label = gtk::Label::new(None);
-    let version_label = gtk::Label::new(None);
+    let height_label = gtk::Label::new(None);
 
     time_label.set_width_request(92);
     time_label.set_markup("<b>Time</b>");
@@ -100,12 +100,12 @@ fn reset_table(list_box: &ListBox) {
     nbits_label.set_width_request(100);
     nbits_label.set_markup("<b>nBits</b>");
 
-    version_label.set_width_request(100);
-    version_label.set_markup("<b>Version</b>");
+    height_label.set_width_request(100);
+    height_label.set_markup("<b>Height</b>");
 
     utxo_box.add(&time_label);
     utxo_box.add(&tx_hash_label);
-    utxo_box.add(&version_label);
+    utxo_box.add(&height_label);
     utxo_box.add(&nbits_label);
 
     utxo_row.add(&utxo_box);
