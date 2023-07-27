@@ -22,7 +22,7 @@ pub fn pending_blocks_loop(
     node_state_ref: Arc<Mutex<NodeState>>,
     peer_action_sender: mpsc::Sender<PeerAction>,
     logger_sender: mpsc::Sender<Log>,
-) {
+) -> thread::JoinHandle<Result<(), CustomError>> {
     thread::spawn(move || -> Result<(), CustomError> {
         loop {
             thread::sleep(Duration::from_secs(5));
@@ -61,5 +61,5 @@ pub fn pending_blocks_loop(
                 drop(node_state);
             }
         }
-    });
+    })
 }

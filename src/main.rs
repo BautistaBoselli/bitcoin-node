@@ -2,6 +2,7 @@ use bitcoin::{
     config::Config,
     gui::init::GUI,
     logger::{send_log, Log, Logger},
+    loops::node_action_loop::NodeAction,
     node::Node,
     node_state::NodeState,
     utils::get_addresses,
@@ -74,15 +75,37 @@ fn main() {
         }
     };
 
-    node.spawn(addresses, gui_sender);
+    let node_thread = node.spawn(addresses, gui_sender);
 
     let gui = GUI::start(
         gui_receiver,
         node_state_ref,
         logger_sender.clone(),
-        node_action_sender,
+        node_action_sender.clone(),
     );
+
     if let Err(error) = gui {
-        send_log(&logger_sender, Log::Error(error));
+        send_log(
+            &logger_sender,
+            Log::Message(format!("Error starting GUI: {}", error)),
+        );
     };
+
+    if logger.tx.send(Log::Terminate).is_ok() {
+        if let Err(error) = logger.thread.join() {
+            send_log(
+                &logger_sender,
+                Log::Message(format!("Error closing logger thread: {:?}", error)),
+            );
+        };
+    }
+
+    if node_action_sender.send(NodeAction::Terminate).is_ok() {
+        if let Err(error) = node_thread.join() {
+            send_log(
+                &logger_sender,
+                Log::Message(format!("Error closing node thread: {:?}", error)),
+            );
+        };
+    }
 }

@@ -55,6 +55,9 @@ impl GUIWindow {
         let load_window: gtk::Window = get_gui_element(&self.builder, "load-window")?;
         load_window.hide();
         let main_window: gtk::Window = get_gui_element(&self.builder, "main-window")?;
+        main_window.connect_destroy(|_| {
+            gtk::main_quit();
+        });
         main_window.show_all();
         Ok(())
     }
