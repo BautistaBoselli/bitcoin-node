@@ -152,6 +152,12 @@ impl NodeState {
         }
     }
 
+    pub fn get_fastest_peer(&mut self) -> Option<&mut Peer> {
+        self.peers
+            .iter_mut()
+            .min_by(|a, b| a.benchmark.cmp(&b.benchmark))
+    }
+
     /********************     HEADERS     ********************/
 
     /// devuelve el hash del ultimo header guardado

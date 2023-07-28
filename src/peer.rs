@@ -4,6 +4,8 @@ use std::{
     thread,
 };
 
+use chrono::Local;
+
 use crate::{
     error::CustomError,
     logger::{send_log, Log},
@@ -45,6 +47,7 @@ pub struct Peer {
     pub send_headers: bool,
     pub requested_headers: bool,
     pub stream: TcpStream,
+    pub benchmark: i64,
     pub peer_action_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
     pub peer_stream_thread: Option<thread::JoinHandle<Result<(), CustomError>>>,
 }
@@ -70,11 +73,25 @@ impl Peer {
             services,
             version,
             stream,
+            benchmark: 99999,
             send_headers: false,
             requested_headers: false,
         };
 
-        peer.call_handshake(sender_address, &mut logger_sender)?;
+        let timestamp_before_handshake = Local::now().timestamp_millis();
+        peer.call_handshake(sender_address)?;
+        let timestamp_after_handshake = Local::now().timestamp_millis();
+        peer.benchmark = timestamp_after_handshake - timestamp_before_handshake;
+
+        send_log(
+            &mut logger_sender,
+            Log::Message(format!(
+                "Successful handshake with {} in {}ms",
+                peer.address.ip(),
+                peer.benchmark
+            )),
+        );
+
         peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
     }
@@ -95,21 +112,31 @@ impl Peer {
             services,
             version,
             stream,
+            benchmark: 99999,
             send_headers: false,
             requested_headers: false,
         };
 
-        peer.answer_handshake(sender_address, &mut logger_sender)?;
+        let timestamp_before_handshake = Local::now().timestamp_millis();
+        peer.answer_handshake(sender_address)?;
+        let timestamp_after_handshake = Local::now().timestamp_millis();
+        peer.benchmark = timestamp_after_handshake - timestamp_before_handshake;
+
+        send_log(
+            &mut logger_sender,
+            Log::Message(format!(
+                "Successful handshake with {} in {}ms",
+                peer.address.ip(),
+                peer.benchmark
+            )),
+        );
+
         peer.spawn_threads(peer_action_receiver, node_action_sender, logger_sender)?;
         Ok(peer)
     }
 
     /// Realiza el handshake de Node con el Peer.
-    fn call_handshake(
-        &mut self,
-        sender_address: SocketAddrV6,
-        logger_sender: &mut mpsc::Sender<Log>,
-    ) -> Result<(), CustomError> {
+    fn call_handshake(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
         Version::new(self.address, sender_address, self.version, self.services)
             .send(&mut self.stream)?;
 
@@ -125,20 +152,11 @@ impl Peer {
 
         VerAck::new().send(&mut self.stream)?;
         SendHeaders::new().send(&mut self.stream)?;
-
-        send_log(
-            logger_sender,
-            Log::Message(format!("Successful handshake with {}", self.address.ip())),
-        );
 
         Ok(())
     }
 
-    fn answer_handshake(
-        &mut self,
-        sender_address: SocketAddrV6,
-        logger_sender: &mut mpsc::Sender<Log>,
-    ) -> Result<(), CustomError> {
+    fn answer_handshake(&mut self, sender_address: SocketAddrV6) -> Result<(), CustomError> {
         let response_header = MessageHeader::read(&mut self.stream)?;
         let version_response = Version::read(&mut self.stream, response_header.payload_size)
             .map_err(|_| CustomError::CannotHandshakeNode)?;
@@ -153,11 +171,6 @@ impl Peer {
         VerAck::read(&mut self.stream, response_header.payload_size)
             .map_err(|_| CustomError::CannotHandshakeNode)?;
         SendHeaders::new().send(&mut self.stream)?;
-
-        send_log(
-            logger_sender,
-            Log::Message(format!("Successful handshake with {}", self.address.ip())),
-        );
 
         Ok(())
     }

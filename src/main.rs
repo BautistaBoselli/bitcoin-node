@@ -91,20 +91,20 @@ fn main() {
         );
     };
 
-    if logger.tx.send(Log::Terminate).is_ok() {
-        if let Err(error) = logger.thread.join() {
-            send_log(
-                &logger_sender,
-                Log::Message(format!("Error closing logger thread: {:?}", error)),
-            );
-        };
-    }
-
     if node_action_sender.send(NodeAction::Terminate).is_ok() {
         if let Err(error) = node_thread.join() {
             send_log(
                 &logger_sender,
                 Log::Message(format!("Error closing node thread: {:?}", error)),
+            );
+        };
+    }
+
+    if logger.tx.send(Log::Terminate).is_ok() {
+        if let Err(error) = logger.thread.join() {
+            send_log(
+                &logger_sender,
+                Log::Message(format!("Error closing logger thread: {:?}", error)),
             );
         };
     }

@@ -19,7 +19,7 @@ use crate::{
         tcp_listener_loop::TcpListenerLoop,
     },
     node_state::NodeState,
-    peer::Peer,
+    peer::{request_headers, Peer},
 };
 
 /// Node es la estructura que representa nuestro nodo.
@@ -178,11 +178,30 @@ impl Node {
     }
 
     fn initialize_ibd(&self) -> Result<(), CustomError> {
-        let node_state = self
-            .node_state_ref
-            .lock()
-            .map_err(|_| CustomError::CannotLockGuard)?;
+        let mut node_state = self.node_state_ref.lock()?;
         let last_header = node_state.get_last_header_hash();
+        let fastest_peer = node_state.get_fastest_peer();
+
+        if let Some(fastest_peer) = fastest_peer {
+            request_headers(
+                last_header,
+                self.version,
+                &mut fastest_peer.stream,
+                &self.logger_sender,
+                &self.node_action_sender,
+            )?;
+
+            send_log(
+                &self.logger_sender,
+                Log::Message(format!(
+                    "Staring headers download with fastest peer: {}",
+                    fastest_peer.address.ip()
+                )),
+            );
+
+            return Ok(());
+        }
+
         drop(node_state);
         self.peer_action_sender
             .send(PeerAction::GetHeaders(last_header))?;
@@ -211,8 +230,10 @@ impl Drop for Node {
     fn drop(&mut self) {
         if let Ok(mut node_state) = self.node_state_ref.lock() {
             let peers = node_state.get_peers();
-            for peer in peers {
+            for _ in peers.iter() {
                 self.peer_action_sender.send(PeerAction::Terminate).unwrap();
+            }
+            for peer in peers {
                 if let Some(thread) = peer.peer_action_thread.take() {
                     if let Err(error) = thread.join() {
                         println!("Error joining thread: {:?}", error);
