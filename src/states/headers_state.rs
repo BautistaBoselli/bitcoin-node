@@ -10,8 +10,19 @@ use crate::{
     parser::BufferParser,
     peer::GENESIS,
     structs::block_header::BlockHeader,
-    utils::open_new_file,
+    utils::{
+        calculate_index_from_timestamp, get_current_timestamp, get_current_timestamp_millis,
+        open_new_file,
+    },
 };
+
+use super::utxo_state::START_DATE_IBD;
+
+struct HeaderIBDStats {
+    checkpoint_timestamp: u128,
+    checkpoint_percentage: u64,
+    checkpoint_downloads: u128,
+}
 
 /// HeadersState es una estructura que contiene los elementos necesarios para manejar los headers.
 /// Los elementos son:
@@ -23,6 +34,7 @@ pub struct HeadersState {
     headers: Vec<BlockHeader>,
     logger_sender: Sender<Log>,
     path: String,
+    ibd_stats: Option<HeaderIBDStats>,
     sync: bool,
 }
 
@@ -35,6 +47,7 @@ impl HeadersState {
             headers: Vec::new(),
             logger_sender: logger_sender.clone(),
             path,
+            ibd_stats: None,
             sync: false,
         };
 
@@ -79,6 +92,10 @@ impl HeadersState {
 
     fn len(&self) -> usize {
         self.headers.len()
+    }
+
+    pub fn total_headers_to_download(&self) -> usize {
+        self.len() - calculate_index_from_timestamp(&self.headers, START_DATE_IBD)
     }
 
     /// Devuelve todos los headers del nodo.
@@ -131,22 +148,97 @@ impl HeadersState {
             if last_header_hash != first_header.prev_block_hash {
                 return Err(CustomError::BlockChainBroken);
             }
+
+            let percentage = self.calculate_percentage_downloaded(first_header.timestamp)?;
+            if self.ibd_stats.is_none() && percentage < 95_u64 {
+                self.start_stats_printing()?;
+            }
         }
 
         self.save(&headers)?;
         let headers_count = headers.len();
         self.headers.append(&mut headers);
 
-        send_log(
-            &self.logger_sender,
-            Log::Message(format!(
-                "There are {} headers, new {}",
-                self.headers.len(),
-                headers_count
-            )),
-        );
-
+        self.print_status(headers_count)?;
         self.verify_headers_sync(headers_count)?;
+        Ok(())
+    }
+
+    fn calculate_percentage_downloaded(&self, received_timestamp: u32) -> Result<u64, CustomError> {
+        let first_timestamp = self
+            .headers
+            .first()
+            .map(|header| header.timestamp)
+            .unwrap_or(received_timestamp) as u64;
+
+        let now = get_current_timestamp()?;
+
+        if now - first_timestamp > 0 {
+            Ok((received_timestamp as u64 - first_timestamp) * 100 / (now - first_timestamp))
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn start_stats_printing(&mut self) -> Result<(), CustomError> {
+        self.ibd_stats = Some(HeaderIBDStats {
+            checkpoint_timestamp: get_current_timestamp_millis()?,
+            checkpoint_percentage: 0,
+            checkpoint_downloads: 0,
+        });
+
+        Ok(())
+    }
+
+    fn print_status(&mut self, headers_count: usize) -> Result<(), CustomError> {
+        if self.is_synced() || self.ibd_stats.is_none() {
+            send_log(
+                &self.logger_sender,
+                Log::Message(format!(
+                    "New headers: {}, total {}",
+                    headers_count,
+                    self.headers.len()
+                )),
+            );
+        } else {
+            self.print_stats(headers_count)?;
+        }
+
+        Ok(())
+    }
+
+    fn print_stats(&mut self, headers_count: usize) -> Result<(), CustomError> {
+        let last_timestamp = self.headers.last().map(|h| h.timestamp).unwrap_or(0);
+        let percentage = self.calculate_percentage_downloaded(last_timestamp)?;
+
+        if let Some(ibd_stats) = &mut self.ibd_stats {
+            ibd_stats.checkpoint_downloads += headers_count as u128;
+
+            let now = get_current_timestamp_millis()?;
+
+            if percentage > ibd_stats.checkpoint_percentage {
+                let checkpoint_time = now - ibd_stats.checkpoint_timestamp;
+                let headers_per_second = if ibd_stats.checkpoint_percentage > 0 {
+                    ibd_stats.checkpoint_downloads * 1000 / checkpoint_time
+                } else {
+                    0
+                };
+                send_log(
+                    &self.logger_sender,
+                    Log::Message(format!(
+                        "Headers sync {}% at {} headers/s... total {}",
+                        percentage,
+                        headers_per_second,
+                        self.headers.len(),
+                    )),
+                );
+
+                ibd_stats.checkpoint_downloads = 0;
+                ibd_stats.checkpoint_percentage = percentage;
+                ibd_stats.checkpoint_timestamp = now;
+            }
+        }
+
         Ok(())
     }
 

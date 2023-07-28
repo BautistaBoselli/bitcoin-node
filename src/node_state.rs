@@ -15,6 +15,7 @@ use crate::{
     messages::{block::Block, get_headers::GetHeaders, headers::Headers, transaction::Transaction},
     peer::Peer,
     states::{
+        blocks_state::BlocksState,
         headers_state::HeadersState,
         pending_blocks_state::PendingBlocks,
         pending_txs_state::PendingTxs,
@@ -43,10 +44,10 @@ pub struct NodeState {
     headers: HeadersState,
     peers: Vec<Peer>,
     wallets: Wallets,
-    pending_blocks_ref: Arc<Mutex<PendingBlocks>>,
+    blocks: BlocksState,
     utxo: UTXO,
     pending_txs: PendingTxs,
-    blocks_sync: bool,
+    // blocks_sync: bool,
 }
 
 impl NodeState {
@@ -68,15 +69,14 @@ impl NodeState {
 
         let node_state_ref = Arc::new(Mutex::new(Self {
             store_path: store_path.clone(),
-            logger_sender,
+            logger_sender: logger_sender.clone(),
             gui_sender,
             headers,
             peers: vec![],
             wallets: Wallets::new(format!("{}/wallets.bin", store_path))?,
-            pending_blocks_ref,
+            blocks: BlocksState::new(store_path.clone(), logger_sender, pending_blocks_ref),
             utxo: UTXO::new(store_path.clone(), "/utxo.bin".to_string())?,
             pending_txs: PendingTxs::new(),
-            blocks_sync: false,
         }));
 
         Ok(node_state_ref)
@@ -85,17 +85,16 @@ impl NodeState {
     /// Agrega un bloque nuevo, lo guarda en su archivo y actualiza los pending_blocks, wallets, pending_txs y utxo.
     /// Tambien verifica si ahora el nodo esta actualizado con la red
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: &Block) -> Result<(), CustomError> {
-        let path = format!(
-            "{}/blocks/{}.bin",
-            self.store_path,
-            block.header.hash_as_string()
-        );
-        block.save(path)?;
-        self.headers.set_downloaded(&block_hash);
+        // let path = format!(
+        //     "{}/blocks/{}.bin",
+        //     self.store_path,
+        //     block.header.hash_as_string()
+        // );
+        // block.save(path)?;
 
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        pending_blocks.remove_block(&block_hash)?;
-        drop(pending_blocks);
+        self.blocks
+            .append_block(&block_hash, block, self.headers.total_headers_to_download())?;
+        self.headers.set_downloaded(&block_hash);
 
         self.verify_sync()?;
 
@@ -179,6 +178,7 @@ impl NodeState {
 
         self.headers.append_headers(new_headers)?;
         self.gui_sender.send(GUIEvents::NewHeaders)?;
+
         Ok(())
     }
 
@@ -199,13 +199,13 @@ impl NodeState {
 
     /// Devuelve true si el nodo esta sincronizado con la red
     pub fn is_synced(&self) -> bool {
-        self.headers.is_synced() && self.blocks_sync && self.utxo.is_synced()
+        self.headers.is_synced() && self.blocks.is_synced() && self.utxo.is_synced()
     }
 
     /// Devuelve true si los bloques estan sincronizados
-    pub fn is_blocks_sync(&self) -> bool {
-        self.blocks_sync
-    }
+    // pub fn is_blocks_sync(&self) -> bool {
+    //     self.blocks_sync
+    // }
 
     /// Verifica si el nodo esta sincronizado con la red
     /// Si el nodo esta sincronizado, envia un evento a la interfaz grafica para indicar que el nodo esta listo para usarse
@@ -215,10 +215,10 @@ impl NodeState {
     ///
     pub fn verify_sync(&mut self) -> Result<(), CustomError> {
         if self.headers.is_synced() {
-            self.verify_blocks_sync()?;
+            self.blocks.verify_sync()?;
         }
 
-        if self.blocks_sync && !self.utxo.is_synced() {
+        if self.blocks.is_synced() && !self.utxo.is_synced() {
             self.utxo
                 .generate(self.headers.get_all(), &mut self.logger_sender)?;
         }
@@ -229,26 +229,6 @@ impl NodeState {
                 .map_err(|_| CustomError::CannotInitGUI)?;
         }
 
-        Ok(())
-    }
-
-    /// Verifica si los bloques estan sincronizados
-    fn verify_blocks_sync(&mut self) -> Result<(), CustomError> {
-        if self.blocks_sync {
-            return Ok(());
-        }
-
-        let pending_blocks_empty = self.is_pending_blocks_empty()?;
-
-        self.blocks_sync = self.headers.is_synced() && pending_blocks_empty;
-
-        if self.blocks_sync {
-            self.remove_pending_blocks()?;
-            send_log(
-                &self.logger_sender,
-                Log::Message("blocks sync completed".to_string()),
-            );
-        }
         Ok(())
     }
 
@@ -346,35 +326,35 @@ impl NodeState {
 
     /// Agrega un pending block nuevo a PendingBlocks
     pub fn append_pending_block(&mut self, header_hash: Vec<u8>) -> Result<(), CustomError> {
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        let mut pending_blocks = self.blocks.pending_blocks_ref.lock()?;
         pending_blocks.append_block(header_hash)?;
         drop(pending_blocks);
 
         Ok(())
     }
 
-    /// Remueve todos los pending blocks de PendingBlocks
-    fn remove_pending_blocks(&self) -> Result<(), CustomError> {
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
-        pending_blocks.drain();
-        Ok(())
-    }
+    // /// Remueve todos los pending blocks de PendingBlocks
+    // fn remove_pending_blocks(&self) -> Result<(), CustomError> {
+    //     let mut pending_blocks = self.pending_blocks_ref.lock()?;
+    //     pending_blocks.drain();
+    //     Ok(())
+    // }
 
-    /// Devuelve los pending blocks de PendingBlocks
+    // /// Devuelve los pending blocks de PendingBlocks
     pub fn get_stale_requests(&self) -> Result<Vec<Vec<u8>>, CustomError> {
-        let mut pending_blocks = self.pending_blocks_ref.lock()?;
+        let mut pending_blocks = self.blocks.pending_blocks_ref.lock()?;
         pending_blocks.get_stale_requests()
     }
 
-    /// Devuelve true si el bloque esta en PendingBlocks
+    // /// Devuelve true si el bloque esta en PendingBlocks
     pub fn is_block_pending(&self, block_hash: &Vec<u8>) -> Result<bool, CustomError> {
-        let pending_blocks = self.pending_blocks_ref.lock()?;
+        let pending_blocks = self.blocks.pending_blocks_ref.lock()?;
         Ok(pending_blocks.is_block_pending(block_hash))
     }
 
-    /// Devuelve true si PendingBlocks esta vacio
+    // /// Devuelve true si PendingBlocks esta vacio
     pub fn is_pending_blocks_empty(&self) -> Result<bool, CustomError> {
-        let pending_blocks = self.pending_blocks_ref.lock()?;
+        let pending_blocks = self.blocks.pending_blocks_ref.lock()?;
         Ok(pending_blocks.is_empty())
     }
 

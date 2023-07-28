@@ -54,6 +54,12 @@ pub fn get_current_timestamp() -> Result<u64, CustomError> {
         .as_secs())
 }
 
+pub fn get_current_timestamp_millis() -> Result<u128, CustomError> {
+    Ok(SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_millis())
+}
+
 // header 0: 1
 // header 1: 3
 

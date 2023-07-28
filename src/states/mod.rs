@@ -1,3 +1,4 @@
+pub mod blocks_state;
 pub mod headers_state;
 pub mod pending_blocks_state;
 pub mod pending_txs_state;
