@@ -427,7 +427,6 @@ mod tests {
         fs::copy("tests/test_headers.bin", "tests/test_headers_append.bin").unwrap();
         let mut headers =
             HeadersState::new("tests/test_headers_append.bin".to_string(), logger_sender).unwrap();
-        println!("headers: {:?}", headers.headers.last().unwrap());
 
         let mut new_headers = Headers::new();
         new_headers.headers.push(BlockHeader {
@@ -437,7 +436,7 @@ mod tests {
             ],
             merkle_root: vec![],
             version: 0,
-            timestamp: 0,
+            timestamp: 1677449562,
             bits: 0,
             nonce: 0,
             hash: vec![],
