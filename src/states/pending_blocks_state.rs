@@ -60,6 +60,10 @@ impl PendingBlocks {
         self.blocks.drain();
     }
 
+    pub fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
     /// Devuelve los bloques pendientes de recibir que ya vencieron.
     pub fn get_stale_requests(&mut self) -> Result<Vec<Vec<u8>>, CustomError> {
         let mut to_remove = Vec::new();

@@ -194,7 +194,7 @@ impl Node {
             send_log(
                 &self.logger_sender,
                 Log::Message(format!(
-                    "Staring headers download with fastest peer: {}",
+                    "Starting headers download with fastest peer: {}",
                     fastest_peer.address.ip()
                 )),
             );
