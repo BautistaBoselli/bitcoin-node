@@ -1,0 +1,11 @@
+[2023-07-31 18:24:37] Initializing node state...
+[2023-07-31 18:24:37] Total headers restored: 2470094
+[2023-07-31 18:24:37] Handshaking with 1 nodes (1 available)
+[2023-07-31 18:24:37] Successful handshake with ::ffff:127.0.0.1 in 0ms
+[2023-07-31 18:24:37] Starting headers download with fastest peer: ::ffff:127.0.0.1
+[2023-07-31 18:24:37] New headers: 0, total 2470094
+[2023-07-31 18:24:37] headers sync completed
+[2023-07-31 18:24:37] blocks sync completed
+[2023-07-31 18:24:38] Utxo generation is starting (0 new blocks)
+[2023-07-31 18:24:38] Utxo generation is (100%) completed...
+[2023-07-31 18:24:38] Utxo generation is finished

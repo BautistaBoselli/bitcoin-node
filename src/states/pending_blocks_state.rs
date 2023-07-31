@@ -169,6 +169,18 @@ mod tests {
 
     #[test]
     fn start_with_lost_blocks() {
+        let old_header = BlockHeader {
+            bits: 0,
+            nonce: 0,
+            prev_block_hash: vec![],
+            timestamp: START_DATE_IBD - 1,
+            version: 0,
+            hash: vec![1, 2, 3],
+            merkle_root: vec![],
+            block_downloaded: true,
+            broadcasted: true,
+        };
+
         let lost_header = BlockHeader {
             bits: 0,
             nonce: 0,
@@ -184,10 +196,12 @@ mod tests {
             broadcasted: true,
         };
 
-        let pending_blocks = PendingBlocks::new(&"".to_string(), &vec![lost_header.clone()]);
+        let pending_blocks =
+            PendingBlocks::new(&"".to_string(), &vec![old_header, lost_header.clone()]);
 
         let pending_blocks = pending_blocks.lock().unwrap();
         assert_eq!(pending_blocks.is_empty(), false);
+        assert_eq!(pending_blocks.len(), 1);
         assert_eq!(pending_blocks.is_block_pending(&lost_header.hash), true);
     }
 }
