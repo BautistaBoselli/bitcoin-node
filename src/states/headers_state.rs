@@ -18,6 +18,14 @@ use crate::{
 
 use super::utxo_state::START_DATE_IBD;
 
+/// HeaderIBDStats es una estructura que contiene los elementos necesarios para manejar las
+/// estadisticas de la descarga masiva de headers.
+/// Solamente se utiliza cuando la distancia entre el timestamp del ultimo header descargado y el actual
+/// es mayor al 5% del tiempo total de la blockchain.
+/// Los elementos son:
+/// - checkpoint_timestamp: Timestamp del momento en el que el ultimo checkpoint fue alcanzado.
+/// - checkpoint_percentage: Porcentaje del tiempo total de la blockchain que representa el checkpoint.
+/// - checkpoint_downloads: Cantidad de headers descargados desde el checkpoint.
 struct HeaderIBDStats {
     checkpoint_timestamp: u128,
     checkpoint_percentage: u64,
@@ -29,6 +37,7 @@ struct HeaderIBDStats {
 /// - headers: Headers del nodo.
 /// - logger_sender: Sender para enviar logs al logger.
 /// - path: Path del archivo donde se guardan los headers.
+/// - ibd_stats: Option<HeaderIBDStats> solamente se inicializa cuando corresponde.
 /// - sync: Indica si los headers del nodo estan sincronizados con la red.
 pub struct HeadersState {
     headers: Vec<BlockHeader>,
@@ -94,6 +103,7 @@ impl HeadersState {
         self.headers.len()
     }
 
+    /// Devuelve la cantidad de headers posteriores a la fecha de inicio del IBD.
     pub fn total_headers_to_download(&self) -> usize {
         self.len() - calculate_index_from_timestamp(&self.headers, START_DATE_IBD)
     }
@@ -103,6 +113,8 @@ impl HeadersState {
         &self.headers
     }
 
+    /// Devuelve la posicion de un header en el vector de headers del nodo dado el hash del mismo.
+    /// Si no se encuentra el header, devuelve 0.
     pub fn get_header_index(&self, block_hash: &Vec<u8>) -> usize {
         let position_from_end = self
             .headers
@@ -242,6 +254,7 @@ impl HeadersState {
         Ok(())
     }
 
+    /// Registra que un header tiene su bloque descargado.
     pub fn set_downloaded(&mut self, block_hash: &Vec<u8>) {
         let downloaded_block = self
             .headers
@@ -254,17 +267,20 @@ impl HeadersState {
         }
     }
 
+    /// Devuelve un vector de headers que se deben enviar a un nodo a partir de un header hash.
+    /// Los headers se envian unicamente si tienen al bloque anterior a ellos enviado y su bloque descargado.
+    /// Todos los headers obtenidos se marcan como enviados.
     pub fn get_headers_to_send(&mut self, block_hash: &Vec<u8>) -> Vec<BlockHeader> {
         let downloaded_block_index = self.get_header_index(block_hash);
 
-        if downloaded_block_index == 0 {
-            return vec![];
-        }
-
-        let downloaded_block_prev = self.headers[downloaded_block_index - 1].clone();
+        let mut next_to_send = downloaded_block_index == 0;
+        if !next_to_send {
+            let downloaded_block_prev = self.headers[downloaded_block_index - 1].clone();
+            next_to_send = downloaded_block_prev.broadcasted
+        };
 
         let mut headers_to_send = vec![];
-        if downloaded_block_prev.broadcasted {
+        if next_to_send {
             for header in self.headers.iter_mut().skip(downloaded_block_index) {
                 if header.block_downloaded {
                     headers_to_send.push(header.clone());
@@ -272,9 +288,6 @@ impl HeadersState {
                 }
             }
         }
-
-        println!("Hola, headers_to_send from: {:?}", downloaded_block_index);
-        println!("Hola, headers_to_send len: {:?}", headers_to_send.len());
 
         headers_to_send
     }
@@ -300,6 +313,7 @@ impl HeadersState {
         self.sync
     }
 
+    /// Ante un mensaje get headers, devuelve los headers esperados de acuerdo al protocolo btc.
     pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
         let peer_last_header = get_headers
             .block_locator_hashes
@@ -377,6 +391,156 @@ mod tests {
     }
 
     #[test]
+    fn headers_to_download() {
+        let (logger_sender, _) = mpsc::channel();
+        let headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+        let headers_to_download = headers.total_headers_to_download();
+        // 2 headers in the file, only one after START_DATE_IBD
+        assert_eq!(headers_to_download, 1);
+    }
+
+    #[test]
+    fn headers_get_header_index() {
+        let (logger_sender, _) = mpsc::channel();
+        let headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let first_hash = headers.headers[0].hash.clone();
+        let second_hash = headers.headers[1].hash.clone();
+
+        assert_eq!(headers.get_header_index(&first_hash), 0);
+        assert_eq!(headers.get_header_index(&second_hash), 1);
+        assert_eq!(headers.get_header_index(&vec![0; 32]), 0);
+    }
+
+    #[test]
+    fn headers_get_last_headers() {
+        let (logger_sender, _) = mpsc::channel();
+        let headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let first_hash = headers.headers[0].hash.clone();
+        let second_hash = headers.headers[1].hash.clone();
+
+        let last_header_zero = headers.get_last_headers(0);
+        let last_headers_one = headers.get_last_headers(1);
+        let last_headers_two = headers.get_last_headers(2);
+        let last_headers_three = headers.get_last_headers(3);
+
+        assert_eq!(last_header_zero.len(), 0);
+        assert_eq!(last_headers_one.len(), 1);
+        assert_eq!(last_headers_two.len(), 2);
+        assert_eq!(last_headers_three.len(), 2);
+
+        assert_eq!(last_headers_one[0].1.hash, second_hash);
+        assert_eq!(last_headers_two[0].1.hash, second_hash);
+        assert_eq!(last_headers_two[1].1.hash, first_hash);
+        assert_eq!(last_headers_three[0].1.hash, second_hash);
+        assert_eq!(last_headers_three[1].1.hash, first_hash);
+
+        assert_eq!(last_headers_one[0].0, 2);
+        assert_eq!(last_headers_two[0].0, 2);
+        assert_eq!(last_headers_two[1].0, 1);
+        assert_eq!(last_headers_three[0].0, 2);
+        assert_eq!(last_headers_three[1].0, 1);
+    }
+
+    #[test]
+    fn headers_set_downloaded() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        headers.headers[1].block_downloaded = false;
+
+        assert_eq!(headers.headers[1].block_downloaded, false);
+        headers.set_downloaded(&headers.headers[1].hash.clone());
+        assert_eq!(headers.headers[1].block_downloaded, true);
+    }
+
+    #[test]
+    fn headers_get_headers_to_send_with_only_one_downloaded() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let first_hash = headers.headers[0].hash.clone();
+        headers.headers[0].block_downloaded = false;
+        headers.headers[1].block_downloaded = false;
+
+        headers.headers[0].broadcasted = false;
+        headers.headers[1].broadcasted = false;
+
+        headers.set_downloaded(&headers.headers[0].hash.clone());
+
+        let headers_to_send = headers.get_headers_to_send(&first_hash);
+        assert_eq!(headers_to_send.len(), 1);
+        assert_eq!(headers_to_send[0].hash, first_hash);
+    }
+
+    #[test]
+    fn headers_get_headers_to_send_with_first_prev_broadcasted() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let second_hash = headers.headers[1].hash.clone();
+        headers.headers[0].block_downloaded = true;
+        headers.headers[1].block_downloaded = false;
+
+        headers.headers[0].broadcasted = true;
+        headers.headers[1].broadcasted = false;
+
+        headers.set_downloaded(&headers.headers[1].hash.clone());
+
+        let headers_to_send = headers.get_headers_to_send(&second_hash);
+        assert_eq!(headers_to_send.len(), 1);
+        assert_eq!(headers_to_send[0].hash, second_hash);
+    }
+
+    #[test]
+    fn headers_get_headers_to_send_with_second_prev_downloaded() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let first_hash = headers.headers[0].hash.clone();
+        let second_hash = headers.headers[1].hash.clone();
+        headers.headers[0].block_downloaded = false;
+        headers.headers[1].block_downloaded = true;
+
+        headers.headers[0].broadcasted = false;
+        headers.headers[1].broadcasted = false;
+
+        headers.set_downloaded(&headers.headers[0].hash.clone());
+        let headers_to_send = headers.get_headers_to_send(&first_hash);
+
+        assert_eq!(headers_to_send.len(), 2);
+        assert_eq!(headers_to_send[0].hash, first_hash);
+        assert_eq!(headers_to_send[1].hash, second_hash);
+    }
+
+    #[test]
+    fn headers_get_headers_to_send_without_prev_broadcasted() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let second_hash = headers.headers[1].hash.clone();
+        headers.headers[0].block_downloaded = false;
+        headers.headers[1].block_downloaded = false;
+
+        headers.headers[0].broadcasted = false;
+        headers.headers[1].broadcasted = false;
+
+        headers.set_downloaded(&headers.headers[1].hash.clone());
+        let headers_to_send = headers.get_headers_to_send(&second_hash);
+
+        assert_eq!(headers_to_send.len(), 0);
+    }
+
+    #[test]
     fn headers_creation_with_restore() {
         let (mut logger_sender, _) = mpsc::channel();
         let headers = HeadersState::new(
@@ -451,7 +615,33 @@ mod tests {
     }
 
     #[test]
+    fn headers_append_headers_blockchain_broken() {
+        let (logger_sender, _) = mpsc::channel();
+        fs::copy("tests/test_headers.bin", "tests/test_headers_append2.bin").unwrap();
+        let mut headers =
+            HeadersState::new("tests/test_headers_append2.bin".to_string(), logger_sender).unwrap();
 
+        let mut new_headers = Headers::new();
+        new_headers.headers.push(BlockHeader {
+            prev_block_hash: vec![1, 2, 3],
+            merkle_root: vec![],
+            version: 0,
+            timestamp: 1677449562,
+            bits: 0,
+            nonce: 0,
+            hash: vec![],
+            block_downloaded: true,
+            broadcasted: true,
+        });
+
+        assert_eq!(headers.headers.len(), 2);
+        assert!(headers.append_headers(new_headers.headers).is_err());
+        assert_eq!(headers.headers.len(), 2);
+
+        remove_file("tests/test_headers_append2.bin").unwrap();
+    }
+
+    #[test]
     fn headers_verify_headers_sync() {
         let (logger_sender, _) = mpsc::channel();
         let mut headers =
@@ -466,5 +656,113 @@ mod tests {
 
         headers.verify_headers_sync(0).unwrap();
         assert_eq!(headers.is_synced(), true);
+    }
+
+    #[test]
+    fn headers_get_headers_from_genesis() {
+        let (logger_sender, _) = mpsc::channel();
+        let headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let getheaders = GetHeaders::new(1, vec![], vec![0; 32]);
+        assert_eq!(headers.get_headers(getheaders).len(), 2);
+
+        let getheaders = GetHeaders::new(1, vec![GENESIS.to_vec()], vec![0; 32]);
+        assert_eq!(headers.get_headers(getheaders).len(), 2);
+    }
+
+    #[test]
+    fn headers_get_headers_from_last() {
+        let (logger_sender, _) = mpsc::channel();
+        let headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let getheaders = GetHeaders::new(
+            1,
+            vec![headers.get_last_header_hash().unwrap()],
+            vec![0; 32],
+        );
+        assert_eq!(headers.get_headers(getheaders).len(), 0);
+    }
+
+    #[test]
+    fn headers_get_headers_from_first() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let second_hash = headers.headers[1].hash.clone();
+
+        let new_header = BlockHeader {
+            prev_block_hash: vec![
+                32, 120, 42, 0, 82, 85, 182, 87, 105, 110, 160, 87, 213, 185, 143, 52, 222, 252,
+                247, 81, 150, 246, 79, 110, 234, 200, 2, 108, 0, 0, 0, 0,
+            ],
+            merkle_root: vec![],
+            version: 0,
+            timestamp: 1677449562,
+            bits: 0,
+            nonce: 0,
+            hash: vec![1, 2, 3],
+            block_downloaded: true,
+            broadcasted: true,
+        };
+        headers.headers.push(new_header.clone());
+
+        let getheaders = GetHeaders::new(1, vec![headers.headers[0].hash.clone()], vec![0; 32]);
+        let getheaders = headers.get_headers(getheaders);
+        assert_eq!(getheaders.len(), 2);
+        assert_eq!(getheaders[0].hash, second_hash);
+        assert_eq!(getheaders[1].hash, new_header.hash);
+    }
+
+    #[test]
+    fn headers_get_headers_with_hash_stop() {
+        let (logger_sender, _) = mpsc::channel();
+        let mut headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let second_hash = headers.headers[1].hash.clone();
+
+        let new_header = BlockHeader {
+            prev_block_hash: vec![
+                32, 120, 42, 0, 82, 85, 182, 87, 105, 110, 160, 87, 213, 185, 143, 52, 222, 252,
+                247, 81, 150, 246, 79, 110, 234, 200, 2, 108, 0, 0, 0, 0,
+            ],
+            merkle_root: vec![],
+            version: 0,
+            timestamp: 1677449562,
+            bits: 0,
+            nonce: 0,
+            hash: vec![1, 2, 3],
+            block_downloaded: true,
+            broadcasted: true,
+        };
+        headers.headers.push(new_header.clone());
+
+        let getheaders = GetHeaders::new(
+            1,
+            vec![headers.headers[0].hash.clone()],
+            second_hash.clone(),
+        );
+        let getheaders = headers.get_headers(getheaders);
+        assert_eq!(getheaders.len(), 1);
+        assert_eq!(getheaders[0].hash, second_hash);
+    }
+
+    #[test]
+    fn headers_get_headers_with_wrong_block_locator_hashes() {
+        let (logger_sender, _) = mpsc::channel();
+        let headers =
+            HeadersState::new("tests/test_headers.bin".to_string(), logger_sender).unwrap();
+
+        let first_hash = headers.headers[0].hash.clone();
+        let second_hash = headers.headers[1].hash.clone();
+
+        let getheaders = GetHeaders::new(1, vec![vec![1, 2, 3]], vec![0; 32]);
+        let getheaders = headers.get_headers(getheaders);
+        assert_eq!(getheaders.len(), 2);
+        assert_eq!(getheaders[0].hash, first_hash);
+        assert_eq!(getheaders[1].hash, second_hash);
     }
 }

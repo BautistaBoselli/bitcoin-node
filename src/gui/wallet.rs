@@ -110,7 +110,10 @@ impl GUIWallet {
 
             update_wallet_combo_box(node_state_ref.clone(), wallet_combobox.clone())
                 .unwrap_or_else(|_| {
-                    println!("Error actualizando combo box");
+                    send_log(
+                        &logger_sender,
+                        Log::Message("Error updating combo box".to_string()),
+                    )
                 });
             name.set_text("");
             pubkey.set_text("");

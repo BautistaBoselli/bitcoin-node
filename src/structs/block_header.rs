@@ -217,8 +217,6 @@ mod tests {
         };
 
         valid_header.serialize();
-        let parsed = BlockHeader::parse(valid_header.serialize()).unwrap();
-        println!("{:?}", parsed.hash);
         assert!(valid_header.validate());
     }
 

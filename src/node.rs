@@ -25,15 +25,16 @@ use crate::{
 /// Node es la estructura que representa nuestro nodo.
 /// Los elementos son:
 /// - address: Direccion del nodo.
-/// - services: Servicios del nodo.
+/// - services: Servicios que ofrece el nodo.
 /// - version: Version del nodo.
+/// - client_only: Indica si el nodo es completo o solo cliente.
 /// - logger_sender: Sender para enviar logs al logger.
 /// - peer_action_sender: Sender para enviar acciones al los peers.
 /// - peer_action_receiver: Receiver para recibir acciones del peer.
 /// - node_action_sender: Sender para enviar acciones al nodo.
 /// - node_action_receiver: Receiver para recibir acciones del nodo.
+/// - tcp_listener_thread: Thread del loop para atender conexiones entrantes a este nodo.
 /// - node_state_ref: Referencia al estado del nodo.
-/// - peers: Vector de peers.
 /// - npeers: Cantidad de peers.
 pub struct Node {
     pub address: SocketAddrV6,
@@ -83,6 +84,7 @@ impl Node {
 
     /// Inicializa el nodo en un thread.
     /// Comienza el thread de pending_blocks_loop.
+    /// Comienza el thread de tcp_listener_loop.
     /// Comienza la descarga de headers.
     /// Comienza el thread de node_action_loop.
     pub fn spawn(
@@ -227,6 +229,8 @@ impl Node {
 }
 
 impl Drop for Node {
+    /// Espera a que los threads de PeerActions terminen.
+    /// Estos junto al NodeActionLoop son los únicos threads que modifican el estado del nodo, por lo que hace falta esperarlos.
     fn drop(&mut self) {
         if let Ok(mut node_state) = self.node_state_ref.lock() {
             let peers = node_state.get_peers();

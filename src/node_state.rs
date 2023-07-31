@@ -20,7 +20,7 @@ use crate::{
         pending_blocks_state::PendingBlocks,
         pending_txs_state::PendingTxs,
         utxo_state::{UTXOValue, UTXO},
-        wallets_state::Wallets,
+        wallets_state::WalletsState,
     },
     structs::{block_header::BlockHeader, movement::Movement, outpoint::OutPoint},
     wallet::Wallet,
@@ -31,23 +31,20 @@ use crate::{
 /// - logger_sender: Sender para enviar logs al logger.
 /// - gui_sender: Sender para enviar eventos a la interfaz grafica.
 /// - headers: HeadersState.
-/// - wallets: Wallets.
-/// - pending_blocks_ref: Referencia a PendingBlocks.
+/// - peers: Vector de peers conectados al nodo.
+/// - wallets: WalletsState.
+/// - blocks: BlocksState.
 /// - utxo: UTXO.
 /// - pending_txs: PendingTxs.
-/// - blocks_sync: Indica si los bloques estan sincronizados.
-/// - Peers: Vector de peers.
 pub struct NodeState {
-    store_path: String,
     logger_sender: mpsc::Sender<Log>,
     gui_sender: Sender<GUIEvents>,
     headers: HeadersState,
     peers: Vec<Peer>,
-    wallets: Wallets,
+    wallets: WalletsState,
     blocks: BlocksState,
     utxo: UTXO,
     pending_txs: PendingTxs,
-    // blocks_sync: bool,
 }
 
 impl NodeState {
@@ -68,12 +65,11 @@ impl NodeState {
         let pending_blocks_ref = PendingBlocks::new(store_path, headers.get_all());
 
         let node_state_ref = Arc::new(Mutex::new(Self {
-            store_path: store_path.clone(),
             logger_sender: logger_sender.clone(),
             gui_sender,
             headers,
             peers: vec![],
-            wallets: Wallets::new(format!("{}/wallets.bin", store_path))?,
+            wallets: WalletsState::new(format!("{}/wallets.bin", store_path))?,
             blocks: BlocksState::new(store_path.clone(), logger_sender, pending_blocks_ref),
             utxo: UTXO::new(store_path.clone(), "/utxo.bin".to_string())?,
             pending_txs: PendingTxs::new(),
@@ -85,13 +81,6 @@ impl NodeState {
     /// Agrega un bloque nuevo, lo guarda en su archivo y actualiza los pending_blocks, wallets, pending_txs y utxo.
     /// Tambien verifica si ahora el nodo esta actualizado con la red
     pub fn append_block(&mut self, block_hash: Vec<u8>, block: &Block) -> Result<(), CustomError> {
-        // let path = format!(
-        //     "{}/blocks/{}.bin",
-        //     self.store_path,
-        //     block.header.hash_as_string()
-        // );
-        // block.save(path)?;
-
         self.blocks
             .append_block(&block_hash, block, self.headers.total_headers_to_download())?;
         self.headers.set_downloaded(&block_hash);
@@ -108,27 +97,29 @@ impl NodeState {
         Ok(())
     }
 
+    /// Obtiene un bloque a partir de su hash
     pub fn get_block(&self, block_string_hash: String) -> Result<Block, CustomError> {
-        let path = format!("{}/blocks/{}.bin", self.store_path, block_string_hash);
-        Block::restore(path)
+        self.blocks.get_block(block_string_hash)
     }
 
     /********************     PEERS     ********************/
 
-    /// devuelve referencia a los peers del nodo
+    /// Devuelve referencia a los peers del nodo
     pub fn get_peers(&mut self) -> &mut Vec<Peer> {
         &mut self.peers
     }
 
+    /// Devuelve referencia a un peer en particular
     pub fn get_peer(&mut self, address: &SocketAddrV6) -> Option<&mut Peer> {
         self.peers.iter_mut().find(|p| &p.address == address)
     }
 
-    /// agrega varios peers nuevos al nodo
+    /// Agrega varios peers nuevos al nodo
     pub fn append_peers(&mut self, peers: Vec<Peer>) {
         self.peers.extend(peers);
     }
 
+    /// Elimina del nodo a un peer en particular
     pub fn remove_peer(&mut self, address: SocketAddrV6) {
         let index = self.peers.iter().position(|p| p.address == address);
 
@@ -137,6 +128,7 @@ impl NodeState {
         }
     }
 
+    /// Registra que un peer solicito el envio directo de headers
     pub fn peer_send_headers(&mut self, address: SocketAddrV6) {
         let peer = self.peers.iter_mut().find(|p| p.address == address);
         if let Some(peer) = peer {
@@ -144,6 +136,7 @@ impl NodeState {
         }
     }
 
+    /// Registra que un peer solicito headers
     pub fn peer_requested_headers(&mut self, address: SocketAddrV6) {
         let peer = self.peers.iter_mut().find(|p| p.address == address);
         if let Some(peer) = peer {
@@ -151,6 +144,7 @@ impl NodeState {
         }
     }
 
+    /// Obtiene el peer con el que haya realizado el handshake mas rapido
     pub fn get_fastest_peer(&mut self) -> Option<&mut Peer> {
         self.peers
             .iter_mut()
@@ -187,10 +181,12 @@ impl NodeState {
         self.headers.get_last_headers(count)
     }
 
+    /// Devuelve los headers que se le solicitan mediante el mensaje GetHeaders del protocolo btc
     pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
         self.headers.get_headers(get_headers)
     }
 
+    /// Devuelve los headers listos para enviar a medida que se descargan sus bloques, siguiendo el orden de la blockchain.
     pub fn get_headers_to_send(&mut self, block_hash: &Vec<u8>) -> Vec<BlockHeader> {
         self.headers.get_headers_to_send(block_hash)
     }
@@ -201,11 +197,6 @@ impl NodeState {
     pub fn is_synced(&self) -> bool {
         self.headers.is_synced() && self.blocks.is_synced() && self.utxo.is_synced()
     }
-
-    /// Devuelve true si los bloques estan sincronizados
-    // pub fn is_blocks_sync(&self) -> bool {
-    //     self.blocks_sync
-    // }
 
     /// Verifica si el nodo esta sincronizado con la red
     /// Si el nodo esta sincronizado, envia un evento a la interfaz grafica para indicar que el nodo esta listo para usarse
@@ -318,6 +309,7 @@ impl NodeState {
         Ok(updated)
     }
 
+    /// Devuelve una pending tx de PendingTxs en base a su hash
     pub fn get_pending_tx(&self, tx_hash: &Vec<u8>) -> Option<Transaction> {
         self.pending_txs.get_pending_tx(tx_hash)
     }
@@ -332,13 +324,6 @@ impl NodeState {
 
         Ok(())
     }
-
-    // /// Remueve todos los pending blocks de PendingBlocks
-    // fn remove_pending_blocks(&self) -> Result<(), CustomError> {
-    //     let mut pending_blocks = self.pending_blocks_ref.lock()?;
-    //     pending_blocks.drain();
-    //     Ok(())
-    // }
 
     // /// Devuelve los pending blocks de PendingBlocks
     pub fn get_stale_requests(&self) -> Result<Vec<Vec<u8>>, CustomError> {

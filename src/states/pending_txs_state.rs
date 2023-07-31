@@ -77,7 +77,7 @@ impl PendingTxs {
 mod tests {
 
     use crate::{
-        states::wallets_state::Wallets,
+        states::wallets_state::WalletsState,
         structs::{block_header::BlockHeader, tx_output::TransactionOutput},
     };
 
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn pendings_from_wallet() {
-        let mut wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
+        let mut wallets = WalletsState::new("tests/test_wallets.bin".to_string()).unwrap();
         wallets
             .set_active("mhzZUxRkPzNpCsQHemTakuJa5xhCajxyVm")
             .unwrap();

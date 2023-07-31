@@ -12,7 +12,10 @@ mod tests {
     use bitcoin::{
         config::Config,
         logger::Logger,
-        loops::{peer_action_loop::PeerAction, pending_blocks_loop::pending_blocks_loop},
+        loops::{
+            peer_action_loop::PeerAction, pending_blocks_loop::pending_blocks_loop,
+            tcp_listener_loop::TcpListenerLoop,
+        },
         node::Node,
         node_state::NodeState,
         peer::Peer,
@@ -35,6 +38,7 @@ mod tests {
         let node = Node::new(&config, &logger, node_state_ref.clone());
         assert!(node.is_ok());
         fs::remove_file("tests/test_log.txt").unwrap();
+        fs::remove_dir_all("tests/store").unwrap();
     }
 
     #[test]
@@ -118,5 +122,59 @@ mod tests {
             assert!(false);
         }
         fs::remove_file("tests/test_log3.txt").unwrap();
+    }
+
+    #[test]
+    fn node_anwsers_handshakes() {
+        let (gui_sender, _gui_receiver) = glib::MainContext::channel(Priority::default());
+
+        let logger = Logger::new(&String::from("tests/test_log4.txt"), gui_sender.clone()).unwrap();
+        let logger_sender = logger.get_sender();
+
+        let (_peer_action_sender, receiver) = mpsc::channel();
+        let peer_action_receiver = Arc::new(Mutex::new(receiver));
+
+        let (node_action_sender, _node_action_receiver) = mpsc::channel();
+
+        let store_path = String::from("tests");
+        let node_state_ref =
+            NodeState::new(logger_sender.clone(), gui_sender, &store_path).unwrap();
+
+        let _tcp_listener = TcpListenerLoop::spawn(
+            logger_sender.clone(),
+            node_state_ref.clone(),
+            SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 18334, 0, 0),
+            123,
+            70015,
+            peer_action_receiver.clone(),
+            node_action_sender.clone(),
+        );
+        let mut addresses = get_addresses("127.0.0.1".to_string(), 18334).unwrap();
+        thread::sleep(Duration::from_secs(5));
+
+        let peer = Peer::call(
+            addresses.next().unwrap(),
+            SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2), 18334, 0, 0),
+            1,
+            13,
+            peer_action_receiver.clone(),
+            logger_sender.clone(),
+            node_action_sender.clone(),
+        )
+        .unwrap();
+
+        assert_eq!(peer.version, 70015);
+        assert_eq!(peer.services, 123);
+
+        thread::sleep(Duration::from_secs(1));
+
+        let mut node_state = node_state_ref.lock().unwrap();
+        let peers = node_state.get_peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].version, 13);
+        assert_eq!(peers[0].services, 1);
+        drop(node_state);
+
+        fs::remove_file("tests/test_log4.txt").unwrap();
     }
 }
