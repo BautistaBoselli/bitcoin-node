@@ -1,6 +1,6 @@
 /target
 *config.txt
 !example-config.txt
-log.txt
+*log.txt
 /store/*
 /*store/*
