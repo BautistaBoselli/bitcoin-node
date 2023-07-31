@@ -13,6 +13,17 @@ use crate::{
 
 use super::{node_action_loop::NodeAction, peer_action_loop::PeerAction};
 
+/// TcpListenerLoop es el loop de eventos que se encarga de escuchar conexiones entrantes.
+/// Cada vez que se recibe una conexión, inicializa un nuevo Peer y contesta el handshake.
+/// Luego, agrega el nuevo Peer a la lista de peers del nodo
+/// Los elementos son:
+/// - logger_sender: Sender para enviar logs al logger
+/// - node_state_ref: Referencia al estado del nodo
+/// - address: Dirección del nodo
+/// - services: Servicios que ofrece el nodo
+/// - version: Versión del protocolo que maneja el nodo
+/// - peer_action_receiver: Receiver para recibir acciones de los peers
+/// - node_action_sender: Sender para enviar acciones al nodo
 pub struct TcpListenerLoop {
     logger_sender: mpsc::Sender<Log>,
     node_state_ref: Arc<Mutex<NodeState>>,

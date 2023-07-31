@@ -18,6 +18,14 @@ use crate::{
 
 use super::utxo_state::START_DATE_IBD;
 
+/// HeaderIBDStats es una estructura que contiene los elementos necesarios para manejar las
+/// estadisticas de la descarga masiva de headers.
+/// Solamente se utiliza cuando la distancia entre el timestamp del ultimo header descargado y el actual
+/// es mayor al 5% del tiempo total de la blockchain.
+/// Los elementos son:
+/// - checkpoint_timestamp: Timestamp del momento en el que el ultimo checkpoint fue alcanzado.
+/// - checkpoint_percentage: Porcentaje del tiempo total de la blockchain que representa el checkpoint.
+/// - checkpoint_downloads: Cantidad de headers descargados desde el checkpoint.
 struct HeaderIBDStats {
     checkpoint_timestamp: u128,
     checkpoint_percentage: u64,
@@ -29,6 +37,7 @@ struct HeaderIBDStats {
 /// - headers: Headers del nodo.
 /// - logger_sender: Sender para enviar logs al logger.
 /// - path: Path del archivo donde se guardan los headers.
+/// - ibd_stats: Option<HeaderIBDStats> solamente se inicializa cuando corresponde.
 /// - sync: Indica si los headers del nodo estan sincronizados con la red.
 pub struct HeadersState {
     headers: Vec<BlockHeader>,
@@ -94,6 +103,7 @@ impl HeadersState {
         self.headers.len()
     }
 
+    /// Devuelve la cantidad de headers posteriores a la fecha de inicio del IBD.
     pub fn total_headers_to_download(&self) -> usize {
         self.len() - calculate_index_from_timestamp(&self.headers, START_DATE_IBD)
     }
@@ -103,6 +113,8 @@ impl HeadersState {
         &self.headers
     }
 
+    /// Devuelve la posicion de un header en el vector de headers del nodo dado el hash del mismo.
+    /// Si no se encuentra el header, devuelve 0.
     pub fn get_header_index(&self, block_hash: &Vec<u8>) -> usize {
         let position_from_end = self
             .headers
@@ -242,6 +254,7 @@ impl HeadersState {
         Ok(())
     }
 
+    /// Registra que un header tiene su bloque descargado.
     pub fn set_downloaded(&mut self, block_hash: &Vec<u8>) {
         let downloaded_block = self
             .headers
@@ -254,6 +267,9 @@ impl HeadersState {
         }
     }
 
+    /// Devuelve un vector de headers que se deben enviar a un nodo a partir de un header hash.
+    /// Los headers se envian unicamente si tienen al bloque anterior a ellos enviado y su bloque descargado.
+    /// Todos los headers obtenidos se marcan como enviados.
     pub fn get_headers_to_send(&mut self, block_hash: &Vec<u8>) -> Vec<BlockHeader> {
         let downloaded_block_index = self.get_header_index(block_hash);
 
@@ -297,6 +313,7 @@ impl HeadersState {
         self.sync
     }
 
+    /// Ante un mensaje get headers, devuelve los headers esperados de acuerdo al protocolo btc.
     pub fn get_headers(&self, get_headers: GetHeaders) -> Vec<BlockHeader> {
         let peer_last_header = get_headers
             .block_locator_hashes

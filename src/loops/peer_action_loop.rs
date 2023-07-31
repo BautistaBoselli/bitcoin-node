@@ -20,6 +20,7 @@ use super::node_action_loop::NodeAction;
 /// - GetHeaders: Solicita headers al peer.
 /// - GetData: Solicita data al peer.
 /// - SendTransaction: Envia una transaccion al peer.
+/// - Terminate: Termina la conexion con el peer.
 pub enum PeerAction {
     GetHeaders(Option<Vec<u8>>),
     GetData(Vec<Inventory>),
@@ -30,10 +31,11 @@ pub enum PeerAction {
 /// PeerActionLoop es una estructura que contiene los elementos necesarios para manejar los las acciones a enviar al peer asociado.
 /// Genera el loop de eventos alrededor de los PeerAction recibido por peer_action_receiver.
 /// Los elementos son:
-/// - peer_action_receiver: Receiver para recibir acciones del peer.
+/// - address: Direccion del peer.
 /// - version: Version del nodo.
 /// - stream: Stream del peer.
 /// - logger_sender: Sender para enviar logs al logger.
+/// - peer_action_receiver: Receiver para recibir acciones del peer.
 /// - node_action_sender: Sender para enviar acciones al nodo.
 pub struct PeerActionLoop {
     pub address: SocketAddrV6,

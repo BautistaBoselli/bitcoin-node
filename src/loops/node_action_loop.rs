@@ -26,12 +26,17 @@ use super::peer_action_loop::PeerAction;
 
 /// NodeAction es una enumeracion de las acciones que puede realizar el nodo.
 /// Las acciones son:
+/// - PeerError: Peer tiene comportamiento no esperado.
 /// - NewHeaders: Recibe nuevos headers.
 /// - GetHeadersError: Error al solicitar headers.
 /// - Block: Recibe un bloque.
 /// - GetDataError: Error al solicitar data.
 /// - PendingTransaction: Recibe una transaccion.
 /// - MakeTransaction: Solicitar una transaccion.
+/// - SendHeaders: Habilita el envio directo de headers a un peer.
+/// - GetHeaders: Solicitud de headers de parte de un peer.
+/// - GetData: Solicitud de data de parte de un peer.
+/// - Terminate: Termina el nodo.
 pub enum NodeAction {
     PeerError(SocketAddrV6),
     NewHeaders(Headers),

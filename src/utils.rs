@@ -54,20 +54,14 @@ pub fn get_current_timestamp() -> Result<u64, CustomError> {
         .as_secs())
 }
 
+/// get_current_timestamp_millis devuelve el timestamp actual en milisegundos.
 pub fn get_current_timestamp_millis() -> Result<u128, CustomError> {
     Ok(SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_millis())
 }
 
-// header 0: 1
-// header 1: 3
-
-// last_timestamp: 2
-// position = 1
-
-// headers.len() - position  = 5 - 3 + 1 = 3
-
+/// calculate_index_from_timestamp devuelve el indice del ultimo bloque anterior o igual a un timestamp dado.
 pub fn calculate_index_from_timestamp(headers: &Vec<BlockHeader>, last_timestamp: u32) -> usize {
     let new_headers_len = headers
         .iter()

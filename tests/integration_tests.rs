@@ -2,8 +2,8 @@
 mod tests {
     use std::{
         fs::{self, File},
-        io::{BufRead, BufReader, Write},
-        net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV6, TcpStream},
+        io::{BufRead, BufReader},
+        net::{Ipv6Addr, SocketAddrV6},
         sync::{mpsc, Arc, Mutex},
         thread,
         time::Duration,

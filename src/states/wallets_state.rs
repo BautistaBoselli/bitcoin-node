@@ -12,13 +12,13 @@ use super::utxo_state::UTXO;
 /// - wallets: Vector de wallets.
 /// - active_pubkey: Public key del wallet activo.
 /// - path: Path del archivo donde se guardan los wallets.
-pub struct Wallets {
+pub struct WalletsState {
     wallets: Vec<Wallet>,
     active_pubkey: Option<String>,
     path: String,
 }
 
-impl Wallets {
+impl WalletsState {
     /// Inicializa los wallets del nodo.
     /// Si el archivo donde se guardan los wallets no existe, se crea.
     /// Si el archivo existe, se restauran los wallets.
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn create_wallets_empty() {
-        let wallets = Wallets::new("tests/wallets_empty.bin".to_string()).unwrap();
+        let wallets = WalletsState::new("tests/wallets_empty.bin".to_string()).unwrap();
         assert_eq!(wallets.wallets.len(), 0);
         assert_eq!(wallets.active_pubkey, None);
 
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn create_wallets_restoring_a_wallet() {
-        let wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
+        let wallets = WalletsState::new("tests/test_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.wallets.len(), 1);
         assert_eq!(wallets.active_pubkey, None);
     }
@@ -161,7 +161,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut wallets = Wallets::new("tests/test_wallets_append.bin".to_string()).unwrap();
+        let mut wallets = WalletsState::new("tests/test_wallets_append.bin".to_string()).unwrap();
         assert_eq!(wallets.wallets.len(), 1);
 
         let new_wallet = Wallet::new(
@@ -187,7 +187,7 @@ mod tests {
         .unwrap();
 
         let mut wallets =
-            Wallets::new("tests/test_wallets_append_duplicated.bin".to_string()).unwrap();
+            WalletsState::new("tests/test_wallets_append_duplicated.bin".to_string()).unwrap();
         assert_eq!(wallets.wallets.len(), 1);
 
         let new_wallet = Wallet::new(
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn save_wallets() {
-        let mut wallets = Wallets::new("tests/save_wallets.bin".to_string()).unwrap();
+        let mut wallets = WalletsState::new("tests/save_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.wallets.len(), 0);
 
         let new_wallet = Wallet::new(
@@ -220,7 +220,7 @@ mod tests {
         wallets.append(new_wallet).unwrap();
         assert_eq!(wallets.wallets.len(), 1);
 
-        let wallets2 = Wallets::new("tests/save_wallets.bin".to_string()).unwrap();
+        let wallets2 = WalletsState::new("tests/save_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets2.wallets.len(), 1);
 
         remove_file("tests/save_wallets.bin".to_string()).unwrap();
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn get_wallets() {
-        let wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
+        let wallets = WalletsState::new("tests/test_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.active_pubkey, None);
 
         let all_wallets = wallets.get_all();
@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn set_active_wallet() {
-        let mut wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
+        let mut wallets = WalletsState::new("tests/test_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.active_pubkey, None);
 
         wallets
@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn get_active_wallet() {
-        let mut wallets = Wallets::new("tests/test_wallets.bin".to_string()).unwrap();
+        let mut wallets = WalletsState::new("tests/test_wallets.bin".to_string()).unwrap();
         assert_eq!(wallets.active_pubkey, None);
 
         assert!(wallets.get_active().is_none());
@@ -280,7 +280,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut wallets = Wallets::new("tests/test_wallets_update.bin".to_string()).unwrap();
+        let mut wallets = WalletsState::new("tests/test_wallets_update.bin".to_string()).unwrap();
         assert_eq!(wallets.active_pubkey, None);
 
         wallets

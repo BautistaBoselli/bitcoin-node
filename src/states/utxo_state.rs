@@ -37,8 +37,8 @@ pub struct UTXOValue {
 /// Los elementos son:
 /// - tx_set: HashMap que contiene las UTXO con su OutPoint y UTXOValue.
 /// - sync: Indica si las UTXO estan sincronizadas con la red.
+/// - store_path: Path de la carpeta store.
 /// - path: Path del archivo donde se guardan las UTXO.
-///
 /// El UTXO tiene un sistema de guardado tipo checkpoint
 /// donde cada vez que se actualiza genera un archivo donde lista los utxo del momento y el timestamp del ultimo bloque procesado.
 pub struct UTXO {
@@ -96,7 +96,8 @@ impl UTXO {
 
     /// Genera las UTXO a partir de los headers.
     /// Si el archivo donde se guardan las UTXO no existe, se crea.
-    /// Si el archivo existe, se restauran las UTXO hasta ese punto y se recorren unicamente los bloques posteriores al timestamp guardado en el archivo.
+    /// Si el archivo existe, se restauran las UTXO hasta ese punto y se recorren unicamente
+    /// los bloques posteriores al bloque del hash guardado en el archivo.
     pub fn generate(
         &mut self,
         headers: &Vec<BlockHeader>,
@@ -107,8 +108,7 @@ impl UTXO {
             headers[first_block_index].hash().clone()
         });
 
-        let new_last_block_hash =
-            self.update_from_headers(headers, last_block_hash, logger_sender)?;
+        let new_last_block_hash = self.update(headers, last_block_hash, logger_sender)?;
 
         self.sync = true;
         self.save(new_last_block_hash)?;
@@ -124,6 +124,9 @@ impl UTXO {
         Ok(())
     }
 
+    /// Restaura las UTXO a partir del archivo donde se guardan.
+    /// Obtiene los datos del UTXO.
+    /// Obtiene el hash del ultimo bloque procesado y lo retorna
     fn restore_utxo(&mut self) -> Result<Option<Vec<u8>>, CustomError> {
         let path = format!("{}/{}", self.store_path, self.path);
         let mut file = open_new_file(path, false)?;
@@ -140,15 +143,15 @@ impl UTXO {
         Ok(last_block_hash)
     }
 
-    fn update_from_headers(
+    /// Dado un block hash, correspondiente al ultimo bloque guardado,
+    /// obtiene por donde empezar a actualizar las UTXO, y lo actuliza.
+    /// Retorna el hash del ultimo bloque procesado.
+    fn update(
         &mut self,
         headers: &Vec<BlockHeader>,
         last_block_hash: Vec<u8>,
         logger_sender: &mut Sender<Log>,
     ) -> Result<Vec<u8>, CustomError> {
-        let mut i = 0;
-        let mut percentage = 0;
-
         let mut last_block_hash = last_block_hash;
 
         let block_position = headers
@@ -169,36 +172,53 @@ impl UTXO {
             )),
         );
 
-        for (_index, header) in headers.iter().enumerate().skip(starting_index) {
-            if i > (headers.len() - starting_index) / 10 {
-                percentage += 10;
-                send_log(
-                    logger_sender,
-                    Log::Message(format!("Utxo generation is ({percentage}%) completed...")),
-                );
-                i = 0;
-            }
-            let path = format!("{}/blocks/{}.bin", self.store_path, header.hash_as_string());
-            let block = match Block::restore(path) {
-                Ok(block) => block,
-                Err(_) => {
+        self.update_from_headers(headers, starting_index, logger_sender, &mut last_block_hash)?;
+        Ok(last_block_hash)
+    }
+
+    /// Actualiza las UTXO a partir de los headers y el indice recibido.
+    /// Se encarga de informar el progreso de la actualizacion.
+    fn update_from_headers(
+        &mut self,
+        headers: &Vec<BlockHeader>,
+        starting_index: usize,
+        logger_sender: &mut Sender<Log>,
+        last_block_hash: &mut Vec<u8>,
+    ) -> Result<(), CustomError> {
+        let mut i = 0;
+        let mut percentage = 0;
+        Ok(
+            for (_index, header) in headers.iter().enumerate().skip(starting_index) {
+                if i > (headers.len() - starting_index) / 10 {
+                    percentage += 10;
                     send_log(
+                        logger_sender,
+                        Log::Message(format!("Utxo generation is ({percentage}%) completed...")),
+                    );
+                    i = 0;
+                }
+                let path = format!("{}/blocks/{}.bin", self.store_path, header.hash_as_string());
+                let block = match Block::restore(path) {
+                    Ok(block) => block,
+                    Err(_) => {
+                        send_log(
                         logger_sender,
                         Log::Message(String::from(
                             "Error generating UTXO (block file broken), please restart the app.",
                         )),
                     );
-                    exit(0);
-                }
-            };
-            self.update_from_block(&block, false)?;
-            drop(block);
-            last_block_hash = header.hash().clone();
-            i += 1;
-        }
-        Ok(last_block_hash)
+                        exit(0);
+                    }
+                };
+                self.update_from_block(&block, false)?;
+                drop(block);
+                *last_block_hash = header.hash().clone();
+                i += 1;
+            },
+        )
     }
 
+    /// Serializa las utxo y el hash del ultimo bloque procesado.
     fn serialize(&mut self, block_hash: Vec<u8>) -> Vec<u8> {
         let mut buffer = vec![];
         buffer.extend(block_hash);
@@ -235,6 +255,7 @@ impl UTXO {
     }
 
     /// Actualiza las UTXO a partir de un bloque, eliminando los outputs gastados y agregando los nuevos outputs.
+    /// Si save es true, guarda el UTXO actualizado en disco.
     pub fn update_from_block(&mut self, block: &Block, save: bool) -> Result<(), CustomError> {
         for tx in &block.transactions {
             for tx_in in &tx.inputs {

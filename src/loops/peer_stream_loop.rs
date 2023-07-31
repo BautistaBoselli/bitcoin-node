@@ -194,7 +194,6 @@ impl PeerStreamLoop {
     }
 
     fn handle_getdata(&mut self, response_header: &MessageHeader) -> Result<(), CustomError> {
-        // thread::sleep(Duration::from_secs(6));
         let getdata = GetData::read(&mut self.stream, response_header.payload_size)?;
         self.node_action_sender
             .send(NodeAction::GetData(self.address, getdata))?;
