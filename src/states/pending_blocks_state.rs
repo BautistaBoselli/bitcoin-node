@@ -26,7 +26,7 @@ impl PendingBlocks {
     /// Inicializa la estructura.
     pub fn new(store_path: &String, headers: &Vec<BlockHeader>) -> Arc<Mutex<Self>> {
         let mut blocks = HashMap::new();
-        let starting_index = calculate_index_from_timestamp(headers, START_DATE_IBD);
+        let starting_index = calculate_index_from_timestamp(headers, START_DATE_IBD) + 1;
 
         for header in headers.iter().skip(starting_index) {
             let path = format!("{}/blocks/{}.bin", store_path, header.hash_as_string());
