@@ -156,9 +156,6 @@ impl UTXO {
             .rev()
             .position(|h| *h.hash() == last_block_hash);
 
-        println!("block_position: {:?}", block_position);
-        println!("blocks len: {:?}", headers.len());
-
         let starting_index = match block_position {
             Some(position) => headers.len() - position,
             None => calculate_index_from_timestamp(headers, START_DATE_IBD),

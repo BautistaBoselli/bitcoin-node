@@ -86,9 +86,112 @@ mod tests {
     use crate::structs::inventory::{Inventory, InventoryType};
 
     #[test]
-    fn inventory_serialize_and_parse() {
+    fn inventory_block_serialize_and_parse() {
         let inventory = Inventory::new(
             InventoryType::Block,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+
+        assert_ne!(parsed_inventory.inventory_type, InventoryType::Tx);
+        assert_ne!(
+            parsed_inventory.inventory_type,
+            InventoryType::FilteredBlock
+        );
+        assert_ne!(parsed_inventory.inventory_type, InventoryType::CompactBlock);
+        assert_ne!(parsed_inventory.inventory_type, InventoryType::WitnessTx);
+        assert_ne!(parsed_inventory.inventory_type, InventoryType::WitnessBlock);
+        assert_ne!(
+            parsed_inventory.inventory_type,
+            InventoryType::FilteredWitnessBlock
+        );
+    }
+
+    #[test]
+    fn inventory_tx_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::Tx,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+    }
+
+    #[test]
+    fn inventory_filtered_block_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::FilteredBlock,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+    }
+
+    #[test]
+    fn inventory_compact_block_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::CompactBlock,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+    }
+
+    #[test]
+    fn inventory_witness_tx_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::WitnessTx,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+    }
+
+    #[test]
+    fn inventory_witness_block_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::WitnessBlock,
+            [
+                220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
+                124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,
+            ]
+            .to_vec(),
+        );
+        let buffer = inventory.serialize();
+        let parsed_inventory = Inventory::parse(buffer).unwrap();
+        assert_eq!(inventory, parsed_inventory);
+    }
+
+    #[test]
+    fn inventory_filtered_witness_block_serialize_and_parse() {
+        let inventory = Inventory::new(
+            InventoryType::FilteredWitnessBlock,
             [
                 220, 9, 210, 68, 121, 44, 33, 165, 243, 235, 28, 125, 43, 136, 29, 116, 190, 43,
                 124, 200, 30, 144, 40, 190, 229, 44, 93, 83, 110, 112, 225, 220,

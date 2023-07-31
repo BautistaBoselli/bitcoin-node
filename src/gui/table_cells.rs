@@ -86,8 +86,14 @@ pub fn merkle_proof_button(
                     return;
                 }
             };
-            println!("Merkle Flags: {:?}", mp_flags);
-            println!("Merkle Hashes: {:?}", mp_hashes);
+            send_log(
+                &logger_sender,
+                Log::Message(format!("Merkle Flags: {:?}", mp_flags)),
+            );
+            send_log(
+                &logger_sender,
+                Log::Message(format!("Merkle Hashes: {:?}", mp_hashes)),
+            );
         });
 
         button_box.add(&button);

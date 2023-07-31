@@ -51,8 +51,6 @@ impl TcpListenerLoop {
 
     fn event_loop(&mut self) -> Result<(), CustomError> {
         let listener = TcpListener::bind(self.address)?;
-
-        // CHEQUEAR: solo iniciar cuando el nodo esta sincronizado con la red
         send_log(
             &self.logger_sender,
             Log::Message(String::from("Server started...")),
@@ -80,8 +78,6 @@ impl TcpListenerLoop {
             node_state.append_peers(vec![new_peer]);
             drop(node_state);
         }
-
-        println!("Terminado");
 
         Ok(())
     }

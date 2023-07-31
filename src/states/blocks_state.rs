@@ -146,3 +146,70 @@ impl BlocksState {
         self.sync
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use std::{fs, path::Path, sync::mpsc};
+
+    use super::*;
+
+    #[test]
+    fn blocks_state_append() {
+        let store_path = "tests".to_string();
+        let (logger_sender, _) = mpsc::channel();
+        let pending_blocks_ref = PendingBlocks::new(&store_path, &vec![]);
+        let mut blocks_state =
+            BlocksState::new(store_path.clone(), logger_sender, pending_blocks_ref);
+
+        let mut pending = blocks_state.pending_blocks_ref.lock().unwrap();
+        pending.append_block(vec![1, 2, 3]).unwrap();
+        drop(pending);
+
+        let mut block = blocks_state.get_block("test_block".to_string()).unwrap();
+        block.header.hash = vec![1, 2, 3];
+
+        blocks_state
+            .append_block(&vec![1, 2, 3], &block, 1)
+            .unwrap();
+
+        let pending = blocks_state.pending_blocks_ref.lock().unwrap();
+        assert_eq!(pending.is_empty(), true);
+
+        assert!(Path::new(&format!("{}/blocks/010203.bin", store_path)).exists());
+        fs::remove_file(format!("{}/blocks/010203.bin", store_path)).unwrap();
+    }
+
+    #[test]
+    fn blocks_state_verify_sync() {
+        let store_path = "tests".to_string();
+        let (logger_sender, _) = mpsc::channel();
+        let pending_blocks_ref = PendingBlocks::new(&store_path, &vec![]);
+        let mut blocks_state =
+            BlocksState::new(store_path.clone(), logger_sender, pending_blocks_ref);
+
+        let mut pending = blocks_state.pending_blocks_ref.lock().unwrap();
+        pending.append_block(vec![1, 2, 3]).unwrap();
+        drop(pending);
+
+        assert_eq!(blocks_state.is_synced(), false);
+        blocks_state.verify_sync().unwrap();
+        assert_eq!(blocks_state.is_synced(), false);
+
+        let mut pending = blocks_state.pending_blocks_ref.lock().unwrap();
+        pending.remove_block(&vec![1, 2, 3]).unwrap();
+        drop(pending);
+
+        assert_eq!(blocks_state.is_synced(), false);
+        blocks_state.verify_sync().unwrap();
+        assert_eq!(blocks_state.is_synced(), true);
+
+        let mut pending = blocks_state.pending_blocks_ref.lock().unwrap();
+        pending.append_block(vec![1, 2, 3]).unwrap();
+        drop(pending);
+
+        assert_eq!(blocks_state.is_synced(), true);
+        blocks_state.verify_sync().unwrap();
+        assert_eq!(blocks_state.is_synced(), true);
+    }
+}

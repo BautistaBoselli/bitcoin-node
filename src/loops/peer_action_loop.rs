@@ -108,7 +108,6 @@ impl PeerActionLoop {
         let inventories_clone = inventories.clone();
         let request = GetData::new(inventories).send(&mut self.stream);
         if let Err(error) = request {
-            println!("Error sending getdata to stream");
             self.node_action_sender
                 .send(NodeAction::GetDataError(inventories_clone))?;
             return Err(error);

@@ -160,11 +160,12 @@ impl Peer {
         let response_header = MessageHeader::read(&mut self.stream)?;
         let version_response = Version::read(&mut self.stream, response_header.payload_size)
             .map_err(|_| CustomError::CannotHandshakeNode)?;
-        self.version = version_response.version;
-        self.services = version_response.services;
 
         Version::new(self.address, sender_address, self.version, self.services)
             .send(&mut self.stream)?;
+        self.version = version_response.version;
+        self.services = version_response.services;
+
         VerAck::new().send(&mut self.stream)?;
 
         let response_header = MessageHeader::read(&mut self.stream)?;
@@ -200,25 +201,6 @@ impl Peer {
             node_action_sender,
         ));
         Ok(())
-    }
-
-    pub fn stop(&mut self) {
-        if let Err(error) = self.stream.shutdown(std::net::Shutdown::Both) {
-            if error.kind() != std::io::ErrorKind::NotConnected {
-                println!("Error shutting down peer stream: {:?}", error)
-            }
-        }
-        if let Some(peer_action_thread) = self.peer_action_thread.take() {
-            if let Err(error) = peer_action_thread.join() {
-                println!("Error joining peer action thread: {:?}", error)
-            }
-        }
-
-        if let Some(peer_stream_thread) = self.peer_stream_thread.take() {
-            if let Err(error) = peer_stream_thread.join() {
-                println!("Error joining peer stream thread: {:?}", error)
-            }
-        }
     }
 
     pub fn send(&mut self, message: impl Message) -> Result<(), CustomError> {
